@@ -2235,7 +2235,7 @@ function abrirVoz(modo) {
   $('voice-text').value = ''; $('voice-text').placeholder = modo === 'claude' ? 'Ex.: adiciona um campo de peso da peça (em gramas) nos pedidos' : 'Fale ou digite aqui...';
   $('voice-preview').innerHTML = ''; $('voice-actions').innerHTML = '';
   $('voice-send').hidden = modo !== 'claude'; $('voice-interpret').hidden = modo === 'claude';
-  renderPedidosClaude();
+  renderPedidosClaude(); if (modo === 'claude') atualizarClaude(true);
   $('voice-sheet').style.display = 'flex';
   iniciarGravacao();
 }
@@ -2270,22 +2270,146 @@ function interpretarVoz() {
   document.getElementById('voice-actions').innerHTML = `<button type="button" class="btn voice-primary" onclick="aplicarDitado(true)" ${vozResultado.ok ? '' : 'disabled'}>✓ Salvar</button><button type="button" class="btn" onclick="aplicarDitado(false)">✎ Revisar no formulário</button>`;
 }
 
-// --- ✳ Pedidos de mudança para o Claude ---
-// Modelo: { id, date, page, text, status: 'fila' }
-function enviarPedidoClaude() {
+// --- ✳ Pedidos de mudança para o Claude (via o GitHub do próprio app) ---
+// Pedido: { id, date, page, text, status, issue, pr, nota }
+//   status: 'fila' (ainda não enviado) → 'enviado' (Claude trabalhando) → 'proposta' (esperando aprovação)
+//           → 'publicado' | 'recusado' | 'sem-mudanca' (Claude pediu detalhes) | 'erro'
+// Configuração SÓ deste aparelho (não sincroniza): lifeos_claude_config = { repo: 'usuario/Genesis', token }
+// Isolamento: o app só escreve no repositório do próprio app (abre issue = pedido; aprova/recusa a proposta = pull request).
+let claudeConfig = JSON.parse(localStorage.getItem('lifeos_claude_config')) || { repo: '', token: '' };
+let claudePropostas = [];      // propostas abertas (ramos claude/pedido-N), lidas do GitHub
+let claudeUltimaConsulta = 0;
+const STATUS_PEDIDO_CLAUDE = {
+  fila:          ['📥', 'guardado (não enviado)', '#8e8e93'],
+  enviado:       ['⏳', 'Claude trabalhando…', '#ff9f0a'],
+  proposta:      ['✅', 'proposta pronta — aprove acima', '#30d158'],
+  publicado:     ['🚀', 'publicado', '#0a84ff'],
+  recusado:      ['✕', 'recusado', '#8e8e93'],
+  'sem-mudanca': ['💬', 'Claude precisa de mais detalhes', '#bf5af2'],
+  erro:          ['⚠️', 'deu erro — tente pedir de novo', '#ff453a']
+};
+
+function repoPadrao() { const h = location.hostname; if (!h.endsWith('.github.io')) return ''; const seg = location.pathname.split('/').filter(Boolean)[0]; return seg ? `${h.split('.')[0]}/${seg}` : ''; }
+function claudeConfigurado() { return !!(claudeConfig.repo && claudeConfig.token); }
+/** Chamada à API do GitHub, sempre dentro do repositório do app. */
+async function gh(caminho, opcoes = {}) {
+  const r = await fetch(`https://api.github.com/repos/${claudeConfig.repo}${caminho}`, {
+    ...opcoes,
+    headers: { 'Accept': 'application/vnd.github+json', 'Authorization': `Bearer ${claudeConfig.token}`, 'X-GitHub-Api-Version': '2022-11-28', ...(opcoes.body ? { 'Content-Type': 'application/json' } : {}) }
+  });
+  if (!r.ok) { let msg = String(r.status); try { msg += ' ' + (await r.json()).message; } catch (e) { } throw new Error(msg); }
+  return r.status === 204 ? null : r.json();
+}
+
+async function enviarPedidoClaude() {
   const txt = document.getElementById('voice-text').value.trim(); if (!txt) { toast('Fale ou digite o que quer mudar.'); return; }
   pararGravacao();
-  claudeReqs.unshift({ id: novoId(), date: hojeISO(), page: nomeAbaAtual(), text: txt, status: 'fila' });
-  salvar('clauderequests', claudeReqs);
-  document.getElementById('voice-text').value = ''; renderPedidosClaude();
-  toast('✳ Pedido guardado. Assim que o envio automático estiver configurado, ele vai direto pro Claude.', 5000);
+  const req = { id: novoId(), date: hojeISO(), page: nomeAbaAtual(), text: txt, status: 'fila' };
+  claudeReqs.unshift(req); salvar('clauderequests', claudeReqs);
+  document.getElementById('voice-text').value = '';
+  if (!claudeConfigurado()) { renderPedidosClaude(); toast('✳ Pedido guardado. Para o Claude receber, configure em Ajustes → Claude na nuvem.', 6000); return; }
+  await enviarUmPedido(req); renderPedidosClaude();
 }
+async function enviarUmPedido(req) {
+  try {
+    const resumo = req.text.replace(/\s+/g, ' ');
+    const issue = await gh('/issues', { method: 'POST', body: JSON.stringify({ title: '✳ ' + resumo.slice(0, 70) + (resumo.length > 70 ? '…' : ''), body: `**Página do app:** ${req.page}\n\n**Pedido (ditado no app):**\n${req.text}` }) });
+    req.issue = issue.number; req.status = 'enviado'; salvar('clauderequests', claudeReqs);
+    toast('✳ Enviado! O Claude já começou; a proposta aparece aqui em alguns minutos.', 6000);
+  } catch (e) { toast(`Não consegui enviar agora (${e.message}). O pedido ficou guardado.`, 6000); }
+}
+async function enviarPendentesClaude() { for (const r of claudeReqs.filter(x => x.status === 'fila')) await enviarUmPedido(r); renderPedidosClaude(); }
 function removerPedidoClaude(id) { claudeReqs = claudeReqs.filter(r => r.id !== id); salvar('clauderequests', claudeReqs); renderPedidosClaude(); }
+
+/** Lê do GitHub as propostas abertas e o andamento dos pedidos enviados. */
+async function atualizarClaude(silencioso) {
+  if (!claudeConfigurado()) { atualizarBadgeClaude(); return; }
+  claudeUltimaConsulta = Date.now();
+  try {
+    const prs = await gh('/pulls?state=open&per_page=30');
+    claudePropostas = prs.filter(p => /^claude\/pedido-\d+$/.test(p.head.ref)).map(p => ({ numero: p.number, issue: Number(p.head.ref.split('-').pop()), titulo: p.title.replace(/^✳\s*/, ''), resumo: (p.body || '').replace(/\s*Closes #\d+\s*$/i, '').trim(), url: p.html_url }));
+    let mudou = false;
+    for (const r of claudeReqs.filter(x => x.issue && (x.status === 'enviado' || x.status === 'proposta')).slice(0, 8)) {
+      const p = claudePropostas.find(x => x.issue === r.issue);
+      if (p) { if (r.status !== 'proposta' || r.pr !== p.numero) { r.status = 'proposta'; r.pr = p.numero; mudou = true; } continue; }
+      const is = await gh(`/issues/${r.issue}`);
+      if (is.state === 'closed') { r.status = is.state_reason === 'completed' ? 'publicado' : 'recusado'; mudou = true; continue; }
+      if (r.status === 'enviado' && is.comments > 1) {
+        const coms = await gh(`/issues/${r.issue}/comments?per_page=10`); const ultimo = (coms[coms.length - 1] || {}).body || '';
+        if (/não alterou/i.test(ultimo)) { r.status = 'sem-mudanca'; r.nota = ultimo.replace(/^💬[^:]*:\s*/, '').trim(); mudou = true; }
+        else if (/⚠️/.test(ultimo)) { r.status = 'erro'; mudou = true; }
+      }
+    }
+    if (mudou) salvar('clauderequests', claudeReqs);
+  } catch (e) { if (!silencioso) toast('Claude na nuvem: ' + e.message, 6000); }
+  atualizarBadgeClaude(); renderPedidosClaude();
+}
+async function aprovarProposta(n) {
+  if (!confirm('Publicar esta mudança no app?')) return;
+  try {
+    await gh(`/pulls/${n}/merge`, { method: 'PUT', body: JSON.stringify({ merge_method: 'squash' }) });
+    const r = claudeReqs.find(x => x.pr === n); if (r) { r.status = 'publicado'; salvar('clauderequests', claudeReqs); }
+    gh(`/git/refs/heads/claude/pedido-${(claudePropostas.find(x => x.numero === n) || {}).issue}`, { method: 'DELETE' }).catch(() => { });
+    toast('🚀 Publicado! Em ~1 minuto feche e reabra o app para ver a mudança.', 8000);
+  } catch (e) { toast('Não consegui publicar: ' + e.message, 6000); }
+  atualizarClaude(true);
+}
+async function recusarProposta(n) {
+  if (!confirm('Recusar esta proposta? Nada muda no app.')) return;
+  const p = claudePropostas.find(x => x.numero === n);
+  try {
+    await gh(`/pulls/${n}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) });
+    if (p) { await gh(`/issues/${p.issue}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed', state_reason: 'not_planned' }) }); gh(`/git/refs/heads/claude/pedido-${p.issue}`, { method: 'DELETE' }).catch(() => { }); }
+    const r = claudeReqs.find(x => x.pr === n); if (r) { r.status = 'recusado'; salvar('clauderequests', claudeReqs); }
+    toast('Proposta recusada.');
+  } catch (e) { toast('Não consegui recusar: ' + e.message, 6000); }
+  atualizarClaude(true);
+}
+
+function atualizarBadgeClaude() {
+  const b = document.querySelector('.fab-claude'); if (!b) return;
+  let el = b.querySelector('.fab-badge'); const n = claudePropostas.length;
+  if (!n) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('span'); el.className = 'fab-badge'; b.appendChild(el); }
+  el.innerText = n;
+}
 function renderPedidosClaude() {
   const el = document.getElementById('voice-requests'); if (!el) return;
-  if (vozModo !== 'claude' || !claudeReqs.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<h4>Pedidos guardados</h4><ul class="transaction-list">${claudeReqs.slice(0, 10).map(r => `<li><div class="transaction-info" style="flex:1"><span>${esc(r.text)}</span><small class="item-date">${esc(r.page)} · ${isoParaBR(r.date).slice(0, 5)} · na fila</small></div><div class="item-actions"><button class="mini-btn" title="Apagar" onclick="removerPedidoClaude(${r.id})">✕</button></div></li>`).join('')}</ul>`;
+  if (vozModo !== 'claude') { el.innerHTML = ''; return; }
+  let html = '';
+  if (!claudeConfigurado()) html += `<div class="voice-card" style="padding:12px"><span class="hint" style="margin:0">Para o Claude mudar o app sozinho, configure em <strong>Ajustes → ✳ Claude na nuvem</strong>. Até lá, os pedidos ficam guardados aqui.</span><button type="button" class="btn" style="width:100%; margin-top:10px" onclick="fecharVoz(); changeTab('settings'); document.getElementById('claude-repo').scrollIntoView({ block: 'center' })">Abrir Ajustes</button></div>`;
+  if (claudePropostas.length) {
+    html += `<h4>Propostas para aprovar</h4>` + claudePropostas.map(p => `<div class="proposal-card"><strong>${esc(p.titulo)}</strong><p>${esc((p.resumo || 'Sem resumo.').replace(/\*\*?([^*\n]+)\*\*?/g, '$1').replace(/`([^`\n]+)`/g, '$1')).replace(/\n/g, '<br>')}</p><a href="${esc(p.url)}/files" target="_blank" rel="noopener">ver as mudanças no GitHub ›</a><div class="voice-buttons" style="margin-top:10px"><button type="button" class="btn voice-primary" onclick="aprovarProposta(${p.numero})">✓ Aprovar e publicar</button><button type="button" class="btn" onclick="recusarProposta(${p.numero})">✕ Recusar</button></div></div>`).join('');
+  }
+  const pend = claudeReqs.filter(r => r.status === 'fila').length;
+  if (claudeReqs.length) {
+    html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px"><h4>Seus pedidos</h4>${claudeConfigurado() ? `<span style="display:flex; gap:6px">${pend ? `<button type="button" class="mini-btn" onclick="enviarPendentesClaude()">Enviar ${pend} guardado${pend > 1 ? 's' : ''}</button>` : ''}<button type="button" class="mini-btn" onclick="atualizarClaude()">↻</button></span>` : ''}</div>`;
+    html += `<ul class="transaction-list">${claudeReqs.slice(0, 10).map(r => { const s = STATUS_PEDIDO_CLAUDE[r.status] || STATUS_PEDIDO_CLAUDE.fila; return `<li><div class="transaction-info" style="flex:1"><span>${esc(r.text)}</span><small class="item-date">${esc(r.page)} · ${isoParaBR(r.date).slice(0, 5)} · <span style="color:${s[2]}">${s[0]} ${s[1]}</span></small>${r.nota ? `<small class="item-notes">${esc(r.nota)}</small>` : ''}</div><div class="item-actions"><button class="mini-btn" title="Tirar da lista" onclick="removerPedidoClaude(${r.id})">✕</button></div></li>`; }).join('')}</ul>`;
+  }
+  el.innerHTML = html;
 }
+
+// Ajustes → ✳ Claude na nuvem
+function carregarClaudeConfigNaTela() {
+  const r = document.getElementById('claude-repo'); const t = document.getElementById('claude-token');
+  if (r) r.value = claudeConfig.repo || repoPadrao(); if (t) t.value = claudeConfig.token || '';
+  setClaudeStatus(claudeConfigurado() ? '🟢 Configurado neste aparelho.' : '⚪ Não configurado.', claudeConfigurado() ? '#30d158' : '#8e8e93');
+}
+function setClaudeStatus(txt, cor) { const el = document.getElementById('claude-status'); if (el) { el.innerText = txt; el.style.color = cor || ''; } }
+async function salvarClaudeConfig() {
+  const repo = document.getElementById('claude-repo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '');
+  const token = document.getElementById('claude-token').value.trim();
+  if (repo && !/^[\w.-]+\/[\w.-]+$/.test(repo)) { alert('O repositório deve ser no formato usuario/nome — ex.: fulano/Genesis'); return; }
+  claudeConfig = { repo, token };
+  localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); // configuração do aparelho, como a da sincronização (não é dado do app)
+  if (!claudeConfigurado()) { setClaudeStatus('⚪ Não configurado.', '#8e8e93'); return; }
+  setClaudeStatus('🔄 Testando...', '#0a84ff');
+  try { const info = await gh(''); await gh('/issues?per_page=1'); setClaudeStatus(`🟢 Conectado a ${info.full_name}. Já pode usar o botão ✳.`, '#30d158'); atualizarClaude(true); }
+  catch (e) { setClaudeStatus('🔴 Não conectou: ' + e.message + ' — confira o token e as permissões.', '#ff453a'); }
+}
+// confere propostas ao abrir o app, ao voltar pra ele e a cada 60 s enquanto houver pedido em andamento
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - claudeUltimaConsulta > 30000) atualizarClaude(true); });
+setInterval(() => { if (document.visibilityState === 'visible' && claudeConfigurado() && (claudeReqs.some(r => r.status === 'enviado') || document.getElementById('voice-sheet').style.display === 'flex')) atualizarClaude(true); }, 60000);
 document.getElementById('voice-sheet').addEventListener('click', (e) => { if (e.target.id === 'voice-sheet') fecharVoz(); });
 
 // Config/Backup
@@ -2507,4 +2631,4 @@ updatePomodoroTime(); updateStudyStats(); renderFocusTab(); renderCalendar(); up
 document.getElementById('session-date').value = hojeISO(); garantirRitual(); redesenharEstudos(); ['workout-date', 'measure-date', 'meal-date'].forEach(i => document.getElementById(i).value = hojeISO()); renderSaude(); document.getElementById('move-date').value = hojeISO(); document.getElementById('asset-current-at').value = hojeISO(); redesenharNegocios(); renderEvents(); renderCalendar();
 aplicarPerfil(); carregarPrefsNaTela(); atualizarSaudacao(); atualizarBotaoDia();
 if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStorage.setItem('lifeos_perfil_avisado', '1'); setTimeout(() => toast('👤 Bem-vindo ao Genesis! Coloque seu nome em ⚙️ Config → Perfil.', 8000), 1500); }
-carregarSyncConfigNaTela(); setSyncStatus(syncConfigurado() ? (syncPendente ? "pendente" : "ok") : "naoconfig"); sincronizar();
+carregarClaudeConfigNaTela(); atualizarClaude(true); carregarSyncConfigNaTela(); setSyncStatus(syncConfigurado() ? (syncPendente ? "pendente" : "ok") : "naoconfig"); sincronizar();

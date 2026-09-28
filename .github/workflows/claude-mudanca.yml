@@ -1,0 +1,78 @@
+# Robô do Genesis: quando o dono pede uma mudança pelo botão ✳ do app,
+# o app abre um "issue" aqui no repositório. Este robô roda o Claude (plano do dono),
+# confere se o código não quebrou e abre uma PROPOSTA (pull request).
+# Nada vai para o site sem o dono tocar em "Aprovar" no app.
+name: Claude - mudanca pedida pelo app
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: claude-mudanca
+  cancel-in-progress: false
+
+jobs:
+  mudar:
+    # Só o dono do repositório pode acionar (o repositório é público).
+    if: github.event.issue.user.login == github.repository_owner && startsWith(github.event.issue.title, '✳')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NUM: ${{ github.event.issue.number }}
+      TITULO: ${{ github.event.issue.title }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Avisar que começou
+        run: gh issue comment "$NUM" --body "⏳ O Claude começou a trabalhar neste pedido."
+
+      - name: Claude faz a mudança
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ github.token }}
+          claude_args: '--max-turns 60 --allowedTools "Read,Edit,Write,Glob,Grep,Bash(node --check:*)"'
+          prompt: |
+            Leia primeiro o arquivo .github/INSTRUCOES-CLAUDE.md e siga todas as regras dele.
+            Depois atenda o pedido abaixo, feito por voz pelo dono dentro do app Genesis.
+
+            ${{ github.event.issue.body }}
+
+      - name: Conferir se o código continua válido
+        run: |
+          node --check app.js
+          node --check sw.js
+
+      - name: Abrir proposta para aprovação
+        run: |
+          RESUMO="$(cat .resumo-claude.md 2>/dev/null || echo 'Mudança pedida pelo app.')"
+          rm -f .resumo-claude.md
+          if [ -z "$(git status --porcelain)" ]; then
+            gh issue comment "$NUM" --body "💬 O Claude não alterou o código:
+
+          $RESUMO"
+            exit 0
+          fi
+          RAMO="claude/pedido-$NUM"
+          git config user.name "claude-genesis[bot]"
+          git config user.email "claude-genesis@users.noreply.github.com"
+          git checkout -b "$RAMO"
+          git add -A
+          git commit -m "$TITULO"
+          git push -f origin "$RAMO"
+          gh pr create --base main --head "$RAMO" --title "$TITULO" --body "$RESUMO
+
+          Closes #$NUM"
+          gh issue comment "$NUM" --body "✅ Proposta pronta — aprove ou recuse pelo botão ✳ no app."
+
+      - name: Avisar se deu erro
+        if: failure()
+        run: gh issue comment "$NUM" --body "⚠️ Deu erro ao processar este pedido. Veja os detalhes na aba Actions do repositório."

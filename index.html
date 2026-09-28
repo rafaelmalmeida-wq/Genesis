@@ -643,6 +643,18 @@
         <button class="btn" type="button" onclick="salvarPerfil()" style="width:100%; margin-top:12px">💾 Salvar perfil</button>
       </div>
       <div class="card" style="margin-top: 20px;">
+        <h2>✳ Claude na nuvem</h2>
+        <p class="hint">Deixa o botão ✳ mudar o app: seu pedido vai para o repositório do app no seu GitHub, o Claude prepara a mudança e você <strong>aprova aqui</strong> antes de publicar. O app só escreve nesse repositório. O token fica guardado só neste aparelho.</p>
+        <div class="sync-form">
+          <label for="claude-repo">Repositório do app (usuário/nome)</label>
+          <input type="text" id="claude-repo" placeholder="usuario/Genesis" autocomplete="off" autocapitalize="off">
+          <label for="claude-token">Token do GitHub</label>
+          <input type="password" id="claude-token" placeholder="github_pat_... (nunca é exibido)" autocomplete="off">
+        </div>
+        <button class="btn" type="button" onclick="salvarClaudeConfig()" style="width:100%; margin-top:12px">💾 Salvar e testar</button>
+        <div id="claude-status" style="font-size: 0.9rem; text-align: center; margin-top: 12px; min-height: 20px;"></div>
+      </div>
+      <div class="card" style="margin-top: 20px;">
         <h2>Segurança e Backup</h2>
         <div style="display: flex; gap: 15px; margin-bottom: 15px;">
           <button onclick="exportData()" style="flex: 1; background-color: #30d158;">⬇️ Exportar Backup</button>

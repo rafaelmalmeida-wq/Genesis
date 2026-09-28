@@ -389,7 +389,14 @@ button:active { transform: scale(0.98); }
 .voice-row:last-child { border-bottom: none; }
 .voice-row span { color: var(--label2); flex-shrink: 0; }
 .voice-row strong { text-align: right; font-weight: 500; overflow-wrap: anywhere; }
-#voice-requests h4 { margin-bottom: 8px; }
+#voice-requests { display: flex; flex-direction: column; gap: 10px; }
+#voice-requests h4 { margin: 4px 0 0; }
+.fab { position: relative; }
+.fab-badge { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--bg); }
+.proposal-card { background: var(--card2); border-radius: 12px; padding: 12px; border-left: 3px solid #d97757; }
+.proposal-card p { font-size: 0.88rem; color: var(--label2); margin: 6px 0 8px; line-height: 1.45; }
+.proposal-card a { font-size: 0.82rem; color: var(--blue); text-decoration: none; }
+.voice-content { max-height: 88vh; overflow-y: auto; }
 
 /* ---------- Trinca de Ases (marca do projeto em conjunto) ---------- */
 .trinca { display: inline-flex; align-items: center; gap: 4px; margin: 6px 0 4px; font-size: 0.8rem; letter-spacing: 0.5px; }
