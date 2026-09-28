@@ -675,6 +675,35 @@
     </div>
   </div>
 
+  <!-- Bolinhas flutuantes: ✳ Claude (mudanças no app) e 🎤 ditado (lançar dados) -->
+  <div class="fab-stack">
+    <button type="button" class="fab fab-claude" onclick="abrirVoz('claude')" title="Pedir mudança no app ao Claude" aria-label="Pedir mudança no app ao Claude">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g stroke="#fff" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></g></svg>
+    </button>
+    <button type="button" class="fab fab-mic" onclick="abrirVoz('dados')" title="Ditado: lançar pedido, tarefa, gasto..." aria-label="Ditado">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+
+  <div id="voice-sheet" class="modal-overlay">
+    <div class="modal-content voice-content">
+      <div class="modal-header"><h3 id="voice-title">🎤 Ditado</h3><button class="close-modal" onclick="fecharVoz()">✕</button></div>
+      <div class="modal-body">
+        <p id="voice-context" class="hint" style="margin:0"></p>
+        <textarea id="voice-text" rows="3"></textarea>
+        <div id="voice-status" class="voice-status"></div>
+        <div class="voice-buttons">
+          <button type="button" id="voice-rec" class="btn" onclick="alternarGravacao()">🎙 Falar</button>
+          <button type="button" id="voice-interpret" class="btn voice-primary" onclick="interpretarVoz()">Entender</button>
+          <button type="button" id="voice-send" class="btn voice-claude" onclick="enviarPedidoClaude()" hidden>✳ Enviar</button>
+        </div>
+        <div id="voice-preview"></div>
+        <div id="voice-actions" class="voice-buttons"></div>
+        <div id="voice-requests"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast"></div>
 
   <div id="day-modal" class="modal-overlay">

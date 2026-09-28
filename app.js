@@ -49,6 +49,7 @@ let medical = JSON.parse(localStorage.getItem('lifeos_medical')) || [];     // S
 let profile = JSON.parse(localStorage.getItem('lifeos_profile')) || { name: '', initials: '', subtitle: 'Life OS' }; // quem usa o app (nome no cumprimento, iniciais no cabeçalho)
 let orders = JSON.parse(localStorage.getItem('lifeos_orders')) || [];   // Primos 3D: pedidos
 let clients = JSON.parse(localStorage.getItem('lifeos_clients')) || []; // Primos 3D: clientes
+let claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || []; // ✳ pedidos de mudança no app ditados para o Claude
 
 // Migração das tarefas de Strings para Objetos (Estilo Keep Notes)
 let tasks = JSON.parse(localStorage.getItem('lifeos_tasks')) || [];
@@ -2037,9 +2038,259 @@ function preencherSelectsSaude() {
 }
 function renderSaude() { preencherSelectsSaude(); renderPainelSaude(); renderTreinos(); renderMedidas(); renderRefeicoes(); renderMedico(); }
 
+// ============================================================================
+// VOZ — duas bolinhas flutuantes em todas as páginas
+// 🎤 Ditado: você fala ("novo pedido do João, 3 vasos, 120 reais, entrega sexta"),
+//    o app entende, mostra o que vai criar e preenche o formulário da aba certa
+//    (o salvamento passa pelo próprio formulário, então segue todas as regras do app).
+// ✳ Claude: você fala uma MUDANÇA NO APP; o pedido fica guardado em "clauderequests".
+//    (Etapa 2: enviar esses pedidos ao Claude na nuvem, com aprovação antes de publicar.)
+// Reconhecimento de voz: o do próprio navegador (Safari usa o ditado da Apple).
+// Se não estiver disponível, a caixa de texto abre e você usa o 🎤 do teclado.
+// ============================================================================
+let vozModo = 'dados';        // 'dados' | 'claude'
+let vozReconhecedor = null;
+let vozGravando = false;
+let vozResultado = null;      // última interpretação do ditado
+
+const NUM_PALAVRAS = { um: 1, uma: 1, dois: 2, duas: 2, 'três': 3, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90, cem: 100, cento: 100, duzentos: 200, trezentos: 300, quatrocentos: 400, quinhentos: 500, seiscentos: 600, setecentos: 700, oitocentos: 800, novecentos: 900, mil: 1000 };
+const DIAS_SEMANA_VOZ = { domingo: 0, segunda: 1, 'terça': 2, terca: 2, quarta: 3, quinta: 4, sexta: 5, 'sábado': 6, sabado: 6 };
+const MESES_NOME = { janeiro: 1, fevereiro: 2, 'março': 3, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12 };
+const CORES_FILAMENTO = ['preto', 'preta', 'branco', 'branca', 'vermelho', 'vermelha', 'azul', 'verde', 'amarelo', 'amarela', 'cinza', 'laranja', 'rosa', 'roxo', 'roxa', 'dourado', 'dourada', 'prata', 'prateado', 'transparente', 'marrom', 'bege', 'lilás', 'vinho'];
+
+function abaAtual() { const el = document.querySelector('.tab-content.active'); return el ? el.id : 'focus'; }
+function nomeAbaAtual() { const b = document.querySelector('.tab-btn.active .tab-lbl'); return b ? b.innerText.trim() : 'Painel'; }
+
+// --- Interpretação do ditado (tudo local, sem internet) ---
+function vozNumero(s) { s = String(s).trim(); if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, ''); return parseFloat(s.replace(',', '.')); }
+function proximoDiaSemana(idx) { const d = new Date(); let diff = (idx - d.getDay() + 7) % 7; if (diff === 0) diff = 7; d.setDate(d.getDate() + diff); return isoDe(d); }
+function dataDiaMes(dia, mes) {
+  const hoje = new Date(); let y = hoje.getFullYear(); let m = mes || hoje.getMonth() + 1;
+  let d = new Date(y, m - 1, dia);
+  if (isoDe(d) < hojeISO()) { if (mes) d = new Date(y + 1, m - 1, dia); else d = new Date(y, m, dia); }
+  return isoDe(d);
+}
+/** Tira do texto um pedaço reconhecido e devolve o que casou (ou null). */
+function vozExtrair(ctx, re) { const m = ctx.resto.match(re); if (!m) return null; ctx.resto = (ctx.resto.slice(0, m.index) + ' ' + ctx.resto.slice(m.index + m[0].length)).replace(/\s+/g, ' '); return m; }
+
+function interpretarDitado(textoOriginal, aba) {
+  let t = ' ' + textoOriginal.replace(/\s+/g, ' ').trim() + ' ';
+  t = t.replace(/\b([A-Za-zÀ-ÿ]+)\b/g, (w) => NUM_PALAVRAS[w.toLowerCase()] !== undefined && !/^(um|uma)$/i.test(w) ? String(NUM_PALAVRAS[w.toLowerCase()]) : w);
+  t = t.replace(/\b(\d{1,2})\s*h?\s+e\s+meia\b/gi, '$1:30').replace(/((?<![\wÀ-ÿ])[àa]s\s+\d{1,2})\s*h?\s+e\s+(\d{1,2})\b/gi, (s, a, b) => a + ':' + b.padStart(2, '0')); // "9 e meia" -> 9:30
+  for (let i = 0; i < 3; i++) t = t.replace(/\b(\d+)\s+e\s+(\d+)\b/g, (s, a, b) => { a = Number(a); b = Number(b); return a >= 20 && a % 10 === 0 && b < a && String(b).length < String(a).length ? String(a + b) : s; }); // "cento e vinte" -> 120
+  const ctx = { resto: t };
+  const low = t.toLowerCase();
+
+  // 1) o que é?
+  let tipo = '';
+  if (/\b(novo cliente|nova cliente|cadastrar cliente|cadastra cliente|cliente novo)\b/.test(low)) tipo = 'cliente';
+  else if (/\b(pedido|encomenda|or[çc]amento)\b/.test(low)) tipo = 'pedido';
+  else if (/\b(gastei|paguei|despesa|comprei|conta de)\b/.test(low)) tipo = 'despesa';
+  else if (/\b(recebi|receita|entrou|me pagou|pagou)\b/.test(low)) tipo = 'receita';
+  else if (/\b(tarefa|lembrete|lembrar de|preciso)\b/.test(low)) tipo = 'tarefa';
+  else if (/\b(compromisso|reuni[ãa]o|consulta|evento|visita|agendar|marcar)\b/.test(low)) tipo = 'compromisso';
+  else if (/\b(nota|anota|anotar|anota[çc][ãa]o|ideia)\b/.test(low)) tipo = 'nota';
+  else tipo = { primos: 'pedido', home: 'compromisso', finances: 'despesa', tasks: 'tarefa', notes: 'nota' }[aba] || 'nota';
+
+  // 2) pedaços comuns: valor, data, hora, telefone
+  let valor = null;
+  let m = vozExtrair(ctx, /(?:r\$\s*)(\d[\d.,]*)|(\d[\d.,]*)\s*(?:reais|real|contos?|pilas?)\b/i);
+  if (m) valor = vozNumero(m[1] || m[2]);
+  let data = '';
+  if ((m = vozExtrair(ctx, /\bdepois de amanh[ãa](?![\wÀ-ÿ])/i))) { const d = new Date(); d.setDate(d.getDate() + 2); data = isoDe(d); }
+  else if ((m = vozExtrair(ctx, /\bamanh[ãa](?![\wÀ-ÿ])/i))) { const d = new Date(); d.setDate(d.getDate() + 1); data = isoDe(d); }
+  else if ((m = vozExtrair(ctx, /\bhoje\b/i))) data = hojeISO();
+  else if ((m = vozExtrair(ctx, /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/))) { data = m[3] ? isoDe(new Date(Number(m[3].length === 2 ? '20' + m[3] : m[3]), m[2] - 1, m[1])) : dataDiaMes(Number(m[1]), Number(m[2])); }
+  else if ((m = vozExtrair(ctx, /\b(?:dia\s+)?(\d{1,2})\s+de\s+(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/i))) data = dataDiaMes(Number(m[1]), MESES_NOME[m[2].toLowerCase()]);
+  else if ((m = vozExtrair(ctx, /\bdia\s+(\d{1,2})\b/i))) data = dataDiaMes(Number(m[1]));
+  else if ((m = vozExtrair(ctx, /\b(?:na |no |pr[óo]xim[ao] |essa |esta )?(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)(?:[- ]feira)?(?: que vem)?\b/i))) data = proximoDiaSemana(DIAS_SEMANA_VOZ[m[1].toLowerCase().replace('ç', 'c').replace('á', 'a')]);
+  let hora = '';
+  if ((m = vozExtrair(ctx, /(?:(?<![\wÀ-ÿ])[àa]s\s+|\ba partir das\s+|\b)(\d{1,2})\s*(?:h|:|horas?\b)\s*(\d{2})?(?:\s*(?:min|minutos))?(\s+da\s+(?:tarde|noite))?/i)) || (m = vozExtrair(ctx, /(?<![\wÀ-ÿ])[àa]s\s+(\d{1,2})\b(\s+da\s+(?:tarde|noite))?/i))) {
+    let h = Number(m[1]); let min = m[2] && /^\d+$/.test(m[2]) ? m[2] : '00';
+    if (/tarde|noite/i.test(m[0]) && h < 12) h += 12;
+    if (h <= 23) hora = `${String(h).padStart(2, '0')}:${min}`;
+  }
+  let telefone = '';
+  if ((m = vozExtrair(ctx, /\(?\b\d{2}\)?\s*9?\s?\d{4}[-\s]?\d{4}\b/))) telefone = m[0].trim();
+
+  const limpar = (s, extras) => {
+    let r = ' ' + s + ' ';
+    (extras || []).forEach(re => { r = r.replace(re, ' '); });
+    r = r.replace(/(?<!\d)[,.]|[,.](?!\d)|;/g, ' ').replace(/\s+/g, ' ').trim();
+    const conect = /^(de|do|da|dos|das|para|pra|pro|com|e|o|a|os|as|no|na|em|um|uma|que|entrega|entregar|prazo|valor|por)\s+/i;
+    const conectFim = /\s+(de|do|da|dos|das|para|pra|pro|com|e|o|a|no|na|em|entrega|entregar|prazo|valor|por|at[ée])$/i;
+    for (let i = 0; i < 6; i++) r = r.replace(conect, '').replace(conectFim, '');
+    return r.charAt(0).toUpperCase() + r.slice(1);
+  };
+  const res = { tipo, texto: textoOriginal.trim(), campos: {} };
+
+  if (tipo === 'pedido') {
+    // cliente: primeiro procura um já cadastrado; senão, um nome próprio depois de "do/da/para"
+    let cliente = null, clienteNovo = '';
+    const achados = clients.filter(c => ctx.resto.toLowerCase().includes(c.name.toLowerCase())).sort((a, b) => b.name.length - a.name.length);
+    if (achados.length) { cliente = achados[0]; const i = ctx.resto.toLowerCase().indexOf(cliente.name.toLowerCase()); ctx.resto = ctx.resto.slice(0, i) + ' ' + ctx.resto.slice(i + cliente.name.length); ctx.resto = ctx.resto.replace(/\b(do|da|de|para|pra|pro)\s+(cliente\s+)?(?=\s|$)/i, ' '); }
+    else if ((m = vozExtrair(ctx, /\b(?:do|da|para o|para a|para|pra|pro)\s+(?:cliente\s+)?([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+(?:d[aeo]s?\s+)?[A-ZÀ-Ý][a-zà-ÿ]+)*)/) || vozExtrair(ctx, /\bcliente\s+([A-ZÀ-Ýa-zà-ÿ]+(?:\s+[A-ZÀ-Ý][a-zà-ÿ]+)*)/))) clienteNovo = m[1].trim().replace(/^./, c => c.toUpperCase());
+    let status = /\bor[çc]amento\b/i.test(t) ? 'orcamento' : /\bimprimindo\b/i.test(t) ? 'imprimindo' : 'aprovado';
+    let material = '';
+    const mats = [...MATERIAIS_3D].filter(x => x !== 'Outro').sort((a, b) => b.length - a.length);
+    ctx.resto = ctx.resto.replace(/\bp\.?\s?l\.?\s?a\b/gi, 'PLA').replace(/\bp\.?\s?e\.?\s?t\.?\s?g\b/gi, 'PETG');
+    for (const x of mats) { const re = new RegExp('\\b(?:em |de )?' + x.replace(/ /g, '\\s+') + '\\b', 'i'); if (re.test(ctx.resto)) { material = x; vozExtrair(ctx, re); break; } }
+    let impressora = '';
+    if (vozExtrair(ctx, /\b(?:na |pela )?(?:anycubic |any cubic )?kobra(?: x)?\b/i)) impressora = 'Anycubic Kobra X';
+    else if ((m = vozExtrair(ctx, /\b(?:na |pela )?(?:bambu |bambu lab )?a ?1\s*(?:#|n[úu]mero\s*)?(1|2|primeira|segunda)\b/i))) impressora = /2|segunda/i.test(m[1]) ? IMPRESSORAS_3D[1] : IMPRESSORAS_3D[0];
+    const cores = [];
+    CORES_FILAMENTO.forEach(c => { const re = new RegExp('\\b' + c + '\\b', 'i'); if (re.test(ctx.resto)) { cores.push(c); ctx.resto = ctx.resto.replace(re, ' '); } });
+    ctx.resto = ctx.resto.replace(/\b(na cor|nas cores|cor|cores)\b/gi, ' ');
+    let qtd = 1;
+    if ((m = vozExtrair(ctx, /\b(\d{1,4})\s*(?:x\b|unidades?\b|p[eç]as?\b)?/i))) qtd = Number(m[1]) || 1;
+    const titulo = limpar(ctx.resto, [/\b(novo|nova|registrar|registra|cadastrar|criar|cria|adicionar|adiciona|anotar|anota)\b/gi, /\b(pedido|encomenda|or[çc]amento|imprimindo|aprovado)\b/gi, /\bno valor de\b/gi, /\bpara entrega\b/gi, /\bentrega(r)?\b/gi, /\bprazo\b/gi]);
+    res.campos = { cliente, clienteNovo, titulo, qtd, material, cores: cores.join(' e ').replace(/^./, c => c.toUpperCase()), impressora, valor, data, status };
+    res.resumo = [['Tipo', `📦 Pedido (${statusPedido(status).nome.toLowerCase()})`], ['Cliente', cliente ? cliente.name : clienteNovo ? clienteNovo + ' (novo)' : '—'], ['Peça', titulo || '—'], ['Qtd.', String(qtd)], ['Material / cor', [material, res.campos.cores].filter(Boolean).join(' · ') || '—'], ['Impressora', impressora || '—'], ['Valor', valor ? formatCurrency(valor) : '—'], ['Entrega', data ? rotuloDataLonga(data) : '—']];
+    res.ok = !!titulo;
+  } else if (tipo === 'cliente') {
+    let email = ''; if ((m = vozExtrair(ctx, /\b[\w.+-]+@[\w-]+\.[\w.]+\b/))) email = m[0];
+    let cidade = ''; if ((m = vozExtrair(ctx, /\b(?:de|em|mora em|da cidade de)\s+([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+[A-ZÀ-Ý][a-zà-ÿ]+)*)\s*$/))) cidade = m[1];
+    const nome = limpar(ctx.resto, [/\b(novo|nova|cadastrar|cadastra|registrar|criar|adicionar)\b/gi, /\bclientes?\b/gi, /\b(telefone|whatsapp|zap|celular|n[úu]mero|e-?mail)\b/gi]);
+    res.campos = { nome, telefone, email, cidade };
+    res.resumo = [['Tipo', '👤 Cliente'], ['Nome', nome || '—'], ['WhatsApp', telefone || '—'], ['E-mail', email || '—'], ['Cidade', cidade || '—']];
+    res.ok = !!nome;
+  } else if (tipo === 'despesa' || tipo === 'receita') {
+    const desc = limpar(ctx.resto, [/\b(gastei|paguei|despesa|comprei|recebi|receita|entrou|me pagou|pagou|lan[çc]ar|lan[çc]a|registrar)\b/gi]);
+    const l = low; let cat = 'Outros';
+    if (tipo === 'despesa') cat = /filamento|insumo|resina|bico|hotend|placa|pla\b|petg/.test(l) ? 'Filamento / Insumos' : /gasolina|combust[íi]vel|uber|[ôo]nibus|estacionamento/.test(l) ? 'Transporte' : /mercado|almo[çc]o|jantar|lanche|restaurante|comida|ifood/.test(l) ? 'Alimentação' : /aluguel|condom[íi]nio|luz|energia|[áa]gua|internet/.test(l) ? 'Moradia' : /imposto|das\b|mei\b/.test(l) ? 'Impostos' : 'Outros';
+    else cat = /primos|impress[ãa]o|pe[çc]a|pedido/.test(l) ? 'Primos 3D' : /projeto|engenharia|laudo|obra|art\b/.test(l) ? 'Engenharia / Projetos' : 'Outros';
+    res.campos = { desc, valor, data: data || hojeISO(), categoria: cat };
+    res.resumo = [['Tipo', tipo === 'despesa' ? '💸 Despesa' : '💰 Receita'], ['Descrição', desc || '—'], ['Valor', valor ? formatCurrency(valor) : '— (falta dizer o valor)'], ['Data', rotuloDataLonga(res.campos.data)], ['Categoria', cat]];
+    res.ok = !!desc && !!valor;
+  } else if (tipo === 'tarefa') {
+    const texto = limpar(ctx.resto, [/\b(nova|criar|adicionar|adiciona|anotar)\b/gi, /\btarefas?\b/gi, /\blembrete\b/gi, /\blembrar de\b/gi, /\bpreciso\b/gi, /\bat[ée](?![\wÀ-ÿ])/gi]);
+    res.campos = { texto, data };
+    res.resumo = [['Tipo', '✅ Tarefa'], ['O quê', texto || '—'], ['Prazo', data ? rotuloDataLonga(data) : '—']];
+    res.ok = !!texto;
+  } else if (tipo === 'compromisso') {
+    const l = low;
+    const tipoEv = /reuni[ãa]o|visita|obra|cliente|trabalho/.test(l) ? 'trabalho' : /consulta|m[ée]dico|dentista|exame/.test(l) ? 'saude' : /aula|prova|curso|estud/.test(l) ? 'estudo' : /anivers[áa]rio|festa|churrasco|jantar/.test(l) ? 'social' : /primos|fornecedor|neg[óo]cio/.test(l) ? 'negocios' : 'pessoal';
+    const titulo = limpar(ctx.resto, [/\b(novo|marcar|agendar|criar|adicionar)\b/gi, /\bcompromissos?\b/gi, /\bevento\b/gi]);
+    res.campos = { titulo, data: data || hojeISO(), hora, tipoEv };
+    res.resumo = [['Tipo', `${tipoEvento(tipoEv).icone} Compromisso (${tipoEvento(tipoEv).nome})`], ['O quê', titulo || '—'], ['Quando', rotuloDataLonga(res.campos.data) + (hora ? ' às ' + hora : '')]];
+    res.ok = !!titulo;
+  } else {
+    const conteudo = limpar(textoOriginal, [/^\s*(nova nota|nota|anota(r)?|anota[çc][ãa]o)\s*:?\s*/i]);
+    res.tipo = 'nota'; res.campos = { conteudo };
+    res.resumo = [['Tipo', '📝 Nota'], ['Texto', conteudo || '—']];
+    res.ok = !!conteudo;
+  }
+  return res;
+}
+
+/** Leva o ditado para o formulário certo. salvar=true também envia o formulário. */
+function aplicarDitado(salvarDireto) {
+  const r = vozResultado; if (!r) return;
+  if (salvarDireto && !r.ok) { toast('Faltou alguma informação — confira no formulário.'); salvarDireto = false; }
+  const $ = id => document.getElementById(id); const c = r.campos;
+  fecharVoz();
+  let form, foco;
+  if (r.tipo === 'pedido') {
+    changeTab('primos'); cancelarEdicaoPedido();
+    if (c.cliente) $('order-client').value = String(c.cliente.id);
+    else if (c.clienteNovo) { $('order-client').value = '__novo'; $('order-client-new').hidden = false; $('order-client-new').value = c.clienteNovo; }
+    $('order-title').value = c.titulo; $('order-qty').value = c.qtd || 1;
+    if (c.material) $('order-material').value = c.material;
+    $('order-color').value = c.cores || ''; $('order-printer').value = c.impressora || '';
+    $('order-price').value = c.valor || ''; $('order-due').value = c.data || ''; $('order-status').value = c.status;
+    $('order-notes').value = ''; form = 'order-form'; foco = 'order-title';
+  } else if (r.tipo === 'cliente') {
+    changeTab('primos'); cancelarEdicaoCliente();
+    $('client-name').value = c.nome; $('client-phone').value = c.telefone; $('client-email').value = c.email; $('client-city').value = c.cidade;
+    form = 'client-form'; foco = 'client-name';
+  } else if (r.tipo === 'despesa' || r.tipo === 'receita') {
+    changeTab('finances'); cancelarEdicaoFin();
+    $('type').value = r.tipo === 'despesa' ? 'expense' : 'income'; preencherCategorias(false); definirCategoriaNaTela(c.categoria);
+    $('desc').value = c.desc; $('amount').value = c.valor || ''; $('fin-date').value = c.data;
+    form = 'finance-form'; foco = 'desc';
+  } else if (r.tipo === 'tarefa') {
+    changeTab('tasks'); cancelarEdicaoTarefa();
+    $('task-desc').value = c.texto; $('task-due').value = c.data || '';
+    form = 'task-form'; foco = 'task-desc';
+  } else if (r.tipo === 'compromisso') {
+    changeTab('home'); cancelarEdicaoEvento();
+    $('event-title').value = c.titulo; $('event-date').value = c.data; $('event-time').value = c.hora || ''; $('event-type').value = c.tipoEv;
+    form = 'event-form'; foco = 'event-title';
+  } else {
+    changeTab('notes'); cancelarEdicaoNota(); alternarTipoNota('texto', document.querySelector('#note-tipo span'));
+    $('note-content').value = c.conteudo; form = 'note-form'; foco = 'note-content';
+  }
+  if (salvarDireto) $(form).requestSubmit();
+  else setTimeout(() => { $(foco).scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('✎ Confira os campos e toque em salvar.'); }, 150);
+}
+
+// --- Janela de voz (folha que sobe de baixo) ---
+function abrirVoz(modo) {
+  vozModo = modo; vozResultado = null;
+  const $ = id => document.getElementById(id);
+  $('voice-title').innerText = modo === 'claude' ? '✳ Pedir mudança ao Claude' : '🎤 Ditado';
+  $('voice-context').innerText = modo === 'claude'
+    ? `Página: ${nomeAbaAtual()}. Diga o que quer mudar ou adicionar no app.`
+    : `Ex.: "novo pedido do João, 3 vasos em PLA preto, 120 reais, entrega sexta" · "gastei 90 reais em filamento" · "reunião com cliente amanhã às 14h"`;
+  $('voice-text').value = ''; $('voice-text').placeholder = modo === 'claude' ? 'Ex.: adiciona um campo de peso da peça (em gramas) nos pedidos' : 'Fale ou digite aqui...';
+  $('voice-preview').innerHTML = ''; $('voice-actions').innerHTML = '';
+  $('voice-send').hidden = modo !== 'claude'; $('voice-interpret').hidden = modo === 'claude';
+  renderPedidosClaude();
+  $('voice-sheet').style.display = 'flex';
+  iniciarGravacao();
+}
+function fecharVoz() { pararGravacao(); document.getElementById('voice-sheet').style.display = 'none'; }
+function setVozStatus(txt, cor) { const el = document.getElementById('voice-status'); if (el) { el.innerText = txt || ''; el.style.color = cor || ''; } }
+function atualizarBotaoGravar() {
+  const b = document.getElementById('voice-rec'); if (!b) return;
+  b.classList.toggle('on', vozGravando); b.innerText = vozGravando ? '■ Parar' : '🎙 Falar';
+}
+function iniciarGravacao() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const caixa = document.getElementById('voice-text');
+  if (!SR) { setVozStatus('Toque no 🎤 do teclado para ditar.'); caixa.focus(); atualizarBotaoGravar(); return; }
+  try {
+    const r = new SR(); vozReconhecedor = r;
+    r.lang = 'pt-BR'; r.interimResults = true; r.continuous = false;
+    const base = caixa.value.trim() ? caixa.value.trim() + ' ' : '';
+    r.onresult = (e) => { let s = ''; for (const res of e.results) s += res[0].transcript; caixa.value = base + s; };
+    r.onerror = (e) => { setVozStatus(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Microfone bloqueado — permita nas configurações, ou use o 🎤 do teclado.' : e.error === 'no-speech' ? 'Não ouvi nada. Toque em Falar de novo.' : 'Não consegui ouvir. Use o 🎤 do teclado.', '#ff9f0a'); };
+    r.onend = () => { vozGravando = false; vozReconhecedor = null; atualizarBotaoGravar(); if (!document.getElementById('voice-status').style.color) setVozStatus(''); if (vozModo === 'dados' && caixa.value.trim()) interpretarVoz(); };
+    r.start(); vozGravando = true; setVozStatus('Ouvindo...', '');
+  } catch (err) { vozGravando = false; setVozStatus('Use o 🎤 do teclado para ditar.'); caixa.focus(); }
+  atualizarBotaoGravar();
+}
+function pararGravacao() { if (vozReconhecedor) { try { vozReconhecedor.stop(); } catch (e) { } } vozGravando = false; atualizarBotaoGravar(); }
+function alternarGravacao() { if (vozGravando) pararGravacao(); else { setVozStatus(''); iniciarGravacao(); } }
+
+function interpretarVoz() {
+  const txt = document.getElementById('voice-text').value.trim(); if (!txt) { toast('Fale ou digite primeiro.'); return; }
+  vozResultado = interpretarDitado(txt, abaAtual());
+  document.getElementById('voice-preview').innerHTML = `<div class="voice-card">${vozResultado.resumo.map(([k, v]) => `<div class="voice-row"><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div>`;
+  document.getElementById('voice-actions').innerHTML = `<button type="button" class="btn voice-primary" onclick="aplicarDitado(true)" ${vozResultado.ok ? '' : 'disabled'}>✓ Salvar</button><button type="button" class="btn" onclick="aplicarDitado(false)">✎ Revisar no formulário</button>`;
+}
+
+// --- ✳ Pedidos de mudança para o Claude ---
+// Modelo: { id, date, page, text, status: 'fila' }
+function enviarPedidoClaude() {
+  const txt = document.getElementById('voice-text').value.trim(); if (!txt) { toast('Fale ou digite o que quer mudar.'); return; }
+  pararGravacao();
+  claudeReqs.unshift({ id: novoId(), date: hojeISO(), page: nomeAbaAtual(), text: txt, status: 'fila' });
+  salvar('clauderequests', claudeReqs);
+  document.getElementById('voice-text').value = ''; renderPedidosClaude();
+  toast('✳ Pedido guardado. Assim que o envio automático estiver configurado, ele vai direto pro Claude.', 5000);
+}
+function removerPedidoClaude(id) { claudeReqs = claudeReqs.filter(r => r.id !== id); salvar('clauderequests', claudeReqs); renderPedidosClaude(); }
+function renderPedidosClaude() {
+  const el = document.getElementById('voice-requests'); if (!el) return;
+  if (vozModo !== 'claude' || !claudeReqs.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<h4>Pedidos guardados</h4><ul class="transaction-list">${claudeReqs.slice(0, 10).map(r => `<li><div class="transaction-info" style="flex:1"><span>${esc(r.text)}</span><small class="item-date">${esc(r.page)} · ${isoParaBR(r.date).slice(0, 5)} · na fila</small></div><div class="item-actions"><button class="mini-btn" title="Apagar" onclick="removerPedidoClaude(${r.id})">✕</button></div></li>`).join('')}</ul>`;
+}
+document.getElementById('voice-sheet').addEventListener('click', (e) => { if (e.target.id === 'voice-sheet') fecharVoz(); });
+
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, orders, clients, events, finances: transactions, recurring, tasks, tasklists, notes, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.orders) salvar('orders', data.orders); if (data.clients) salvar('clients', data.clients); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); location.reload(); } catch (error) { alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function exportData() { const data = { habits, habitlog: habitLog, orders, clients, events, finances: transactions, recurring, tasks, tasklists, notes, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile, clauderequests: claudeReqs }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.orders) salvar('orders', data.orders); if (data.clients) salvar('clients', data.clients); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile', 'clauderequests'].forEach(k => { if (data[k]) salvar(k, data[k]); }); location.reload(); } catch (error) { alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // SINCRONIZAÇÃO (Google Sheets via Apps Script — ver sync/Code.gs)
@@ -2050,7 +2301,7 @@ function importData(event) { const file = event.target.files[0]; if (!file) retu
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'events', 'finances', 'recurring', 'tasks', 'tasklists', 'notes', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'events', 'finances', 'recurring', 'tasks', 'tasklists', 'notes', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile', 'clauderequests'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -2180,6 +2431,7 @@ function redesenharTudo() {
   assets = JSON.parse(localStorage.getItem('lifeos_assets')) || []; moves = JSON.parse(localStorage.getItem('lifeos_moves')) || []; goals = JSON.parse(localStorage.getItem('lifeos_goals')) || []; projects = JSON.parse(localStorage.getItem('lifeos_projects')) || []; wealth = JSON.parse(localStorage.getItem('lifeos_wealth')) || wealth;
   workouts = JSON.parse(localStorage.getItem('lifeos_workouts')) || []; measures = JSON.parse(localStorage.getItem('lifeos_measures')) || []; hydration = JSON.parse(localStorage.getItem('lifeos_hydration')) || hydration; meals = JSON.parse(localStorage.getItem('lifeos_meals')) || []; medical = JSON.parse(localStorage.getItem('lifeos_medical')) || [];
   profile = JSON.parse(localStorage.getItem('lifeos_profile')) || profile; aplicarPerfil();
+  claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || []; renderPedidosClaude();
   renderFocusTab(); renderPrimos(); renderEvents(); updateFinanceValues(); renderFinances(); renderRecorrentes(); renderTaskLists(); renderTasks(); renderNotes(); redesenharEstudos(); redesenharNegocios(); renderSaude(); updateStudyStats(); renderJournal(); atualizarSaudacao();
 }
 
