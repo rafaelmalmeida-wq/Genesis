@@ -52,6 +52,9 @@ a { color: var(--blue); }
 .life-os-header { display: flex; align-items: center; gap: 14px; padding: 10px 4px 6px; }
 .life-os-header h1 { font-size: 2.1rem; font-weight: 700; color: var(--label); line-height: 1.1; overflow-wrap: anywhere; }
 .avatar-placeholder { font-size: 2rem; width: 60px; height: 60px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; border-radius: 50%; background: linear-gradient(145deg, #ffffff, #e5e5ea); box-shadow: 0 0 0 0.5px var(--sep); }
+.app-logo { width: 60px; height: 60px; flex-shrink: 0; border-radius: 13.5px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.06); }
+.tabs-logo { display: flex; align-items: center; padding: 0 6px 0 4px; flex-shrink: 0; }
+.tabs-logo img { width: 28px; height: 28px; border-radius: 7px; display: block; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08); }
 .start-day-btn { background: var(--fill); color: var(--blue); border: none; padding: 6px 14px; border-radius: 16px; font-size: 0.82rem; font-weight: 600; margin-top: 6px; cursor: pointer; }
 .start-day-btn:hover { background: var(--fill2); }
 .start-day-btn.done { color: var(--green); cursor: default; }
@@ -418,6 +421,7 @@ button:active { transform: scale(0.98); }
 @media (max-width: 800px) {
   body { padding: calc(6px + env(safe-area-inset-top)) 16px calc(var(--tabbar-h) + 30px + env(safe-area-inset-bottom)); }
   .tabs { position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 900; gap: 0; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); border-radius: 0; border: none; border-top: 0.5px solid var(--sep); background: rgba(249, 249, 249, 0.9); justify-content: flex-start; }
+  .tabs-logo { display: none; }
   .tab-btn { flex: 0 0 auto; min-width: 70px; flex-direction: column; gap: 3px; padding: 5px 4px; font-size: 0.64rem; font-weight: 500; border-radius: 8px; }
   .tab-btn.active { background: transparent; color: var(--blue); font-weight: 600; }
   .tab-ico { width: 28px; height: 28px; border-radius: 7.5px; }
