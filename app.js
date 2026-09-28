@@ -274,7 +274,7 @@ setInterval(atualizarSaudacao, 60000);
 /** Aplica nome/iniciais na tela (cabeçalho, título da aba, campos da Config). */
 function aplicarPerfil() {
   const h = document.getElementById('header-title');
-  if (h) h.innerHTML = (profile.initials ? `${esc(profile.initials)} <span style="color:#30d158">·</span> ` : '') + esc(profile.subtitle || 'Life OS');
+  if (h) h.innerHTML = (profile.initials ? `${esc(profile.initials)} <span style="color:#34c759">·</span> ` : '') + esc(profile.subtitle || 'Life OS');
   const n = document.getElementById('profile-name'); const i = document.getElementById('profile-initials'); const s = document.getElementById('profile-subtitle');
   if (n && document.activeElement !== n) n.value = profile.name || '';
   if (i && document.activeElement !== i) i.value = profile.initials || '';
@@ -359,8 +359,8 @@ function renderFocusTab() {
   } else {
     filteredHabits.forEach(h => {
       const streak = streakHabito(h);
-      mainHabits.innerHTML += `<li style="color: ${h.done ? '#8e8e93' : '#f5f5f7'};">
-        <input type="checkbox" ${h.done ? 'checked' : ''} onclick="toggleHabit(${h.originalIndex})" style="accent-color: #30d158;">
+      mainHabits.innerHTML += `<li style="color: ${h.done ? '#8e8e93' : 'var(--label)'};">
+        <input type="checkbox" ${h.done ? 'checked' : ''} onclick="toggleHabit(${h.originalIndex})" style="accent-color: #34c759;">
         <span style="opacity: ${h.done ? 0.5 : 1}; cursor: pointer;" onclick="toggleHabit(${h.originalIndex})">${esc(h.icon)}</span>
         <span style="${h.done ? 'text-decoration: line-through; opacity: 0.5' : ''}; cursor: pointer; flex:1;" onclick="toggleHabit(${h.originalIndex})">${esc(h.text)}</span>
         ${streak > 0 ? `<span class="streak" title="${streak} dia(s) seguidos">🔥 ${streak}</span>` : ''}
@@ -448,15 +448,15 @@ function renderJournal() {
   const nomes = { day: 'Hoje', week: 'Esta semana', month: 'Este mês', quarter: 'Este trimestre', year: 'Este ano' };
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = `<div class="stat-period">${nomes[currentJournal]} · ${isoParaBR(ini)}${ini !== fim ? ' a ' + isoParaBR(fim) : ''}</div><div class="stat-grid">`;
-  html += tile('🎮', `${habPct}%`, currentJournal === 'day' ? 'hábitos hoje' : 'média de hábitos', '#30d158');
+  html += tile('🎮', `${habPct}%`, currentJournal === 'day' ? 'hábitos hoje' : 'média de hábitos', '#34c759');
   html += tile('🖨️', `${ped.length}`, `pedido${ped.length === 1 ? '' : 's'} · ${formatCurrency(pedR)} recebido`, COR_PEDIDO);
-  html += tile('✅', `${tarefasFeitas}`, `concluída${tarefasFeitas === 1 ? '' : 's'} · ${tarefasPend} pendente${tarefasPend === 1 ? '' : 's'}`, '#0a84ff');
-  html += tile('📚', `${Math.floor(estudo / 60)}h ${estudo % 60}m`, 'de estudo', '#bf5af2');
-  html += tile('💰', formatCurrency(inc - exp), `↑ ${formatCurrency(inc)} · ↓ ${formatCurrency(exp)}`, inc - exp >= 0 ? '#30d158' : '#ff453a');
+  html += tile('✅', `${tarefasFeitas}`, `concluída${tarefasFeitas === 1 ? '' : 's'} · ${tarefasPend} pendente${tarefasPend === 1 ? '' : 's'}`, '#007aff');
+  html += tile('📚', `${Math.floor(estudo / 60)}h ${estudo % 60}m`, 'de estudo', '#af52de');
+  html += tile('💰', formatCurrency(inc - exp), `↑ ${formatCurrency(inc)} · ↓ ${formatCurrency(exp)}`, inc - exp >= 0 ? '#34c759' : '#ff3b30');
   const aportado = moves.filter(m => m.type === 'aporte' && !m.initial && dentro(m.date)).reduce((a, m) => a + m.amount, 0);
-  html += tile('🏦', formatCurrency(patrimonioTotal()), `patrimônio · ${formatCurrency(aportado)} aportados`, '#0a84ff');
+  html += tile('🏦', formatCurrency(patrimonioTotal()), `patrimônio · ${formatCurrency(aportado)} aportados`, '#007aff');
   const tr_ = workouts.filter(w => dentro(w.date)); const trMin = tr_.reduce((a, w) => a + (w.minutes || 0), 0);
-  html += tile('🏋️', `${tr_.length}`, `treino${tr_.length === 1 ? '' : 's'} · ${trMin} min · 💧 ${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L hoje`, '#30d158');
+  html += tile('🏋️', `${tr_.length}`, `treino${tr_.length === 1 ? '' : 's'} · ${trMin} min · 💧 ${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L hoje`, '#34c759');
   html += '</div>';
 
   if (currentJournal === 'day') {
@@ -481,22 +481,22 @@ function renderJournal() {
     const porMes = {};
     ped.forEach(o => { const m = o.date.slice(0, 7); porMes[m] = porMes[m] || { n: 0, valor: 0, pagos: 0 }; porMes[m].n++; if (pedidoGeraLancamento(o)) porMes[m].valor += Number(o.price) || 0; if (o.paid) porMes[m].pagos += Number(o.price) || 0; });
     const meses = Object.keys(porMes).sort();
-    html += `<div class="stat-lists"><div><h5>🖨️ Pedidos por mês</h5>${meses.length ? meses.map(m => `<div class="stat-line"><strong>${nomeMes(m).slice(0, 3)}</strong> · ${porMes[m].n} pedido${porMes[m].n === 1 ? '' : 's'} · <span style="color:${COR_PEDIDO}">${formatCurrency(porMes[m].valor)}</span> <small style="color:#30d158">(${formatCurrency(porMes[m].pagos)} recebido)</small></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div></div>`;
+    html += `<div class="stat-lists"><div><h5>🖨️ Pedidos por mês</h5>${meses.length ? meses.map(m => `<div class="stat-line"><strong>${nomeMes(m).slice(0, 3)}</strong> · ${porMes[m].n} pedido${porMes[m].n === 1 ? '' : 's'} · <span style="color:${COR_PEDIDO}">${formatCurrency(porMes[m].valor)}</span> <small style="color:#34c759">(${formatCurrency(porMes[m].pagos)} recebido)</small></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div></div>`;
   }
   content.innerHTML = html;
 }
 
 // --- AGENDA: TIPOS DE COMPROMISSO ---
 const TIPOS_EVENTO = {
-  trabalho: { nome: 'Trabalho', cor: '#0a84ff', icone: '💼' },
-  pessoal:  { nome: 'Pessoal',  cor: '#bf5af2', icone: '🏠' },
-  saude:    { nome: 'Saúde',    cor: '#30d158', icone: '🩺' },
-  estudo:   { nome: 'Estudo',   cor: '#ff375f', icone: '📚' },
-  negocios: { nome: 'Negócios', cor: '#ffd60a', icone: '📈' },
-  social:   { nome: 'Social',   cor: '#ffb340', icone: '🎉' },
+  trabalho: { nome: 'Trabalho', cor: '#007aff', icone: '💼' },
+  pessoal:  { nome: 'Pessoal',  cor: '#af52de', icone: '🏠' },
+  saude:    { nome: 'Saúde',    cor: '#34c759', icone: '🩺' },
+  estudo:   { nome: 'Estudo',   cor: '#ff2d55', icone: '📚' },
+  negocios: { nome: 'Negócios', cor: '#e0a800', icone: '📈' },
+  social:   { nome: 'Social',   cor: '#a2845e', icone: '🎉' },
   outro:    { nome: 'Outro',    cor: '#8e8e93', icone: '📌' }
 };
-const COR_PEDIDO = '#ff9f0a'; // entregas da Primos 3D no calendário
+const COR_PEDIDO = '#ff9500'; // entregas da Primos 3D no calendário
 function tipoEvento(t) { return TIPOS_EVENTO[t] || TIPOS_EVENTO.outro; }
 function diaSemanaCurto(iso) { const [y, m, d] = iso.split('-'); return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''); }
 function rotuloData(iso) {
@@ -695,11 +695,11 @@ function updateFinanceValues() {
   document.getElementById('total-income').innerText = formatCurrency(income);
   document.getElementById('total-expense').innerText = formatCurrency(expense);
   document.getElementById('net-balance').innerText = formatCurrency(total);
-  document.getElementById('net-balance').style.color = total >= 0 ? '#30d158' : '#ff453a';
+  document.getElementById('net-balance').style.color = total >= 0 ? '#34c759' : '#ff3b30';
   const pend = document.getElementById('total-pending'); if (pend) pend.innerText = formatCurrency(aReceber);
   const lbl = document.getElementById('fin-month-label'); if (lbl) lbl.innerText = finModo === 'mes' ? nomeMes(finMonth) : 'Todo o período';
   const extra = document.getElementById('fin-extra');
-  if (extra) extra.innerHTML = `<span>💸 A pagar: <strong style="color:#ff453a">${formatCurrency(aPagar)}</strong></span><span>📈 Previsto (saldo + a receber − a pagar): <strong style="color:${total + aReceber - aPagar >= 0 ? '#30d158' : '#ff453a'}">${formatCurrency(total + aReceber - aPagar)}</strong></span><span>🏦 Saldo acumulado (tudo): <strong style="color:${acumulado >= 0 ? '#30d158' : '#ff453a'}">${formatCurrency(acumulado)}</strong></span>`;
+  if (extra) extra.innerHTML = `<span>💸 A pagar: <strong style="color:#ff3b30">${formatCurrency(aPagar)}</strong></span><span>📈 Previsto (saldo + a receber − a pagar): <strong style="color:${total + aReceber - aPagar >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(total + aReceber - aPagar)}</strong></span><span>🏦 Saldo acumulado (tudo): <strong style="color:${acumulado >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(acumulado)}</strong></span>`;
 }
 
 function renderFinances() {
@@ -716,7 +716,7 @@ function renderFinances() {
     const li = document.createElement('li'); li.classList.add(t.type === 'income' ? 'income-item' : 'expense-item'); if (pend) li.classList.add('pending-item');
     li.innerHTML = `<div class="transaction-info" style="flex:1"><span>${dePedido ? '📦 ' : ''}${t.recurringId ? '🔁 ' : ''}${esc(t.desc)}${pend ? (t.type === 'income' ? ' <span class="badge-unpaid">a receber</span>' : ' <span class="badge-topay">a pagar</span>') : ''}</span>
         <small class="category-badge">${esc(t.category || 'Sem categoria')}</small> <small class="item-date">${isoParaBR(dataTransacao(t))}</small>${t.notes ? `<small class="item-notes">${esc(t.notes)}</small>` : ''}</div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${t.type === 'income' ? '#30d158' : '#ff453a'}">${t.type === 'income' ? '+' : '−'}${formatCurrency(t.amount)}</strong><button class="mini-btn ${pend ? '' : 'on'}" title="${pend ? 'Marcar como efetivado' : 'Voltar para pendente'}" onclick="alternarEfetivado(${i})">💵</button><button class="mini-btn" title="Editar" onclick="editarTransacao(${i})">✎</button><button class="mini-btn" title="Apagar" onclick="removeFinance(${i})">✕</button></div>`;
+      <div class="item-actions"><strong style="margin-right:6px; color:${t.type === 'income' ? '#34c759' : '#ff3b30'}">${t.type === 'income' ? '+' : '−'}${formatCurrency(t.amount)}</strong><button class="mini-btn ${pend ? '' : 'on'}" title="${pend ? 'Marcar como efetivado' : 'Voltar para pendente'}" onclick="alternarEfetivado(${i})">💵</button><button class="mini-btn" title="Editar" onclick="editarTransacao(${i})">✎</button><button class="mini-btn" title="Apagar" onclick="removeFinance(${i})">✕</button></div>`;
     tList.appendChild(li);
   });
   renderCategoriasFin(); renderMesesFin();
@@ -731,7 +731,7 @@ function renderCategoriasFin() {
     if (!itens.length) return `<div class="cat-block"><h5>${titulo}</h5><div class="stat-line muted">nada ainda</div></div>`;
     return `<div class="cat-block"><h5>${titulo} · ${formatCurrency(total)}</h5>` + itens.map(([c, v]) => `<div class="cat-row"><span class="cat-name">${esc(c)}</span><div class="cat-bar"><div style="width:${Math.round(v / total * 100)}%; background:${cor}"></div></div><span class="cat-val">${formatCurrency(v)} <small>${Math.round(v / total * 100)}%</small></span></div>`).join('') + '</div>';
   };
-  el.innerHTML = bloco('expense', '#ff453a', '💸 Despesas') + bloco('income', '#30d158', '💰 Receitas');
+  el.innerHTML = bloco('expense', '#ff3b30', '💸 Despesas') + bloco('income', '#34c759', '💰 Receitas');
 }
 
 function renderMesesFin() {
@@ -742,7 +742,7 @@ function renderMesesFin() {
   const max = Math.max(1, ...dados.map(d => Math.max(d.inc, d.exp)));
   el.innerHTML = dados.map(d => `<div class="mes-col ${d.m === finMonth && finModo === 'mes' ? 'atual' : ''}" onclick="finMonth='${d.m}'; finModo='mes'; redesenharFinancas();" title="Receitas ${formatCurrency(d.inc)} · Despesas ${formatCurrency(d.exp)}">
       <div class="mes-bars"><div class="mes-bar inc" style="height:${Math.round(d.inc / max * 100)}%"></div><div class="mes-bar exp" style="height:${Math.round(d.exp / max * 100)}%"></div></div>
-      <small>${nomeMes(d.m).slice(0, 3)}</small><small class="mes-saldo" style="color:${d.inc - d.exp >= 0 ? '#30d158' : '#ff453a'}">${formatCurrency(d.inc - d.exp).replace('R$', '').trim()}</small></div>`).join('');
+      <small>${nomeMes(d.m).slice(0, 3)}</small><small class="mes-saldo" style="color:${d.inc - d.exp >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(d.inc - d.exp).replace('R$', '').trim()}</small></div>`).join('');
 }
 
 document.getElementById('type').addEventListener('change', () => preencherCategorias(false));
@@ -847,7 +847,7 @@ function renderRecorrentes() {
   [...recurring].sort((a, b) => (a.day || 0) - (b.day || 0)).forEach(r => {
     const off = r.active === false;
     ul.innerHTML += `<li class="${r.type === 'income' ? 'income-item' : 'expense-item'}" style="${off ? 'opacity:0.45' : ''}"><div class="transaction-info" style="flex:1"><span>🔁 ${esc(r.desc)}${off ? ' <small class="item-date">(pausada)</small>' : ''}</span><small class="category-badge">${esc(r.category)}</small> <small class="item-date">todo dia ${r.day}</small></div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${r.type === 'income' ? '#30d158' : '#ff453a'}">${formatCurrency(r.amount)}</strong><button class="mini-btn ${off ? '' : 'on'}" title="${off ? 'Reativar' : 'Pausar'}" onclick="alternarRecorrente(${r.id})">${off ? '▶' : '⏸'}</button><button class="mini-btn" title="Editar" onclick="editarRecorrente(${r.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerRecorrente(${r.id})">✕</button></div></li>`;
+      <div class="item-actions"><strong style="margin-right:6px; color:${r.type === 'income' ? '#34c759' : '#ff3b30'}">${formatCurrency(r.amount)}</strong><button class="mini-btn ${off ? '' : 'on'}" title="${off ? 'Reativar' : 'Pausar'}" onclick="alternarRecorrente(${r.id})">${off ? '▶' : '⏸'}</button><button class="mini-btn" title="Editar" onclick="editarRecorrente(${r.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerRecorrente(${r.id})">✕</button></div></li>`;
   });
 }
 
@@ -860,11 +860,11 @@ function renderRecorrentes() {
 // ============================================================================
 const STATUS_PEDIDO = {
   orcamento:  { nome: 'Orçamento',  icone: '📝', cor: '#8e8e93' },
-  aprovado:   { nome: 'Aprovado',   icone: '👍', cor: '#0a84ff' },
-  imprimindo: { nome: 'Imprimindo', icone: '🖨️', cor: '#ff9f0a' },
-  pronto:     { nome: 'Pronto',     icone: '✅', cor: '#30d158' },
-  entregue:   { nome: 'Entregue',   icone: '📦', cor: '#64d2ff' },
-  cancelado:  { nome: 'Cancelado',  icone: '✕',  cor: '#ff453a' }
+  aprovado:   { nome: 'Aprovado',   icone: '👍', cor: '#007aff' },
+  imprimindo: { nome: 'Imprimindo', icone: '🖨️', cor: '#ff9500' },
+  pronto:     { nome: 'Pronto',     icone: '✅', cor: '#34c759' },
+  entregue:   { nome: 'Entregue',   icone: '📦', cor: '#32ade6' },
+  cancelado:  { nome: 'Cancelado',  icone: '✕',  cor: '#ff3b30' }
 };
 const FLUXO_PEDIDO = ['orcamento', 'aprovado', 'imprimindo', 'pronto', 'entregue'];
 const MATERIAIS_3D = ['PLA', 'PLA Silk', 'PLA Matte', 'PETG', 'ABS', 'ASA', 'TPU', 'Outro'];
@@ -1096,11 +1096,11 @@ function renderPainelPrimos() {
   const recebidoMes = orders.filter(o => o.paid && (o.paidAt || '').startsWith(mes)).reduce((a, o) => a + (Number(o.price) || 0), 0);
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   el.innerHTML = '<div class="stat-grid">'
-    + tile('📦', `${producao.length}`, `em produção · ${imprimindo} imprimindo${atrasados ? ` · <span style="color:#ff453a">${atrasados} atrasado${atrasados === 1 ? '' : 's'}</span>` : ''}`, '#0a84ff')
+    + tile('📦', `${producao.length}`, `em produção · ${imprimindo} imprimindo${atrasados ? ` · <span style="color:#ff3b30">${atrasados} atrasado${atrasados === 1 ? '' : 's'}</span>` : ''}`, '#007aff')
     + tile('📝', `${orc}`, `orçamento${orc === 1 ? '' : 's'} aguardando`, '#8e8e93')
-    + tile('⏳', formatCurrency(totalReceber), `a receber (${aReceber.length})`, '#ff9f0a')
-    + tile('💵', formatCurrency(recebidoMes), 'recebido este mês', '#30d158')
-    + tile('👤', `${clients.length}`, `cliente${clients.length === 1 ? '' : 's'}`, '#bf5af2')
+    + tile('⏳', formatCurrency(totalReceber), `a receber (${aReceber.length})`, '#ff9500')
+    + tile('💵', formatCurrency(recebidoMes), 'recebido este mês', '#34c759')
+    + tile('👤', `${clients.length}`, `cliente${clients.length === 1 ? '' : 's'}`, '#af52de')
     + '</div>';
 }
 function renderPrimos() { preencherSelectsPrimos(); renderPainelPrimos(); renderPedidos(); renderClientes(); }
@@ -1109,7 +1109,7 @@ function redesenharPrimos() { renderPrimos(); updateFinanceValues(); renderFinan
 // --- TAREFAS (estilo Google Tasks) ---
 // Modelo: { id, text, done, doneAt, list, due: 'aaaa-mm-dd' | '', notes, starred, subtasks: [{ text, done }], createdAt }
 // Listas: tasklists = [{ id, name }]  (a lista 'padrao' sempre existe)
-const COR_TAREFA = '#0a84ff';
+const COR_TAREFA = '#007aff';
 let taskView = 'padrao';      // id da lista em exibição, ou '__star' (com estrela) ou '__all' (todas)
 let taskShowDone = false;
 let taskExpanded = {};        // id -> subtarefas abertas?
@@ -1243,9 +1243,9 @@ function renderTasks() {
 }
 function linhaTarefa(t) {
   const p = prazoInfo(t); const subs = t.subtasks || []; const feitasSub = subs.filter(s => s.done).length; const aberto = !!taskExpanded[t.id];
-  return `<li class="task-item ${t.done ? 'done' : ''}" style="border-left-color:${t.starred ? '#ffd60a' : COR_TAREFA}">
+  return `<li class="task-item ${t.done ? 'done' : ''}" style="border-left-color:${t.starred ? '#e0a800' : COR_TAREFA}">
     <div class="task-main">
-      <input type="checkbox" ${t.done ? 'checked' : ''} onclick="toggleTask(${t.id})" style="accent-color: #0a84ff;">
+      <input type="checkbox" ${t.done ? 'checked' : ''} onclick="toggleTask(${t.id})" style="accent-color: #007aff;">
       <div class="task-body" onclick="editarTarefa(${t.id})">
         <span class="task-text">${esc(t.text)}</span>
         <div class="task-meta">${p.rotulo ? `<span class="due ${p.classe}">📅 ${esc(p.rotulo)}</span>` : ''}${taskView === '__star' || taskView === '__all' ? `<span class="task-list-tag">📋 ${esc(listaNome(t.list))}</span>` : ''}${subs.length ? `<span class="sub-count" onclick="event.stopPropagation(); taskExpanded[${t.id}] = !taskExpanded[${t.id}]; renderTasks();">☑ ${feitasSub}/${subs.length}</span>` : ''}${!t.done ? `<span class="quick-dates" onclick="event.stopPropagation()"><button class="mini-btn xs" title="Prazo: hoje" onclick="adiarTarefa(${t.id}, 0)">hoje</button><button class="mini-btn xs" title="Prazo: amanhã" onclick="adiarTarefa(${t.id}, 1)">amanhã</button><button class="mini-btn xs" title="Prazo: +7 dias" onclick="adiarTarefa(${t.id}, 7)">+7d</button></span>` : ''}${t.notes ? `<span class="task-notes">${esc(t.notes)}</span>` : ''}</div>
@@ -1284,16 +1284,16 @@ function tarefasPrioritarias(n) { return tasks.filter(t => !t.done).sort(ordenar
 // --- NOTAS (estilo Google Keep) ---
 // Modelo: { id, title, content, checklist: [{ text, done }] | null, color, labels: [], pinned, archived, createdAt, updatedAt }
 const CORES_NOTA = {
-  default: { nome: 'Padrão',  bg: '#121212', borda: '#2a2a2a' },
-  red:     { nome: 'Vermelho', bg: '#3b1f1f', borda: '#7f1d1d' },
-  orange:  { nome: 'Laranja',  bg: '#3d2a14', borda: '#9a3412' },
-  yellow:  { nome: 'Amarelo',  bg: '#3d3414', borda: '#a16207' },
-  green:   { nome: 'Verde',    bg: '#14301f', borda: '#166534' },
-  teal:    { nome: 'Azul-petróleo', bg: '#0f2f33', borda: '#0e7490' },
-  blue:    { nome: 'Azul',     bg: '#142a3d', borda: '#1d4ed8' },
-  purple:  { nome: 'Roxo',     bg: '#2a1a3d', borda: '#6d28d9' },
-  pink:    { nome: 'Rosa',     bg: '#3d1a2e', borda: '#be185d' },
-  gray:    { nome: 'Cinza',    bg: '#26272b', borda: '#52525b' }
+  default: { nome: 'Padrão',  bg: '#f2f2f7', borda: '#d1d1d6' },
+  red:     { nome: 'Vermelho', bg: '#ffe1df', borda: '#ff9f99' },
+  orange:  { nome: 'Laranja',  bg: '#ffecd4', borda: '#ffc27a' },
+  yellow:  { nome: 'Amarelo',  bg: '#fff5c7', borda: '#f5d64e' },
+  green:   { nome: 'Verde',    bg: '#dcf5e2', borda: '#8fdca2' },
+  teal:    { nome: 'Azul-petróleo', bg: '#d6f1f5', borda: '#7fcfdc' },
+  blue:    { nome: 'Azul',     bg: '#dcebff', borda: '#8fbfff' },
+  purple:  { nome: 'Roxo',     bg: '#f0e2fa', borda: '#cf9ff0' },
+  pink:    { nome: 'Rosa',     bg: '#ffe0e8', borda: '#ff9bb5' },
+  gray:    { nome: 'Cinza',    bg: '#e9e9ee', borda: '#b8b8c0' }
 };
 let noteFilter = 'ativas';   // 'ativas' | 'fixadas' | 'arquivadas'
 let noteLabel = '';          // marcador selecionado
@@ -1430,7 +1430,7 @@ function cardNota(n) {
 const AREAS_ESTUDO = { negocios: '📈 Negócios', investimentos: '💰 Investimentos', medicina: '🩺 Medicina', idiomas: '🗣️ Idiomas', tecnologia: '💻 Tecnologia', pessoal: '🌱 Desenvolvimento pessoal', outro: '📌 Outro' };
 const TIPOS_MATERIAL = { livro: '📖 Livro', curso: '🎓 Curso', artigo: '📄 Artigo', video: '🎬 Vídeo', podcast: '🎧 Podcast', outro: '📌 Outro' };
 const STATUS_MATERIAL = { afazer: 'A fazer', andamento: 'Em andamento', concluido: 'Concluído' };
-const CORES_TEMA = ['#0a84ff', '#bf5af2', '#30d158', '#ff375f', '#ffd60a', '#ffb340', '#ff453a', '#8e8e93'];
+const CORES_TEMA = ['#007aff', '#af52de', '#34c759', '#ff2d55', '#e0a800', '#a2845e', '#ff3b30', '#8e8e93'];
 let materialFilter = 'andamento';
 
 function temaNome(id) { const t = topics.find(x => x.id === id); return t ? t.name : 'Geral'; }
@@ -1540,7 +1540,7 @@ function renderMateriais() {
   if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum material aqui.</li>'; return; }
   lista.forEach(m => {
     const cor = temaCor(m.topicId);
-    ul.innerHTML += `<li class="material-item" style="border-left-color:${cor}"><div class="transaction-info" style="flex:1"><span>${(TIPOS_MATERIAL[m.kind] || '📌').slice(0, 2)} ${m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="color:#f5f5f7">${esc(m.title)} ↗</a>` : esc(m.title)} <small class="category-badge" style="color:${cor}; background:${cor}22">${esc(temaNome(m.topicId))}</small> <small class="item-date">${STATUS_MATERIAL[m.status] || ''}</small></span>
+    ul.innerHTML += `<li class="material-item" style="border-left-color:${cor}"><div class="transaction-info" style="flex:1"><span>${(TIPOS_MATERIAL[m.kind] || '📌').slice(0, 2)} ${m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="color:var(--label)">${esc(m.title)} ↗</a>` : esc(m.title)} <small class="category-badge" style="color:${cor}; background:${cor}22">${esc(temaNome(m.topicId))}</small> <small class="item-date">${STATUS_MATERIAL[m.status] || ''}</small></span>
         <div class="progress-line"><input type="range" min="0" max="100" value="${m.progress || 0}" onchange="progressoMaterial(${m.id}, this.value)" title="Progresso"><small>${m.progress || 0}%</small></div>${m.notes ? `<small class="item-notes">${esc(m.notes)}</small>` : ''}</div>
       <div class="item-actions"><button class="mini-btn" title="Avançar status" onclick="avancarMaterial(${m.id})">${m.status === 'concluido' ? '↩' : '▶'}</button><button class="mini-btn" title="Agendar revisões (1, 7, 30 dias)" onclick="agendarRevisao(${m.id})">🔁</button><button class="mini-btn" title="Editar" onclick="editarMaterial(${m.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMaterial(${m.id})">✕</button></div></li>`;
   });
@@ -1624,10 +1624,10 @@ function renderPainelEstudos() {
   const proxRev = tasks.filter(t => !t.done && t.text.startsWith('🔁 Revisar') && t.due).sort((a, b) => a.due.localeCompare(b.due))[0];
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = '<div class="stat-grid">';
-  html += tile('⏱', fmtMin(semana), metaTotal ? `nesta semana · meta ${fmtMin(metaTotal)} (${Math.min(100, Math.round(semana / metaTotal * 100))}%)` : 'nesta semana', '#bf5af2');
-  html += tile('🔥', `${streak}`, `dia${streak === 1 ? '' : 's'} seguido${streak === 1 ? '' : 's'} estudando`, '#ff9f0a');
-  html += tile('📖', `${emAnd.length}`, 'em andamento', '#0a84ff');
-  html += tile('🔁', proxRev ? rotuloData(proxRev.due) : '—', proxRev ? proxRev.text.replace('🔁 Revisar: ', '').slice(0, 30) : 'nenhuma revisão marcada', '#30d158');
+  html += tile('⏱', fmtMin(semana), metaTotal ? `nesta semana · meta ${fmtMin(metaTotal)} (${Math.min(100, Math.round(semana / metaTotal * 100))}%)` : 'nesta semana', '#af52de');
+  html += tile('🔥', `${streak}`, `dia${streak === 1 ? '' : 's'} seguido${streak === 1 ? '' : 's'} estudando`, '#ff9500');
+  html += tile('📖', `${emAnd.length}`, 'em andamento', '#007aff');
+  html += tile('🔁', proxRev ? rotuloData(proxRev.due) : '—', proxRev ? proxRev.text.replace('🔁 Revisar: ', '').slice(0, 30) : 'nenhuma revisão marcada', '#34c759');
   html += '</div>';
   const porTema = topics.filter(t => !t.archived).map(t => ({ t, min: minutosNaSemana(t.id) })).filter(x => x.min > 0 || x.t.weeklyGoalMin);
   if (porTema.length) html += '<div class="cat-block" style="margin-top:12px"><h5>Semana por tema</h5>' + porTema.map(({ t, min }) => { const meta = t.weeklyGoalMin || 0; const pct = meta ? Math.min(100, Math.round(min / meta * 100)) : (semana ? Math.round(min / semana * 100) : 0); return `<div class="cat-row"><span class="cat-name">${esc(t.name)}</span><div class="cat-bar"><div style="width:${pct}%; background:${t.color}"></div></div><span class="cat-val">${fmtMin(min)}${meta ? ` <small>/ ${fmtMin(meta)}</small>` : ''}</span></div>`; }).join('') + '</div>';
@@ -1644,16 +1644,16 @@ function redesenharEstudos() { preencherTemasSelects(); renderPainelEstudos(); r
 // wealth:   { snapshots: { 'aaaa-mm': patrimônio }, indicators: { cdi, selic, ipca, ref } }
 // ============================================================================
 const CLASSES_ATIVO = {
-  reserva: { nome: 'Reserva de emergência', cor: '#30d158', icone: '🛟' },
-  rf:      { nome: 'Renda fixa',            cor: '#0a84ff', icone: '🏦' },
-  fundo:   { nome: 'Fundo',                 cor: '#bf5af2', icone: '🧺' },
-  acao:    { nome: 'Ações',                 cor: '#ff375f', icone: '📈' },
-  fii:     { nome: 'FIIs',                  cor: '#ffb340', icone: '🏢' },
-  cripto:  { nome: 'Cripto',                cor: '#ffd60a', icone: '🪙' },
+  reserva: { nome: 'Reserva de emergência', cor: '#34c759', icone: '🛟' },
+  rf:      { nome: 'Renda fixa',            cor: '#007aff', icone: '🏦' },
+  fundo:   { nome: 'Fundo',                 cor: '#af52de', icone: '🧺' },
+  acao:    { nome: 'Ações',                 cor: '#ff2d55', icone: '📈' },
+  fii:     { nome: 'FIIs',                  cor: '#a2845e', icone: '🏢' },
+  cripto:  { nome: 'Cripto',                cor: '#e0a800', icone: '🪙' },
   prev:    { nome: 'Previdência',           cor: '#2dd4bf', icone: '🧓' },
   outro:   { nome: 'Outro',                 cor: '#8e8e93', icone: '📌' }
 };
-const ESTAGIOS_PROJETO = { ideia: ['💡', 'Ideia', '#8e8e93'], estudo: ['🔍', 'Em estudo', '#0a84ff'], validacao: ['🧪', 'Validação', '#bf5af2'], andamento: ['🚀', 'Em andamento', '#30d158'], pausado: ['⏸️', 'Pausado', '#ff9f0a'], encerrado: ['🏁', 'Encerrado', '#8e8e93'] };
+const ESTAGIOS_PROJETO = { ideia: ['💡', 'Ideia', '#8e8e93'], estudo: ['🔍', 'Em estudo', '#007aff'], validacao: ['🧪', 'Validação', '#af52de'], andamento: ['🚀', 'Em andamento', '#34c759'], pausado: ['⏸️', 'Pausado', '#ff9500'], encerrado: ['🏁', 'Encerrado', '#8e8e93'] };
 let projectFilter = 'ativos';
 
 function classeAtivo(k) { return CLASSES_ATIVO[k] || CLASSES_ATIVO.outro; }
@@ -1718,7 +1718,7 @@ function renderAtivos() {
     const c = classeAtivo(a.klass); const inv = investidoEm(a.id); const res = (a.current || 0) - inv; const p = inv ? res / inv * 100 : 0;
     const venc = a.due ? (a.due < hoje ? `<span class="badge-topay">venceu ${isoParaBR(a.due)}</span>` : `<span class="item-date">vence ${isoParaBR(a.due)}</span>`) : '';
     ul.innerHTML += `<li class="asset-item" style="border-left-color:${c.cor}; ${a.archived ? 'opacity:0.45' : ''}"><div class="transaction-info" style="flex:1"><span>${c.icone} ${esc(a.name)} <small class="category-badge" style="color:${c.cor}; background:${c.cor}22">${c.nome}</small>${a.institution ? ` <small class="item-date">${esc(a.institution)}</small>` : ''}${a.rate ? ` <small class="item-date">· ${esc(a.rate)}</small>` : ''} ${venc}${a.archived ? ' <small class="item-date">· arquivado</small>' : ''}</span>
-        <small class="item-date">investido ${formatCurrency(inv)} · resultado <span style="color:${res >= 0 ? '#30d158' : '#ff453a'}">${formatCurrency(res)} (${pct(p)})</span> · valor de ${isoParaBR(a.currentAt || hoje)}</small>${a.notes ? `<small class="item-notes">${esc(a.notes)}</small>` : ''}</div>
+        <small class="item-date">investido ${formatCurrency(inv)} · resultado <span style="color:${res >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(res)} (${pct(p)})</span> · valor de ${isoParaBR(a.currentAt || hoje)}</small>${a.notes ? `<small class="item-notes">${esc(a.notes)}</small>` : ''}</div>
       <div class="item-actions"><strong style="margin-right:6px">${formatCurrency(a.current)}</strong><button class="mini-btn" title="Atualizar valor atual" onclick="atualizarValorAtivo(${a.id})">💰</button><button class="mini-btn" title="Editar" onclick="editarAtivo(${a.id})">✎</button><button class="mini-btn" title="${a.archived ? 'Reativar' : 'Arquivar'}" onclick="arquivarAtivo(${a.id})">${a.archived ? '📤' : '🗄️'}</button><button class="mini-btn" title="Apagar" onclick="removerAtivo(${a.id})">✕</button></div></li>`;
   });
 }
@@ -1752,7 +1752,7 @@ function renderMovimentos() {
   lista.forEach(m => {
     const ap = m.type === 'aporte';
     ul.innerHTML += `<li class="${ap ? 'expense-item' : 'income-item'}"><div class="transaction-info" style="flex:1"><span>${ap ? '📥 Aporte' : '📤 Resgate'} · ${esc(ativoNome(m.assetId))}${m.financeId ? ' <small class="item-date">· em Finanças</small>' : ''}</span><small class="item-date">${isoParaBR(m.date)}${m.note ? ' · ' + esc(m.note) : ''}</small></div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${ap ? '#0a84ff' : '#ff9f0a'}">${ap ? '+' : '−'}${formatCurrency(m.amount)}</strong><button class="mini-btn" title="Apagar" onclick="removerMovimento(${m.id})">✕</button></div></li>`;
+      <div class="item-actions"><strong style="margin-right:6px; color:${ap ? '#007aff' : '#ff9500'}">${ap ? '+' : '−'}${formatCurrency(m.amount)}</strong><button class="mini-btn" title="Apagar" onclick="removerMovimento(${m.id})">✕</button></div></li>`;
   });
 }
 
@@ -1777,8 +1777,8 @@ function renderMetas() {
     const atual = valorMeta(g); const p = g.target ? Math.min(100, Math.round(atual / g.target * 100)) : 0; const falta = Math.max(0, g.target - atual);
     let porMes = '';
     if (g.deadline && falta > 0) { const [y, m, d] = g.deadline.split('-').map(Number); const meses = Math.max(1, Math.round((new Date(y, m - 1, d) - new Date()) / (30.44 * 86400000))); porMes = ` · ${formatCurrency(falta / meses)}/mês por ${meses} ${meses === 1 ? 'mês' : 'meses'}`; }
-    ul.innerHTML += `<li class="goal-item" style="border-left-color:${p >= 100 ? '#30d158' : '#ffd60a'}"><div class="transaction-info" style="flex:1"><span>🎯 ${esc(g.name)} ${p >= 100 ? '<span class="badge-paid">alcançada</span>' : ''}<small class="item-date"> · ${rotuloVinculo(g)}${g.deadline ? ' · até ' + isoParaBR(g.deadline) : ''}</small></span>
-        <div class="cat-bar" style="margin-top:6px"><div style="width:${p}%; background:${p >= 100 ? '#30d158' : '#ffd60a'}"></div></div>
+    ul.innerHTML += `<li class="goal-item" style="border-left-color:${p >= 100 ? '#34c759' : '#e0a800'}"><div class="transaction-info" style="flex:1"><span>🎯 ${esc(g.name)} ${p >= 100 ? '<span class="badge-paid">alcançada</span>' : ''}<small class="item-date"> · ${rotuloVinculo(g)}${g.deadline ? ' · até ' + isoParaBR(g.deadline) : ''}</small></span>
+        <div class="cat-bar" style="margin-top:6px"><div style="width:${p}%; background:${p >= 100 ? '#34c759' : '#e0a800'}"></div></div>
         <small class="item-date">${formatCurrency(atual)} de ${formatCurrency(g.target)} (${p}%)${falta > 0 ? ` · faltam ${formatCurrency(falta)}${porMes}` : ''}</small>${g.note ? `<small class="item-notes">${esc(g.note)}</small>` : ''}</div>
       <div class="item-actions"><button class="mini-btn" title="Editar" onclick="editarMeta(${g.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMeta(${g.id})">✕</button></div></li>`;
   });
@@ -1818,7 +1818,7 @@ function renderProjetos() {
       <select class="stage-select" style="color:${e[2]}" onchange="mudarEstagio(${p.id}, this.value)">${Object.entries(ESTAGIOS_PROJETO).map(([k, v]) => `<option value="${k}" ${k === p.stage ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('')}</select>
       ${p.desc ? `<div class="note-body">${esc(p.desc)}</div>` : ''}
       ${tot ? `<div class="note-check"><small class="item-date">Próximos passos · ${feitos}/${tot}</small>${p.steps.map((s, i) => `<label class="subtask ${s.done ? 'done' : ''}"><input type="checkbox" ${s.done ? 'checked' : ''} onclick="togglePasso(${p.id}, ${i})"> ${esc(s.text)}</label>`).join('')}</div>` : ''}
-      ${p.budget || p.spent ? `<div><small class="item-date">💸 gasto ${formatCurrency(p.spent || 0)}${p.budget ? ` de ${formatCurrency(p.budget)} previstos (${gastoPct}%)` : ''}</small><div class="cat-bar" style="margin-top:4px"><div style="width:${gastoPct}%; background:${gastoPct > 100 ? '#ff453a' : '#ff9f0a'}"></div></div></div>` : ''}
+      ${p.budget || p.spent ? `<div><small class="item-date">💸 gasto ${formatCurrency(p.spent || 0)}${p.budget ? ` de ${formatCurrency(p.budget)} previstos (${gastoPct}%)` : ''}</small><div class="cat-bar" style="margin-top:4px"><div style="width:${gastoPct}%; background:${gastoPct > 100 ? '#ff3b30' : '#ff9500'}"></div></div></div>` : ''}
       ${p.contacts ? `<small class="item-notes">👥 ${esc(p.contacts)}</small>` : ''}${p.notes ? `<small class="item-notes">${esc(p.notes)}</small>` : ''}
       <div class="note-foot"><small class="item-date" style="margin-left:auto">${new Date(p.updatedAt || p.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</small></div>
     </div>`;
@@ -1842,17 +1842,17 @@ function renderPainelNegocios() {
   const mes = hojeISO().slice(0, 7); const aportadoMes = moves.filter(m => m.type === 'aporte' && !m.initial && m.date.startsWith(mes)).reduce((a, m) => a + m.amount, 0);
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = '<div class="stat-grid">';
-  html += tile('🏦', formatCurrency(total), 'patrimônio investido (valor atual)', '#0a84ff');
-  html += tile('📥', formatCurrency(inv), `aportado no total · ${formatCurrency(aportadoMes)} neste mês`, '#bf5af2');
-  html += tile('📈', formatCurrency(res), `resultado simples (${pct(p)})`, res >= 0 ? '#30d158' : '#ff453a');
-  html += tile('🛟', formatCurrency(reserva), 'reserva de emergência', '#30d158');
+  html += tile('🏦', formatCurrency(total), 'patrimônio investido (valor atual)', '#007aff');
+  html += tile('📥', formatCurrency(inv), `aportado no total · ${formatCurrency(aportadoMes)} neste mês`, '#af52de');
+  html += tile('📈', formatCurrency(res), `resultado simples (${pct(p)})`, res >= 0 ? '#34c759' : '#ff3b30');
+  html += tile('🛟', formatCurrency(reserva), 'reserva de emergência', '#34c759');
   html += '</div>';
   // por classe
   const classes = Object.keys(CLASSES_ATIVO).map(k => ({ k, v: totalClasse(k) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
   if (classes.length) html += '<div class="cat-block" style="margin-top:14px"><h5>Por classe</h5>' + classes.map(({ k, v }) => { const c = classeAtivo(k); return `<div class="cat-row"><span class="cat-name">${c.icone} ${c.nome}</span><div class="cat-bar"><div style="width:${Math.round(v / total * 100)}%; background:${c.cor}"></div></div><span class="cat-val">${formatCurrency(v)} <small>${Math.round(v / total * 100)}%</small></span></div>`; }).join('') + '</div>';
   // evolução mensal (últimos 6 meses com registro)
   const snaps = Object.entries(wealth.snapshots || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-6);
-  if (snaps.length >= 2) { const max = Math.max(1, ...snaps.map(s => s[1])); html += '<div class="cat-block"><h5>Evolução do patrimônio</h5><div class="fin-meses" style="height:120px">' + snaps.map(([m, v]) => `<div class="mes-col" title="${formatCurrency(v)}"><div class="mes-bars" style="height:70px"><div class="mes-bar" style="width:60%; height:${Math.round(v / max * 100)}%; background:#0a84ff"></div></div><small>${nomeMes(m).slice(0, 3)}</small><small class="mes-saldo" style="color:#8e8e93">${(v / 1000).toFixed(1)}k</small></div>`).join('') + '</div></div>'; }
+  if (snaps.length >= 2) { const max = Math.max(1, ...snaps.map(s => s[1])); html += '<div class="cat-block"><h5>Evolução do patrimônio</h5><div class="fin-meses" style="height:120px">' + snaps.map(([m, v]) => `<div class="mes-col" title="${formatCurrency(v)}"><div class="mes-bars" style="height:70px"><div class="mes-bar" style="width:60%; height:${Math.round(v / max * 100)}%; background:#007aff"></div></div><small>${nomeMes(m).slice(0, 3)}</small><small class="mes-saldo" style="color:#8e8e93">${(v / 1000).toFixed(1)}k</small></div>`).join('') + '</div></div>'; }
   // vencimentos próximos (60 dias)
   const lim = new Date(); lim.setDate(lim.getDate() + 60); const limISO = isoDe(lim); const hoje = hojeISO();
   const venc = assets.filter(a => !a.archived && a.due && a.due <= limISO).sort((a, b) => a.due.localeCompare(b.due));
@@ -1947,7 +1947,7 @@ function renderMedidas() {
   const lista = [...measures].sort((a, b) => a.date.localeCompare(b.date));
   const pesos = lista.filter(m => m.weight > 0).slice(-12);
   if (ch) {
-    if (pesos.length >= 2) { const min = Math.min(...pesos.map(m => m.weight)) - 1; const max = Math.max(...pesos.map(m => m.weight)) + 1; ch.innerHTML = '<div class="fin-meses" style="grid-template-columns:repeat(' + pesos.length + ',1fr); height:130px">' + pesos.map(m => `<div class="mes-col" title="${isoParaBR(m.date)}: ${m.weight} kg"><div class="mes-bars" style="height:80px"><div class="mes-bar" style="width:60%; height:${Math.round((m.weight - min) / (max - min) * 100)}%; background:#ff375f"></div></div><small>${isoParaBR(m.date).slice(0, 5)}</small><small class="mes-saldo" style="color:#f5f5f7">${m.weight}</small></div>`).join('') + '</div>'; }
+    if (pesos.length >= 2) { const min = Math.min(...pesos.map(m => m.weight)) - 1; const max = Math.max(...pesos.map(m => m.weight)) + 1; ch.innerHTML = '<div class="fin-meses" style="grid-template-columns:repeat(' + pesos.length + ',1fr); height:130px">' + pesos.map(m => `<div class="mes-col" title="${isoParaBR(m.date)}: ${m.weight} kg"><div class="mes-bars" style="height:80px"><div class="mes-bar" style="width:60%; height:${Math.round((m.weight - min) / (max - min) * 100)}%; background:#ff2d55"></div></div><small>${isoParaBR(m.date).slice(0, 5)}</small><small class="mes-saldo" style="color:var(--label)">${m.weight}</small></div>`).join('') + '</div>'; }
     else ch.innerHTML = '<div class="stat-line muted">Registre pelo menos 2 pesagens pra ver a evolução.</div>';
   }
   if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma medida ainda.</li>'; return; }
@@ -2024,10 +2024,10 @@ function renderPainelSaude() {
   const goal = hydration.goal || 2500; const pct = Math.min(100, Math.round((hydration.ml || 0) / goal * 100));
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = '<div class="stat-grid">';
-  html += tile('🏋️', `${semana.length}`, `treino${semana.length === 1 ? '' : 's'} nesta semana · ${minSemana} min`, '#30d158');
-  html += tile('💧', `${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L`, `de ${(goal / 1000).toFixed(1).replace('.', ',')} L hoje (${pct}%)`, '#0a84ff');
-  html += tile('⚖️', ultimo ? `${ultimo.weight} kg` : '—', ultimo ? `${isoParaBR(ultimo.date)}${anterior ? ` · ${delta > 0 ? '+' : ''}${delta.toFixed(1).replace('.', ',')} kg` : ''}` : 'sem pesagem', '#ff375f');
-  html += tile('🩺', prox ? rotuloData(prox.date) : '—', prox ? `${(TIPOS_MEDICO[prox.kind] || TIPOS_MEDICO.outro)[1]}: ${esc(prox.title).slice(0, 28)}` : 'nada marcado', '#bf5af2');
+  html += tile('🏋️', `${semana.length}`, `treino${semana.length === 1 ? '' : 's'} nesta semana · ${minSemana} min`, '#34c759');
+  html += tile('💧', `${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L`, `de ${(goal / 1000).toFixed(1).replace('.', ',')} L hoje (${pct}%)`, '#007aff');
+  html += tile('⚖️', ultimo ? `${ultimo.weight} kg` : '—', ultimo ? `${isoParaBR(ultimo.date)}${anterior ? ` · ${delta > 0 ? '+' : ''}${delta.toFixed(1).replace('.', ',')} kg` : ''}` : 'sem pesagem', '#ff2d55');
+  html += tile('🩺', prox ? rotuloData(prox.date) : '—', prox ? `${(TIPOS_MEDICO[prox.kind] || TIPOS_MEDICO.outro)[1]}: ${esc(prox.title).slice(0, 28)}` : 'nada marcado', '#af52de');
   html += '</div>';
   html += `<div class="water-box"><div class="water-bar"><div style="width:${pct}%"></div></div><div class="water-btns"><button class="mini-btn" onclick="beberAgua(250)">+250 ml</button><button class="mini-btn" onclick="beberAgua(500)">+500 ml</button><button class="mini-btn" onclick="beberAgua(750)">+750 ml</button><button class="mini-btn" onclick="beberAgua(-250)" title="Tirar 250 ml">−250</button><button class="mini-btn" onclick="definirMetaAgua()" title="Mudar meta">🎯 meta</button></div></div>`;
   el.innerHTML = html;
@@ -2232,7 +2232,8 @@ function abrirVoz(modo) {
   $('voice-context').innerText = modo === 'claude'
     ? `Página: ${nomeAbaAtual()}. Diga o que quer mudar ou adicionar no app.`
     : `Ex.: "novo pedido do João, 3 vasos em PLA preto, 120 reais, entrega sexta" · "gastei 90 reais em filamento" · "reunião com cliente amanhã às 14h"`;
-  $('voice-text').value = ''; $('voice-text').placeholder = modo === 'claude' ? 'Ex.: adiciona um campo de peso da peça (em gramas) nos pedidos' : 'Fale ou digite aqui...';
+  $('voice-help').innerHTML = modo === 'claude' ? AJUDA_CLAUDE : AJUDA_DITADO; $('voice-help').parentElement.open = false;
+  $('voice-text').value = ''; $('voice-text').placeholder = modo === 'claude' ? 'Ex.: na Primos 3D, adiciona um campo de peso da peça em gramas' : 'Fale ou digite aqui...';
   $('voice-preview').innerHTML = ''; $('voice-actions').innerHTML = '';
   $('voice-send').hidden = modo !== 'claude'; $('voice-interpret').hidden = modo === 'claude';
   renderPedidosClaude(); if (modo === 'claude') atualizarClaude(true);
@@ -2240,27 +2241,53 @@ function abrirVoz(modo) {
   iniciarGravacao();
 }
 function fecharVoz() { pararGravacao(); document.getElementById('voice-sheet').style.display = 'none'; }
+function vozAberta() { return document.getElementById('voice-sheet').style.display === 'flex'; }
 function setVozStatus(txt, cor) { const el = document.getElementById('voice-status'); if (el) { el.innerText = txt || ''; el.style.color = cor || ''; } }
 function atualizarBotaoGravar() {
   const b = document.getElementById('voice-rec'); if (!b) return;
   b.classList.toggle('on', vozGravando); b.innerText = vozGravando ? '■ Parar' : '🎙 Falar';
 }
+// O microfone fica aberto até VOCÊ tocar em Parar. O iPhone às vezes encerra sozinho
+// depois de um silêncio: nesse caso o app religa e continua escrevendo no mesmo texto.
+let vozQuerGravar = false;
+let vozReligadas = 0;
+let vozErro = false;       // houve erro de microfone (mantém o aviso na tela)
 function iniciarGravacao() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const caixa = document.getElementById('voice-text');
-  if (!SR) { setVozStatus('Toque no 🎤 do teclado para ditar.'); caixa.focus(); atualizarBotaoGravar(); return; }
-  try {
-    const r = new SR(); vozReconhecedor = r;
-    r.lang = 'pt-BR'; r.interimResults = true; r.continuous = false;
-    const base = caixa.value.trim() ? caixa.value.trim() + ' ' : '';
-    r.onresult = (e) => { let s = ''; for (const res of e.results) s += res[0].transcript; caixa.value = base + s; };
-    r.onerror = (e) => { setVozStatus(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Microfone bloqueado — permita nas configurações, ou use o 🎤 do teclado.' : e.error === 'no-speech' ? 'Não ouvi nada. Toque em Falar de novo.' : 'Não consegui ouvir. Use o 🎤 do teclado.', '#ff9f0a'); };
-    r.onend = () => { vozGravando = false; vozReconhecedor = null; atualizarBotaoGravar(); if (!document.getElementById('voice-status').style.color) setVozStatus(''); if (vozModo === 'dados' && caixa.value.trim()) interpretarVoz(); };
-    r.start(); vozGravando = true; setVozStatus('Ouvindo...', '');
-  } catch (err) { vozGravando = false; setVozStatus('Use o 🎤 do teclado para ditar.'); caixa.focus(); }
-  atualizarBotaoGravar();
+  if (!SR) { setVozStatus('Toque no 🎤 do teclado para ditar.'); document.getElementById('voice-text').focus(); atualizarBotaoGravar(); return; }
+  vozQuerGravar = true; vozGravando = true; vozReligadas = 0; vozErro = false; atualizarBotaoGravar();
+  setVozStatus('🔴 Ouvindo… fale à vontade e toque em Parar quando terminar.', '#ff3b30');
+  ouvirVoz();
 }
-function pararGravacao() { if (vozReconhecedor) { try { vozReconhecedor.stop(); } catch (e) { } } vozGravando = false; atualizarBotaoGravar(); }
+function ouvirVoz() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const caixa = document.getElementById('voice-text');
+  let r;
+  try { r = new SR(); } catch (err) { vozQuerGravar = false; vozGravando = false; atualizarBotaoGravar(); setVozStatus('Use o 🎤 do teclado para ditar.'); caixa.focus(); return; }
+  vozReconhecedor = r;
+  r.lang = 'pt-BR'; r.interimResults = true; r.continuous = true;
+  const base = caixa.value.trim() ? caixa.value.trim() + ' ' : '';
+  r.onresult = (e) => { let s = ''; for (const res of e.results) s += res[0].transcript; caixa.value = base + s.trim(); caixa.scrollTop = caixa.scrollHeight; vozReligadas = 0; };
+  r.onerror = (e) => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return; // silêncio: segue ouvindo
+    vozQuerGravar = false; vozErro = true;
+    setVozStatus(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Microfone bloqueado — toque em Falar de novo, ou use o 🎤 do teclado.' : 'Não consegui ouvir. Toque em Falar de novo, ou use o 🎤 do teclado.', '#ff9500');
+  };
+  r.onend = () => {
+    vozReconhecedor = null;
+    if (vozQuerGravar && vozAberta() && vozReligadas < 20) { vozReligadas++; setTimeout(() => { if (vozQuerGravar) ouvirVoz(); }, 200); return; }
+    vozQuerGravar = false; vozGravando = false; atualizarBotaoGravar();
+    if (!vozErro) setVozStatus('');
+    if (vozModo === 'dados' && vozAberta() && caixa.value.trim()) interpretarVoz();
+  };
+  try { r.start(); }
+  catch (err) { vozQuerGravar = false; vozGravando = false; atualizarBotaoGravar(); setVozStatus('Toque em Falar para continuar, ou use o 🎤 do teclado.', '#ff9500'); }
+}
+function pararGravacao() {
+  vozQuerGravar = false;
+  if (vozReconhecedor) { try { vozReconhecedor.stop(); } catch (e) { } setTimeout(() => { if (!vozQuerGravar && vozGravando) { vozGravando = false; atualizarBotaoGravar(); } }, 1500); }
+  else { vozGravando = false; atualizarBotaoGravar(); }
+}
 function alternarGravacao() { if (vozGravando) pararGravacao(); else { setVozStatus(''); iniciarGravacao(); } }
 
 function interpretarVoz() {
@@ -2270,31 +2297,39 @@ function interpretarVoz() {
   document.getElementById('voice-actions').innerHTML = `<button type="button" class="btn voice-primary" onclick="aplicarDitado(true)" ${vozResultado.ok ? '' : 'disabled'}>✓ Salvar</button><button type="button" class="btn" onclick="aplicarDitado(false)">✎ Revisar no formulário</button>`;
 }
 
-// --- ✳ Pedidos de mudança para o Claude (via o GitHub do próprio app) ---
-// Pedido: { id, date, page, text, status, issue, pr, nota }
-//   status: 'fila' (ainda não enviado) → 'enviado' (Claude trabalhando) → 'proposta' (esperando aprovação)
-//           → 'publicado' | 'recusado' | 'sem-mudanca' (Claude pediu detalhes) | 'erro'
+// --- ✳ Pedidos de mudança no app → Claude no computador (via o GitHub do próprio app) ---
+// Fluxo: você fala → o app abre um "issue" (título começa com ✳) no repositório do app →
+// o Claude Code aberto no computador vigia esses pedidos, faz a mudança, publica e responde no issue:
+//   "⏳ ..." = começou · "🚀 ..." = publicado (issue fechado) · "💬 ..." = precisa de mais detalhes · "⚠️ ..." = erro.
+// Pedido: { id, date, page, text, status, issue, nota, avisado }
+//   status: 'fila' (não enviado) → 'enviado' (esperando o computador) → 'trabalhando' → 'publicado' | 'duvida' | 'erro'
 // Configuração SÓ deste aparelho (não sincroniza): lifeos_claude_config = { repo: 'usuario/Genesis', token }
-// Isolamento: o app só escreve no repositório do próprio app (abre issue = pedido; aprova/recusa a proposta = pull request).
+// Isolamento: o app só escreve issues no repositório do próprio app.
 let claudeConfig = JSON.parse(localStorage.getItem('lifeos_claude_config')) || { repo: '', token: '' };
-let claudePropostas = [];      // propostas abertas (ramos claude/pedido-N), lidas do GitHub
 let claudeUltimaConsulta = 0;
 const STATUS_PEDIDO_CLAUDE = {
-  fila:          ['📥', 'guardado (não enviado)', '#8e8e93'],
-  enviado:       ['⏳', 'Claude trabalhando…', '#ff9f0a'],
-  proposta:      ['✅', 'proposta pronta — aprove acima', '#30d158'],
-  publicado:     ['🚀', 'publicado', '#0a84ff'],
-  recusado:      ['✕', 'recusado', '#8e8e93'],
-  'sem-mudanca': ['💬', 'Claude precisa de mais detalhes', '#bf5af2'],
-  erro:          ['⚠️', 'deu erro — tente pedir de novo', '#ff453a']
+  fila:        ['📥', 'guardado — ainda não enviado', '#8e8e93', false],
+  enviado:     ['', 'enviado — esperando o computador', '#007aff', true],
+  trabalhando: ['', 'Claude trabalhando no computador…', '#ff9500', true],
+  publicado:   ['🚀', 'publicado — feche e reabra o app', '#34c759', false],
+  duvida:      ['💬', 'o Claude precisa de mais detalhes', '#af52de', false],
+  erro:        ['⚠️', 'deu erro — peça de novo', '#ff3b30', false]
 };
+const AJUDA_DITADO = `<p><strong>1.</strong> Toque em <strong>🎙 Falar</strong>, fale tudo com calma e toque em <strong>■ Parar</strong>.</p>
+<p><strong>2.</strong> O app mostra o que entendeu. <strong>✓ Salvar</strong> cria na hora; <strong>✎ Revisar</strong> abre o formulário preenchido.</p>
+<p><strong>Comece pelo tipo:</strong> "novo pedido", "orçamento", "novo cliente", "gastei", "recebi", "tarefa", "reunião/compromisso" ou "anota".</p>
+<p><strong>Pedido:</strong> cliente com "do/da/para", quantidade, material e cor, valor em "reais" e prazo ("entrega sexta", "dia 15", "amanhã").</p>`;
+const AJUDA_CLAUDE = `<p><strong>1.</strong> Fale a mudança que quer <em>no app</em> — ex.: "na Primos 3D, adiciona um campo de peso da peça em gramas". Toque em <strong>■ Parar</strong> e depois em <strong>✳ Enviar</strong>.</p>
+<p><strong>2.</strong> O pedido vai para o <strong>Claude no seu computador</strong> (a conversa do Genesis precisa estar aberta no PC). Pode sair desta tela: o símbolo girando no botão ✳ mostra que está em andamento.</p>
+<p><strong>3.</strong> Quando aparecer <strong>🚀 publicado</strong>, feche e reabra o app para ver a mudança.</p>
+<p>Para <em>lançar dados</em> (pedido, cliente, gasto...), use o 🎤 azul — ele faz na hora, sem o computador.</p>`;
 
 function repoPadrao() { const h = location.hostname; if (!h.endsWith('.github.io')) return ''; const seg = location.pathname.split('/').filter(Boolean)[0]; return seg ? `${h.split('.')[0]}/${seg}` : ''; }
 function claudeConfigurado() { return !!(claudeConfig.repo && claudeConfig.token); }
 /** Chamada à API do GitHub, sempre dentro do repositório do app. */
 async function gh(caminho, opcoes = {}) {
   const r = await fetch(`https://api.github.com/repos/${claudeConfig.repo}${caminho}`, {
-    ...opcoes,
+    ...opcoes, cache: 'no-store',
     headers: { 'Accept': 'application/vnd.github+json', 'Authorization': `Bearer ${claudeConfig.token}`, 'X-GitHub-Api-Version': '2022-11-28', ...(opcoes.body ? { 'Content-Type': 'application/json' } : {}) }
   });
   if (!r.ok) { let msg = String(r.status); try { msg += ' ' + (await r.json()).message; } catch (e) { } throw new Error(msg); }
@@ -2302,98 +2337,81 @@ async function gh(caminho, opcoes = {}) {
 }
 
 async function enviarPedidoClaude() {
+  if (vozGravando) { pararGravacao(); await new Promise(ok => setTimeout(ok, 600)); } // espera a última frase chegar
   const txt = document.getElementById('voice-text').value.trim(); if (!txt) { toast('Fale ou digite o que quer mudar.'); return; }
-  pararGravacao();
   const req = { id: novoId(), date: hojeISO(), page: nomeAbaAtual(), text: txt, status: 'fila' };
   claudeReqs.unshift(req); salvar('clauderequests', claudeReqs);
   document.getElementById('voice-text').value = '';
-  if (!claudeConfigurado()) { renderPedidosClaude(); toast('✳ Pedido guardado. Para o Claude receber, configure em Ajustes → Claude na nuvem.', 6000); return; }
-  await enviarUmPedido(req); renderPedidosClaude();
+  if (!claudeConfigurado()) { renderPedidosClaude(); toast('✳ Pedido guardado. Para enviar ao computador, configure em Ajustes → Claude.', 6000); return; }
+  await enviarUmPedido(req); renderPedidosClaude(); atualizarIndicadorClaude();
 }
 async function enviarUmPedido(req) {
   try {
     const resumo = req.text.replace(/\s+/g, ' ');
     const issue = await gh('/issues', { method: 'POST', body: JSON.stringify({ title: '✳ ' + resumo.slice(0, 70) + (resumo.length > 70 ? '…' : ''), body: `**Página do app:** ${req.page}\n\n**Pedido (ditado no app):**\n${req.text}` }) });
     req.issue = issue.number; req.status = 'enviado'; salvar('clauderequests', claudeReqs);
-    toast('✳ Enviado! O Claude já começou; a proposta aparece aqui em alguns minutos.', 6000);
+    toast('✳ Enviado para o computador! Pode sair desta tela — o ✳ gira enquanto o Claude trabalha.', 6000);
   } catch (e) { toast(`Não consegui enviar agora (${e.message}). O pedido ficou guardado.`, 6000); }
 }
-async function enviarPendentesClaude() { for (const r of claudeReqs.filter(x => x.status === 'fila')) await enviarUmPedido(r); renderPedidosClaude(); }
-function removerPedidoClaude(id) { claudeReqs = claudeReqs.filter(r => r.id !== id); salvar('clauderequests', claudeReqs); renderPedidosClaude(); }
+async function enviarPendentesClaude() { for (const r of claudeReqs.filter(x => x.status === 'fila')) await enviarUmPedido(r); renderPedidosClaude(); atualizarIndicadorClaude(); }
+function removerPedidoClaude(id) { claudeReqs = claudeReqs.filter(r => r.id !== id); salvar('clauderequests', claudeReqs); renderPedidosClaude(); atualizarIndicadorClaude(); }
+function emAndamentoClaude() { return claudeReqs.some(r => (STATUS_PEDIDO_CLAUDE[r.status] || [])[3]); }
 
-/** Lê do GitHub as propostas abertas e o andamento dos pedidos enviados. */
+/** Lê no GitHub o andamento dos pedidos enviados (pela última resposta do Claude no issue). */
 async function atualizarClaude(silencioso) {
-  if (!claudeConfigurado()) { atualizarBadgeClaude(); return; }
+  if (!claudeConfigurado()) { atualizarIndicadorClaude(); return; }
   claudeUltimaConsulta = Date.now();
+  let mudou = false, publicou = false;
   try {
-    const prs = await gh('/pulls?state=open&per_page=30');
-    claudePropostas = prs.filter(p => /^claude\/pedido-\d+$/.test(p.head.ref)).map(p => ({ numero: p.number, issue: Number(p.head.ref.split('-').pop()), titulo: p.title.replace(/^✳\s*/, ''), resumo: (p.body || '').replace(/\s*Closes #\d+\s*$/i, '').trim(), url: p.html_url }));
-    let mudou = false;
-    for (const r of claudeReqs.filter(x => x.issue && (x.status === 'enviado' || x.status === 'proposta')).slice(0, 8)) {
-      const p = claudePropostas.find(x => x.issue === r.issue);
-      if (p) { if (r.status !== 'proposta' || r.pr !== p.numero) { r.status = 'proposta'; r.pr = p.numero; mudou = true; } continue; }
+    for (const r of claudeReqs.filter(x => x.issue && x.status !== 'publicado').slice(0, 8)) {
       const is = await gh(`/issues/${r.issue}`);
-      if (is.state === 'closed') { r.status = is.state_reason === 'completed' ? 'publicado' : 'recusado'; mudou = true; continue; }
-      if (r.status === 'enviado' && is.comments > 1) {
-        const coms = await gh(`/issues/${r.issue}/comments?per_page=10`); const ultimo = (coms[coms.length - 1] || {}).body || '';
-        if (/não alterou/i.test(ultimo)) { r.status = 'sem-mudanca'; r.nota = ultimo.replace(/^💬[^:]*:\s*/, '').trim(); mudou = true; }
-        else if (/⚠️/.test(ultimo)) { r.status = 'erro'; mudou = true; }
+      let ultimo = '';
+      if (is.comments > 0) { const coms = await gh(`/issues/${r.issue}/comments?per_page=100`); ultimo = ((coms[coms.length - 1] || {}).body || '').trim(); }
+      const semEmoji = s => s.replace(/^\S+\s*/, '').trim();
+      let novo = 'enviado', nota = '';
+      if (ultimo.startsWith('🚀')) { novo = 'publicado'; nota = semEmoji(ultimo); }
+      else if (is.state === 'closed') novo = 'publicado';
+      else if (ultimo.startsWith('💬')) { novo = 'duvida'; nota = semEmoji(ultimo); }
+      else if (ultimo.startsWith('⚠️')) { novo = 'erro'; nota = semEmoji(ultimo); }
+      else if (ultimo.startsWith('⏳')) novo = 'trabalhando';
+      if (novo !== r.status || nota !== (r.nota || '')) {
+        if (novo === 'publicado' && !r.avisado) { r.avisado = true; publicou = true; }
+        r.status = novo; r.nota = nota; mudou = true;
       }
     }
     if (mudou) salvar('clauderequests', claudeReqs);
-  } catch (e) { if (!silencioso) toast('Claude na nuvem: ' + e.message, 6000); }
-  atualizarBadgeClaude(); renderPedidosClaude();
-}
-async function aprovarProposta(n) {
-  if (!confirm('Publicar esta mudança no app?')) return;
-  try {
-    await gh(`/pulls/${n}/merge`, { method: 'PUT', body: JSON.stringify({ merge_method: 'squash' }) });
-    const r = claudeReqs.find(x => x.pr === n); if (r) { r.status = 'publicado'; salvar('clauderequests', claudeReqs); }
-    gh(`/git/refs/heads/claude/pedido-${(claudePropostas.find(x => x.numero === n) || {}).issue}`, { method: 'DELETE' }).catch(() => { });
-    toast('🚀 Publicado! Em ~1 minuto feche e reabra o app para ver a mudança.', 8000);
-  } catch (e) { toast('Não consegui publicar: ' + e.message, 6000); }
-  atualizarClaude(true);
-}
-async function recusarProposta(n) {
-  if (!confirm('Recusar esta proposta? Nada muda no app.')) return;
-  const p = claudePropostas.find(x => x.numero === n);
-  try {
-    await gh(`/pulls/${n}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed' }) });
-    if (p) { await gh(`/issues/${p.issue}`, { method: 'PATCH', body: JSON.stringify({ state: 'closed', state_reason: 'not_planned' }) }); gh(`/git/refs/heads/claude/pedido-${p.issue}`, { method: 'DELETE' }).catch(() => { }); }
-    const r = claudeReqs.find(x => x.pr === n); if (r) { r.status = 'recusado'; salvar('clauderequests', claudeReqs); }
-    toast('Proposta recusada.');
-  } catch (e) { toast('Não consegui recusar: ' + e.message, 6000); }
-  atualizarClaude(true);
+  } catch (e) { if (!silencioso) toast('Claude: ' + e.message, 6000); }
+  if (publicou) toast('🚀 Sua mudança foi publicada! Feche e reabra o app para ver.', 9000);
+  atualizarIndicadorClaude(); renderPedidosClaude();
 }
 
-function atualizarBadgeClaude() {
+/** O botão ✳ gira enquanto houver pedido em andamento; ganha um "!" se o Claude pediu detalhes. */
+function atualizarIndicadorClaude() {
   const b = document.querySelector('.fab-claude'); if (!b) return;
-  let el = b.querySelector('.fab-badge'); const n = claudePropostas.length;
-  if (!n) { if (el) el.remove(); return; }
+  b.classList.toggle('trabalhando', emAndamentoClaude());
+  let el = b.querySelector('.fab-badge'); const duvida = claudeReqs.some(r => r.status === 'duvida');
+  if (!duvida) { if (el) el.remove(); return; }
   if (!el) { el = document.createElement('span'); el.className = 'fab-badge'; b.appendChild(el); }
-  el.innerText = n;
+  el.innerText = '!';
 }
 function renderPedidosClaude() {
   const el = document.getElementById('voice-requests'); if (!el) return;
   if (vozModo !== 'claude') { el.innerHTML = ''; return; }
   let html = '';
-  if (!claudeConfigurado()) html += `<div class="voice-card" style="padding:12px"><span class="hint" style="margin:0">Para o Claude mudar o app sozinho, configure em <strong>Ajustes → ✳ Claude na nuvem</strong>. Até lá, os pedidos ficam guardados aqui.</span><button type="button" class="btn" style="width:100%; margin-top:10px" onclick="fecharVoz(); changeTab('settings'); document.getElementById('claude-repo').scrollIntoView({ block: 'center' })">Abrir Ajustes</button></div>`;
-  if (claudePropostas.length) {
-    html += `<h4>Propostas para aprovar</h4>` + claudePropostas.map(p => `<div class="proposal-card"><strong>${esc(p.titulo)}</strong><p>${esc((p.resumo || 'Sem resumo.').replace(/\*\*?([^*\n]+)\*\*?/g, '$1').replace(/`([^`\n]+)`/g, '$1')).replace(/\n/g, '<br>')}</p><a href="${esc(p.url)}/files" target="_blank" rel="noopener">ver as mudanças no GitHub ›</a><div class="voice-buttons" style="margin-top:10px"><button type="button" class="btn voice-primary" onclick="aprovarProposta(${p.numero})">✓ Aprovar e publicar</button><button type="button" class="btn" onclick="recusarProposta(${p.numero})">✕ Recusar</button></div></div>`).join('');
-  }
+  if (!claudeConfigurado()) html += `<div class="voice-card" style="padding:12px"><span class="hint" style="margin:0">Para mandar pedidos ao Claude no computador, configure em <strong>Ajustes → ✳ Claude</strong>. Até lá, eles ficam guardados aqui.</span><button type="button" class="btn" style="width:100%; margin-top:10px" onclick="fecharVoz(); changeTab('settings'); document.getElementById('claude-repo').scrollIntoView({ block: 'center' })">Abrir Ajustes</button></div>`;
   const pend = claudeReqs.filter(r => r.status === 'fila').length;
   if (claudeReqs.length) {
-    html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px"><h4>Seus pedidos</h4>${claudeConfigurado() ? `<span style="display:flex; gap:6px">${pend ? `<button type="button" class="mini-btn" onclick="enviarPendentesClaude()">Enviar ${pend} guardado${pend > 1 ? 's' : ''}</button>` : ''}<button type="button" class="mini-btn" onclick="atualizarClaude()">↻</button></span>` : ''}</div>`;
-    html += `<ul class="transaction-list">${claudeReqs.slice(0, 10).map(r => { const s = STATUS_PEDIDO_CLAUDE[r.status] || STATUS_PEDIDO_CLAUDE.fila; return `<li><div class="transaction-info" style="flex:1"><span>${esc(r.text)}</span><small class="item-date">${esc(r.page)} · ${isoParaBR(r.date).slice(0, 5)} · <span style="color:${s[2]}">${s[0]} ${s[1]}</span></small>${r.nota ? `<small class="item-notes">${esc(r.nota)}</small>` : ''}</div><div class="item-actions"><button class="mini-btn" title="Tirar da lista" onclick="removerPedidoClaude(${r.id})">✕</button></div></li>`; }).join('')}</ul>`;
+    html += `<div style="display:flex; justify-content:space-between; align-items:center"><h4>Seus pedidos</h4>${claudeConfigurado() ? `<span style="display:flex; gap:6px">${pend ? `<button type="button" class="mini-btn" onclick="enviarPendentesClaude()">Enviar ${pend} guardado${pend > 1 ? 's' : ''}</button>` : ''}<button type="button" class="mini-btn" title="Atualizar" onclick="atualizarClaude()">↻</button></span>` : ''}</div>`;
+    html += `<ul class="transaction-list">${claudeReqs.slice(0, 10).map(r => { const s = STATUS_PEDIDO_CLAUDE[r.status] || STATUS_PEDIDO_CLAUDE.fila; return `<li><div class="transaction-info" style="flex:1"><span>${esc(r.text)}</span><small class="item-date">${esc(r.page)} · ${isoParaBR(r.date).slice(0, 5)} · <span style="color:${s[2]}">${s[3] ? '<span class="spin"></span> ' : s[0] + ' '}${s[1]}</span></small>${r.nota ? `<small class="item-notes">${esc(r.nota)}</small>` : ''}</div><div class="item-actions"><button class="mini-btn" title="Tirar da lista" onclick="removerPedidoClaude(${r.id})">✕</button></div></li>`; }).join('')}</ul>`;
   }
   el.innerHTML = html;
 }
 
-// Ajustes → ✳ Claude na nuvem
+// Ajustes → ✳ Claude
 function carregarClaudeConfigNaTela() {
   const r = document.getElementById('claude-repo'); const t = document.getElementById('claude-token');
   if (r) r.value = claudeConfig.repo || repoPadrao(); if (t) t.value = claudeConfig.token || '';
-  setClaudeStatus(claudeConfigurado() ? '🟢 Configurado neste aparelho.' : '⚪ Não configurado.', claudeConfigurado() ? '#30d158' : '#8e8e93');
+  setClaudeStatus(claudeConfigurado() ? '🟢 Configurado neste aparelho.' : '⚪ Não configurado.', claudeConfigurado() ? '#34c759' : '#8e8e93');
 }
 function setClaudeStatus(txt, cor) { const el = document.getElementById('claude-status'); if (el) { el.innerText = txt; el.style.color = cor || ''; } }
 async function salvarClaudeConfig() {
@@ -2403,13 +2421,13 @@ async function salvarClaudeConfig() {
   claudeConfig = { repo, token };
   localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); // configuração do aparelho, como a da sincronização (não é dado do app)
   if (!claudeConfigurado()) { setClaudeStatus('⚪ Não configurado.', '#8e8e93'); return; }
-  setClaudeStatus('🔄 Testando...', '#0a84ff');
-  try { const info = await gh(''); await gh('/issues?per_page=1'); setClaudeStatus(`🟢 Conectado a ${info.full_name}. Já pode usar o botão ✳.`, '#30d158'); atualizarClaude(true); }
-  catch (e) { setClaudeStatus('🔴 Não conectou: ' + e.message + ' — confira o token e as permissões.', '#ff453a'); }
+  setClaudeStatus('🔄 Testando...', '#007aff');
+  try { const info = await gh(''); await gh('/issues?per_page=1'); setClaudeStatus(`🟢 Conectado a ${info.full_name}. Já pode usar o botão ✳.`, '#34c759'); atualizarClaude(true); }
+  catch (e) { setClaudeStatus('🔴 Não conectou: ' + e.message + ' — confira o token e as permissões.', '#ff3b30'); }
 }
-// confere propostas ao abrir o app, ao voltar pra ele e a cada 60 s enquanto houver pedido em andamento
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - claudeUltimaConsulta > 30000) atualizarClaude(true); });
-setInterval(() => { if (document.visibilityState === 'visible' && claudeConfigurado() && (claudeReqs.some(r => r.status === 'enviado') || document.getElementById('voice-sheet').style.display === 'flex')) atualizarClaude(true); }, 60000);
+// confere o andamento ao abrir o app, ao voltar pra ele e a cada 20 s enquanto houver pedido em andamento
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - claudeUltimaConsulta > 15000) atualizarClaude(true); });
+setInterval(() => { if (document.visibilityState === 'visible' && claudeConfigurado() && emAndamentoClaude()) atualizarClaude(true); }, 20000);
 document.getElementById('voice-sheet').addEventListener('click', (e) => { if (e.target.id === 'voice-sheet') fecharVoz(); });
 
 // Config/Backup
@@ -2564,7 +2582,7 @@ function setAgendaStatus(estado, texto) {
   localStorage.setItem('lifeos_agenda_status', JSON.stringify({ estado, texto, quando: Date.now() }));
   const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   el.innerText = (estado === 'ok' ? '📆 Google Agenda ' + hora + ': ' : '📆 Google Agenda — erro: ') + texto;
-  el.style.color = estado === 'ok' ? '#30d158' : '#ff453a';
+  el.style.color = estado === 'ok' ? '#34c759' : '#ff3b30';
 }
 function enviarAgendaAgora() {
   if (!syncConfig.agenda) { toast('Marque "Enviar para o Google Calendar" e clique em Salvar e testar primeiro.'); return; }
@@ -2577,11 +2595,11 @@ function setSyncStatus(estado, detalhe) {
   const hora = ultima ? new Date(Number(ultima)).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
   const mapa = {
     naoconfig: ['⚪', 'Sincronização não configurada — preencha URL e token abaixo.', '#8e8e93'],
-    andamento: ['🔄', 'Sincronizando...', '#0a84ff'],
-    ok:        ['🟢', 'Sincronizado' + (hora ? ' às ' + hora : '') + ' · automático a cada 30 s', '#30d158'],
-    pendente:  ['🟡', 'Alterações pendentes' + (hora ? ' (último sync ' + hora + ')' : ''), '#ff9f0a'],
-    offline:   ['🔴', 'Offline — vai sincronizar quando a internet voltar.', '#ff453a'],
-    erro:      ['🔴', 'Erro: ' + (detalhe || 'falha na sincronização'), '#ff453a']
+    andamento: ['🔄', 'Sincronizando...', '#007aff'],
+    ok:        ['🟢', 'Sincronizado' + (hora ? ' às ' + hora : '') + ' · automático a cada 30 s', '#34c759'],
+    pendente:  ['🟡', 'Alterações pendentes' + (hora ? ' (último sync ' + hora + ')' : ''), '#ff9500'],
+    offline:   ['🔴', 'Offline — vai sincronizar quando a internet voltar.', '#ff3b30'],
+    erro:      ['🔴', 'Erro: ' + (detalhe || 'falha na sincronização'), '#ff3b30']
   };
   const [icone, texto, cor] = mapa[estado] || mapa.naoconfig;
   if (el) { el.innerText = icone + ' ' + texto; el.style.color = cor; }
@@ -2614,7 +2632,7 @@ function carregarSyncConfigNaTela() {
   if (t) t.value = syncConfig.token || '';
   const a = document.getElementById('sync-agenda'); if (a) a.checked = !!syncConfig.agenda;
   const st = JSON.parse(localStorage.getItem('lifeos_agenda_status') || 'null'); const el = document.getElementById('agenda-status');
-  if (st && el) { el.innerText = (st.estado === 'ok' ? '📆 Google Agenda ' + new Date(st.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ': ' : '📆 Google Agenda — erro: ') + st.texto; el.style.color = st.estado === 'ok' ? '#30d158' : '#ff453a'; }
+  if (st && el) { el.innerText = (st.estado === 'ok' ? '📆 Google Agenda ' + new Date(st.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ': ' : '📆 Google Agenda — erro: ') + st.texto; el.style.color = st.estado === 'ok' ? '#34c759' : '#ff3b30'; }
 }
 
 // Gatilhos automáticos: voltou a internet / voltou pro app (celular) / a cada 30 s com o app visível
@@ -2630,5 +2648,5 @@ renderTaskLists(); preencherTiposEvento(); preencherCategorias(false); preencher
 updatePomodoroTime(); updateStudyStats(); renderFocusTab(); renderCalendar(); updateFinanceValues(); renderFinances(); renderPrimos(); renderTasks(); renderNotes(); renderEvents(); renderRecorrentes();
 document.getElementById('session-date').value = hojeISO(); garantirRitual(); redesenharEstudos(); ['workout-date', 'measure-date', 'meal-date'].forEach(i => document.getElementById(i).value = hojeISO()); renderSaude(); document.getElementById('move-date').value = hojeISO(); document.getElementById('asset-current-at').value = hojeISO(); redesenharNegocios(); renderEvents(); renderCalendar();
 aplicarPerfil(); carregarPrefsNaTela(); atualizarSaudacao(); atualizarBotaoDia();
-if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStorage.setItem('lifeos_perfil_avisado', '1'); setTimeout(() => toast('👤 Bem-vindo ao Genesis! Coloque seu nome em ⚙️ Config → Perfil.', 8000), 1500); }
-carregarClaudeConfigNaTela(); atualizarClaude(true); carregarSyncConfigNaTela(); setSyncStatus(syncConfigurado() ? (syncPendente ? "pendente" : "ok") : "naoconfig"); sincronizar();
+if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStorage.setItem('lifeos_perfil_avisado', '1'); setTimeout(() => toast('👤 Bem-vindo ao Genesis! Coloque seu nome em Ajustes → Perfil.', 8000), 1500); }
+carregarClaudeConfigNaTela(); atualizarIndicadorClaude(); atualizarClaude(true); carregarSyncConfigNaTela(); setSyncStatus(syncConfigurado() ? (syncPendente ? "pendente" : "ok") : "naoconfig"); sincronizar();
