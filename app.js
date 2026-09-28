@@ -3,6 +3,7 @@ function changeTab(tabId) {
   document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
   document.getElementById(tabId).classList.add('active');
   document.getElementById('btn-' + tabId).classList.add('active');
+  window.scrollTo(0, 0); // como no iOS: trocar de aba volta ao topo
 }
 
 // --- UTILITÁRIOS ---
@@ -26,7 +27,6 @@ function toast(msg, ms = 3500) {
 }
 
 // Bando de dados e Migração
-let shifts = JSON.parse(localStorage.getItem('lifeos_shifts')) || [];
 let transactions = JSON.parse(localStorage.getItem('lifeos_finances')) || [];
 let notes = JSON.parse(localStorage.getItem('lifeos_notes')) || [];
 let events = JSON.parse(localStorage.getItem('lifeos_events')) || [];   // compromissos da agenda geral
@@ -47,7 +47,8 @@ let hydration = JSON.parse(localStorage.getItem('lifeos_hydration')) || { date: 
 let meals = JSON.parse(localStorage.getItem('lifeos_meals')) || [];         // Saúde: refeições
 let medical = JSON.parse(localStorage.getItem('lifeos_medical')) || [];     // Saúde: consultas/exames/vacinas/medicamentos
 let profile = JSON.parse(localStorage.getItem('lifeos_profile')) || { name: '', initials: '', subtitle: 'Life OS' }; // quem usa o app (nome no cumprimento, iniciais no cabeçalho)
-let places = JSON.parse(localStorage.getItem('lifeos_places')) || []; // turnos de plantão (nome, local, hora, duração, valor)
+let orders = JSON.parse(localStorage.getItem('lifeos_orders')) || [];   // Primos 3D: pedidos
+let clients = JSON.parse(localStorage.getItem('lifeos_clients')) || []; // Primos 3D: clientes
 
 // Migração das tarefas de Strings para Objetos (Estilo Keep Notes)
 let tasks = JSON.parse(localStorage.getItem('lifeos_tasks')) || [];
@@ -215,7 +216,7 @@ const FRASES = [
   'Disciplina é escolher entre o que você quer agora e o que você quer mais.',
   'Não é sobre ter tempo. É sobre fazer tempo.',
   'Cuide do processo; o resultado cuida de si.',
-  'Um plantão de cada vez, um paciente de cada vez.',
+  'Uma camada de cada vez, uma peça de cada vez.',
   'Comece onde você está. Use o que você tem. Faça o que você pode.',
   'A melhor hora pra plantar uma árvore foi há 20 anos. A segunda melhor é agora.',
   'Pequenos passos todos os dias somam mais que grandes saltos de vez em quando.',
@@ -253,11 +254,13 @@ function atualizarSaudacao() {
   const saud = h < 5 ? 'Boa madrugada' : h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
   document.getElementById('greeting-text').innerText = profile.name ? `${saud}, ${profile.name}` : `${saud}!`;
   const hoje = hojeISO();
-  const plantoesHoje = shifts.filter(s => s.date === hoje).sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+  const entregasHoje = orders.filter(o => pedidoAberto(o) && o.due && o.due <= hoje);
+  const imprimindo = orders.filter(o => o.status === 'imprimindo').length;
   const pendentes = tasks.filter(t => !t.done).length;
   const habPend = habits.filter(h => !h.done).length;
   const partes = [];
-  partes.push(plantoesHoje.length ? `🚑 ${plantoesHoje.map(s => `${s.desc} ${s.time || ''}`.trim()).join(', ')}` : '🚑 sem plantão hoje');
+  partes.push(entregasHoje.length ? `📦 entregar: ${entregasHoje.map(o => o.title).join(', ')}` : '📦 nenhuma entrega hoje');
+  if (imprimindo) partes.push(`🖨️ ${imprimindo} imprimindo`);
   const evHoje = events.filter(e => e.date === hoje && !e.done).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
   if (evHoje.length) partes.push(`📅 ${evHoje.map(e => `${e.time ? e.time + ' ' : ''}${e.title}`).join(', ')}`);
   partes.push(`✅ ${pendentes} tarefa${pendentes === 1 ? '' : 's'} pendente${pendentes === 1 ? '' : 's'}`);
@@ -270,7 +273,7 @@ setInterval(atualizarSaudacao, 60000);
 /** Aplica nome/iniciais na tela (cabeçalho, título da aba, campos da Config). */
 function aplicarPerfil() {
   const h = document.getElementById('header-title');
-  if (h) h.innerHTML = (profile.initials ? `${esc(profile.initials)} <span style="color:#22c55e">·</span> ` : '') + esc(profile.subtitle || 'Life OS');
+  if (h) h.innerHTML = (profile.initials ? `${esc(profile.initials)} <span style="color:#30d158">·</span> ` : '') + esc(profile.subtitle || 'Life OS');
   const n = document.getElementById('profile-name'); const i = document.getElementById('profile-initials'); const s = document.getElementById('profile-subtitle');
   if (n && document.activeElement !== n) n.value = profile.name || '';
   if (i && document.activeElement !== i) i.value = profile.initials || '';
@@ -292,8 +295,8 @@ function iniciarDia() {
   localStorage.setItem('lifeos_dia_iniciado', hojeISO()); atualizarBotaoDia();
   changeJournalTab('day', document.querySelector('#journal-tabs span'));
   const hoje = hojeISO();
-  const pl = shifts.filter(s => s.date === hoje).length; const pend = tasks.filter(t => !t.done).length;
-  toast(`☀️ Bom trabalho hoje! ${pl} plant${pl === 1 ? 'ão' : 'ões'} · ${pend} tarefa${pend === 1 ? '' : 's'} pendente${pend === 1 ? '' : 's'} · ${habits.length} hábitos pra cumprir.`, 6000);
+  const ent = orders.filter(o => pedidoAberto(o) && o.due && o.due <= hoje).length; const pend = tasks.filter(t => !t.done).length;
+  toast(`☀️ Bom trabalho hoje! ${ent} entrega${ent === 1 ? '' : 's'} · ${pend} tarefa${pend === 1 ? '' : 's'} pendente${pend === 1 ? '' : 's'} · ${habits.length} hábitos pra cumprir.`, 6000);
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
 }
 
@@ -351,12 +354,12 @@ function renderFocusTab() {
   }
 
   if (filteredHabits.length === 0) {
-    mainHabits.innerHTML = '<li style="color:#64748b; font-size:0.85rem;">Nenhum hábito nesta categoria.</li>';
+    mainHabits.innerHTML = '<li style="color:#8e8e93; font-size:0.85rem;">Nenhum hábito nesta categoria.</li>';
   } else {
     filteredHabits.forEach(h => {
       const streak = streakHabito(h);
-      mainHabits.innerHTML += `<li style="color: ${h.done ? '#64748b' : '#e2e8f0'};">
-        <input type="checkbox" ${h.done ? 'checked' : ''} onclick="toggleHabit(${h.originalIndex})" style="accent-color: #22c55e;">
+      mainHabits.innerHTML += `<li style="color: ${h.done ? '#8e8e93' : '#f5f5f7'};">
+        <input type="checkbox" ${h.done ? 'checked' : ''} onclick="toggleHabit(${h.originalIndex})" style="accent-color: #30d158;">
         <span style="opacity: ${h.done ? 0.5 : 1}; cursor: pointer;" onclick="toggleHabit(${h.originalIndex})">${esc(h.icon)}</span>
         <span style="${h.done ? 'text-decoration: line-through; opacity: 0.5' : ''}; cursor: pointer; flex:1;" onclick="toggleHabit(${h.originalIndex})">${esc(h.text)}</span>
         ${streak > 0 ? `<span class="streak" title="${streak} dia(s) seguidos">🔥 ${streak}</span>` : ''}
@@ -432,7 +435,8 @@ function renderJournal() {
   if (dentro(hoje) && habits.length) { dias++; soma += habits.filter(h => h.done).length / habits.length; }
   const habPct = dias ? Math.round(soma / dias * 100) : 0;
 
-  const pl = shifts.filter(s => dentro(s.date)); const plR = pl.reduce((a, s) => a + (Number(s.amount) || 0), 0);
+  const ped = orders.filter(o => o.status !== 'cancelado' && dentro(o.date));
+  const pedR = orders.filter(o => o.paid && dentro(o.paidAt || o.date)).reduce((a, o) => a + (Number(o.price) || 0), 0);
   const tarefasFeitas = tasks.filter(t => t.done && t.doneAt && dentro(t.doneAt.slice(0, 10))).length;
   const tarefasPend = tasks.filter(t => !t.done).length;
   let estudo = 0; Object.entries(studyData.dias).forEach(([d, m]) => { if (dentro(d)) estudo += m; }); if (dentro(hoje)) estudo += studyData.minutes;
@@ -443,55 +447,55 @@ function renderJournal() {
   const nomes = { day: 'Hoje', week: 'Esta semana', month: 'Este mês', quarter: 'Este trimestre', year: 'Este ano' };
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = `<div class="stat-period">${nomes[currentJournal]} · ${isoParaBR(ini)}${ini !== fim ? ' a ' + isoParaBR(fim) : ''}</div><div class="stat-grid">`;
-  html += tile('🎮', `${habPct}%`, currentJournal === 'day' ? 'hábitos hoje' : 'média de hábitos', '#22c55e');
-  html += tile('🚑', `${pl.length}`, `plant${pl.length === 1 ? 'ão' : 'ões'} · ${formatCurrency(plR)}`, '#f59e0b');
-  html += tile('✅', `${tarefasFeitas}`, `concluída${tarefasFeitas === 1 ? '' : 's'} · ${tarefasPend} pendente${tarefasPend === 1 ? '' : 's'}`, '#38bdf8');
-  html += tile('📚', `${Math.floor(estudo / 60)}h ${estudo % 60}m`, 'de estudo', '#a78bfa');
-  html += tile('💰', formatCurrency(inc - exp), `↑ ${formatCurrency(inc)} · ↓ ${formatCurrency(exp)}`, inc - exp >= 0 ? '#22c55e' : '#ef4444');
+  html += tile('🎮', `${habPct}%`, currentJournal === 'day' ? 'hábitos hoje' : 'média de hábitos', '#30d158');
+  html += tile('🖨️', `${ped.length}`, `pedido${ped.length === 1 ? '' : 's'} · ${formatCurrency(pedR)} recebido`, COR_PEDIDO);
+  html += tile('✅', `${tarefasFeitas}`, `concluída${tarefasFeitas === 1 ? '' : 's'} · ${tarefasPend} pendente${tarefasPend === 1 ? '' : 's'}`, '#0a84ff');
+  html += tile('📚', `${Math.floor(estudo / 60)}h ${estudo % 60}m`, 'de estudo', '#bf5af2');
+  html += tile('💰', formatCurrency(inc - exp), `↑ ${formatCurrency(inc)} · ↓ ${formatCurrency(exp)}`, inc - exp >= 0 ? '#30d158' : '#ff453a');
   const aportado = moves.filter(m => m.type === 'aporte' && !m.initial && dentro(m.date)).reduce((a, m) => a + m.amount, 0);
-  html += tile('🏦', formatCurrency(patrimonioTotal()), `patrimônio · ${formatCurrency(aportado)} aportados`, '#38bdf8');
+  html += tile('🏦', formatCurrency(patrimonioTotal()), `patrimônio · ${formatCurrency(aportado)} aportados`, '#0a84ff');
   const tr_ = workouts.filter(w => dentro(w.date)); const trMin = tr_.reduce((a, w) => a + (w.minutes || 0), 0);
-  html += tile('🏋️', `${tr_.length}`, `treino${tr_.length === 1 ? '' : 's'} · ${trMin} min · 💧 ${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L hoje`, '#22c55e');
+  html += tile('🏋️', `${tr_.length}`, `treino${tr_.length === 1 ? '' : 's'} · ${trMin} min · 💧 ${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L hoje`, '#30d158');
   html += '</div>';
 
   if (currentJournal === 'day') {
-    const plHoje = pl.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    const entHoje = orders.filter(o => pedidoAberto(o) && o.due && o.due <= hoje).sort((a, b) => a.due.localeCompare(b.due));
     const pend = tarefasPrioritarias(5);
     html += '<div class="stat-lists">';
-    html += `<div><h5>🚑 Plantões de hoje</h5>${plHoje.length ? plHoje.map(s => `<div class="stat-line"><strong>${esc(s.time || '')}</strong> ${esc(s.desc)} <span style="color:#f59e0b">${formatCurrency(s.amount)}</span></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div>`;
+    html += `<div><h5>📦 Entregas de hoje</h5>${entHoje.length ? entHoje.map(o => `<div class="stat-line">${o.due < hoje ? '<span class="badge-topay">atrasado</span> ' : ''}${esc(o.title)}${o.clientId ? ` <span class="item-date">· ${esc(clienteNome(o.clientId))}</span>` : ''}</div>`).join('') : '<div class="stat-line muted">nenhuma</div>'}</div>`;
     const evHoje = events.filter(e => e.date === hoje).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
     html += `<div><h5>📅 Compromissos de hoje</h5>${evHoje.length ? evHoje.map(e => `<div class="stat-line" style="${e.done ? 'opacity:0.5;text-decoration:line-through' : ''}">${tipoEvento(e.type).icone} <strong>${esc(e.time || '')}</strong> ${esc(e.title)}</div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div>`;
     html += `<div><h5>✅ Próximas tarefas</h5>${pend.length ? pend.map(t => `<div class="stat-line">${t.starred ? '★' : '•'} ${esc(t.text)}${t.due ? ` <span class="due ${prazoInfo(t).classe}">${esc(prazoInfo(t).rotulo)}</span>` : ''}</div>`).join('') : '<div class="stat-line muted">tudo em dia</div>'}</div>`;
     html += '</div>';
   }
   if (currentJournal === 'week' || currentJournal === 'month') {
-    const lista = [...pl].sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+    const lista = orders.filter(o => pedidoAberto(o) && o.due && dentro(o.due)).sort((a, b) => a.due.localeCompare(b.due));
     const evs = events.filter(e => dentro(e.date) && !e.done).sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
     html += '<div class="stat-lists">';
-    html += `<div><h5>🚑 Plantões ${currentJournal === 'week' ? 'da semana' : 'do mês'}</h5>${lista.length ? lista.map(s => `<div class="stat-line ${s.date < hoje ? 'muted' : ''}"><strong>${diaSemanaCurto(s.date)} ${isoParaBR(s.date).slice(0, 5)}</strong> · ${esc(s.time || '')} ${esc(s.desc)} <span style="color:#f59e0b">${formatCurrency(s.amount)}</span>${s.paid ? ' <span class="badge-paid">pago</span>' : ''}</div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div>`;
+    html += `<div><h5>📦 Entregas ${currentJournal === 'week' ? 'da semana' : 'do mês'}</h5>${lista.length ? lista.map(o => `<div class="stat-line"><strong>${diaSemanaCurto(o.due)} ${isoParaBR(o.due).slice(0, 5)}</strong> · ${esc(o.title)}${o.due < hoje ? ' <span class="badge-topay">atrasado</span>' : ''}${o.price ? ` <span style="color:${COR_PEDIDO}">${formatCurrency(o.price)}</span>` : ''}</div>`).join('') : '<div class="stat-line muted">nenhuma</div>'}</div>`;
     html += `<div><h5>📅 Compromissos ${currentJournal === 'week' ? 'da semana' : 'do mês'}</h5>${evs.length ? evs.slice(0, 12).map(e => `<div class="stat-line ${e.date < hoje ? 'muted' : ''}">${tipoEvento(e.type).icone} <strong>${diaSemanaCurto(e.date)} ${isoParaBR(e.date).slice(0, 5)}</strong> · ${esc(e.time || '')} ${esc(e.title)}</div>`).join('') + (evs.length > 12 ? `<div class="stat-line muted">+${evs.length - 12} mais</div>` : '') : '<div class="stat-line muted">nenhum</div>'}</div>`;
     html += '</div>';
   }
   if (currentJournal === 'quarter' || currentJournal === 'year') {
     const porMes = {};
-    pl.forEach(s => { const m = s.date.slice(0, 7); porMes[m] = porMes[m] || { n: 0, valor: 0, pagos: 0 }; porMes[m].n++; porMes[m].valor += Number(s.amount) || 0; if (s.paid) porMes[m].pagos += Number(s.amount) || 0; });
+    ped.forEach(o => { const m = o.date.slice(0, 7); porMes[m] = porMes[m] || { n: 0, valor: 0, pagos: 0 }; porMes[m].n++; if (pedidoGeraLancamento(o)) porMes[m].valor += Number(o.price) || 0; if (o.paid) porMes[m].pagos += Number(o.price) || 0; });
     const meses = Object.keys(porMes).sort();
-    html += `<div class="stat-lists"><div><h5>🚑 Plantões por mês</h5>${meses.length ? meses.map(m => `<div class="stat-line"><strong>${nomeMes(m).slice(0, 3)}</strong> · ${porMes[m].n} plant${porMes[m].n === 1 ? 'ão' : 'ões'} · <span style="color:#f59e0b">${formatCurrency(porMes[m].valor)}</span> <small style="color:#22c55e">(${formatCurrency(porMes[m].pagos)} pago)</small></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div></div>`;
+    html += `<div class="stat-lists"><div><h5>🖨️ Pedidos por mês</h5>${meses.length ? meses.map(m => `<div class="stat-line"><strong>${nomeMes(m).slice(0, 3)}</strong> · ${porMes[m].n} pedido${porMes[m].n === 1 ? '' : 's'} · <span style="color:${COR_PEDIDO}">${formatCurrency(porMes[m].valor)}</span> <small style="color:#30d158">(${formatCurrency(porMes[m].pagos)} recebido)</small></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div></div>`;
   }
   content.innerHTML = html;
 }
 
 // --- AGENDA: TIPOS DE COMPROMISSO ---
 const TIPOS_EVENTO = {
-  trabalho: { nome: 'Trabalho', cor: '#38bdf8', icone: '💼' },
-  pessoal:  { nome: 'Pessoal',  cor: '#a78bfa', icone: '🏠' },
-  saude:    { nome: 'Saúde',    cor: '#22c55e', icone: '🩺' },
-  estudo:   { nome: 'Estudo',   cor: '#f472b6', icone: '📚' },
-  negocios: { nome: 'Negócios', cor: '#fbbf24', icone: '📈' },
-  social:   { nome: 'Social',   cor: '#fb923c', icone: '🎉' },
-  outro:    { nome: 'Outro',    cor: '#94a3b8', icone: '📌' }
+  trabalho: { nome: 'Trabalho', cor: '#0a84ff', icone: '💼' },
+  pessoal:  { nome: 'Pessoal',  cor: '#bf5af2', icone: '🏠' },
+  saude:    { nome: 'Saúde',    cor: '#30d158', icone: '🩺' },
+  estudo:   { nome: 'Estudo',   cor: '#ff375f', icone: '📚' },
+  negocios: { nome: 'Negócios', cor: '#ffd60a', icone: '📈' },
+  social:   { nome: 'Social',   cor: '#ffb340', icone: '🎉' },
+  outro:    { nome: 'Outro',    cor: '#8e8e93', icone: '📌' }
 };
-const COR_PLANTAO = '#f59e0b';
+const COR_PEDIDO = '#ff9f0a'; // entregas da Primos 3D no calendário
 function tipoEvento(t) { return TIPOS_EVENTO[t] || TIPOS_EVENTO.outro; }
 function diaSemanaCurto(iso) { const [y, m, d] = iso.split('-'); return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''); }
 function rotuloData(iso) {
@@ -501,10 +505,10 @@ function rotuloData(iso) {
 }
 function rotuloDataLonga(iso) { const r = rotuloData(iso); return (r === 'Hoje' || r === 'Amanhã' ? r : diaSemanaCurto(iso)) + ' · ' + isoParaBR(iso); }
 
-/** Tudo que acontece num dia (plantões + compromissos), em ordem de horário. */
+/** Tudo que acontece num dia (entregas de pedidos + compromissos + tarefas), em ordem de horário. */
 function itensDoDia(iso) {
   const itens = [];
-  shifts.filter(s => s.date === iso).forEach(s => itens.push({ kind: 'shift', time: s.time || '', obj: s }));
+  orders.filter(o => o.due === iso && pedidoAberto(o)).forEach(o => itens.push({ kind: 'order', time: '', obj: o }));
   events.filter(e => e.date === iso).forEach(e => itens.push({ kind: 'event', time: e.time || '', obj: e }));
   tasks.filter(t => t.due === iso && !t.done).forEach(t => itens.push({ kind: 'task', time: '', obj: t }));
   return itens.sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
@@ -528,7 +532,7 @@ function renderCalendar() {
   for (let i = 1; i <= lastDay; i++) {
     const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
     const itens = itensDoDia(iso);
-    const cores = itens.map(it => it.kind === 'shift' ? COR_PLANTAO : it.kind === 'task' ? COR_TAREFA : tipoEvento(it.obj.type).cor);
+    const cores = itens.map(it => it.kind === 'order' ? COR_PEDIDO : it.kind === 'task' ? COR_TAREFA : tipoEvento(it.obj.type).cor);
     const dots = cores.slice(0, 4).map(c => `<span class="day-dot" style="background:${c}"></span>`).join('') + (cores.length > 4 ? '<span class="day-more">+</span>' : '');
     daysHTML += `<div class="calendar-day ${iso === hoje ? 'today' : ''} ${itens.length ? 'has-items' : ''}" onclick="openDayModal(${year}, ${month + 1}, ${i})" title="${itens.length ? itens.length + ' item(ns)' : ''}">${i}<div class="day-dots">${dots}</div></div>`;
   }
@@ -547,12 +551,12 @@ function openDayModal(year, month, day) {
   const modalList = document.getElementById('modal-shift-list'); modalList.innerHTML = '';
 
   if (itens.length === 0) {
-    modalList.innerHTML = '<li style="justify-content:center; color:#64748b; background: transparent; border:none;">Nada marcado neste dia.</li>';
+    modalList.innerHTML = '<li style="justify-content:center; color:#8e8e93; background: transparent; border:none;">Nada marcado neste dia.</li>';
   } else {
     itens.forEach(it => {
-      if (it.kind === 'shift') {
-        const s = it.obj;
-        modalList.innerHTML += `<li class="shift-item" style="border-left-color:${COR_PLANTAO}"><span style="display:flex; flex-direction:column;"><strong>🚑 ${esc(s.time || '')}${s.hours ? ' · ' + s.hours + 'h' : ''}</strong><span style="font-size:0.85rem;">${esc(s.desc)} ${s.paid ? '<span class="badge-paid">pago</span>' : '<span class="badge-unpaid">a receber</span>'}${s.swap ? ' <span class="badge-swap">🔁 troca</span>' : ''}</span></span><strong style="color:${COR_PLANTAO}">${formatCurrency(s.amount)}</strong></li>`;
+      if (it.kind === 'order') {
+        const o = it.obj; const st = statusPedido(o.status); const cli = clienteNome(o.clientId);
+        modalList.innerHTML += `<li class="shift-item" style="border-left-color:${COR_PEDIDO}; cursor:pointer" onclick="closeModal(); editarPedido(${o.id})"><span style="display:flex; flex-direction:column;"><strong>📦 Entrega${o.due < hojeISO() ? ' (atrasada)' : ''}</strong><span style="font-size:0.85rem;">${esc(o.title)}${cli ? ' — ' + esc(cli) : ''}</span></span><small class="category-badge" style="color:${st.cor}; background:${st.cor}22">${st.icone} ${st.nome}</small></li>`;
       } else if (it.kind === 'task') {
         const t = it.obj;
         modalList.innerHTML += `<li class="shift-item" style="border-left-color:${COR_TAREFA}"><span style="display:flex; flex-direction:column;"><strong>✅ Tarefa${t.starred ? ' ★' : ''}</strong><span style="font-size:0.85rem;">${esc(t.text)}</span></span><small class="category-badge">${esc(listaNome(t.list))}</small></li>`;
@@ -565,7 +569,7 @@ function openDayModal(year, month, day) {
   document.getElementById('day-modal').style.display = 'flex';
 }
 function closeModal() { document.getElementById('day-modal').style.display = 'none'; }
-function goToAddShift() { closeModal(); changeTab('shifts'); cancelarEdicaoPlantao(); document.getElementById('shift-date').value = selectedModalDate; setTimeout(() => document.getElementById('shift-desc').focus(), 100); }
+function goToAddOrder() { closeModal(); changeTab('primos'); cancelarEdicaoPedido(); document.getElementById('order-due').value = selectedModalDate; setTimeout(() => { document.getElementById('order-title').scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('order-title').focus(); }, 100); }
 function goToAddEvent() { closeModal(); cancelarEdicaoEvento(); document.getElementById('event-date').value = selectedModalDate; setTimeout(() => { document.getElementById('event-title').scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('event-title').focus(); }, 100); }
 document.getElementById('day-modal').addEventListener('click', (e) => { if (e.target.id === 'day-modal') closeModal(); });
 
@@ -623,7 +627,7 @@ function renderEvents() {
   else if (eventFilter === 'concluidos') lista = lista.filter(e => e.done);
   lista.sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
   if (eventFilter === 'passados') lista.reverse();
-  if (!lista.length) { list.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum compromisso aqui.</li>'; return; }
+  if (!lista.length) { list.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum compromisso aqui.</li>'; return; }
   let ultimaData = '';
   lista.forEach(e => {
     if (e.date !== ultimaData) { ultimaData = e.date; list.innerHTML += `<li class="date-sep">${rotuloData(e.date)} <small>${isoParaBR(e.date)}</small></li>`; }
@@ -637,12 +641,12 @@ function renderEvents() {
     </li>`;
   });
 }
-function redesenharAgenda() { renderCalendar(); renderEvents(); renderShifts(); renderJournal(); atualizarSaudacao(); }
+function redesenharAgenda() { renderCalendar(); renderEvents(); renderJournal(); atualizarSaudacao(); }
 
 // --- FINANÇAS ---
 const CATEGORIAS = {
-  income:  ['Plantão', 'Salário CLT', 'Consulta / Particular', 'Faturamento CNPJ', 'Investimentos', 'Reembolso', 'Outros'],
-  expense: ['Custos Fixos', 'Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Assinaturas', 'Educação', 'Lazer', 'Investimentos', 'Impostos', 'Empresa', 'Outros']
+  income:  ['Primos 3D', 'Engenharia / Projetos', 'Salário CLT', 'Faturamento CNPJ', 'Investimentos', 'Reembolso', 'Outros'],
+  expense: ['Filamento / Insumos', 'Primos 3D (outros)', 'Custos Fixos', 'Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Assinaturas', 'Educação', 'Lazer', 'Investimentos', 'Impostos', 'Empresa', 'Outros']
 };
 let finMonth = hojeISO().slice(0, 7); // 'aaaa-mm' do mês em exibição
 let finModo = 'mes';                  // 'mes' | 'tudo'
@@ -650,7 +654,6 @@ let finFilter = 'todas';
 let finSearch = '';
 
 function transacaoPendente(t) { return t.pending === true; }
-function transacaoDePlantao(t) { return shifts.some(s => s.id === t.id); }
 function nomeMes(ym) { const [y, m] = ym.split('-'); return new Date(y, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).replace(/^./, c => c.toUpperCase()); }
 function somaMes(ym, delta) { const [y, m] = ym.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); return isoDe(d).slice(0, 7); }
 function mudarMesFin(delta) { finMonth = somaMes(finMonth, delta); redesenharFinancas(); }
@@ -691,11 +694,11 @@ function updateFinanceValues() {
   document.getElementById('total-income').innerText = formatCurrency(income);
   document.getElementById('total-expense').innerText = formatCurrency(expense);
   document.getElementById('net-balance').innerText = formatCurrency(total);
-  document.getElementById('net-balance').style.color = total >= 0 ? '#22c55e' : '#ef4444';
+  document.getElementById('net-balance').style.color = total >= 0 ? '#30d158' : '#ff453a';
   const pend = document.getElementById('total-pending'); if (pend) pend.innerText = formatCurrency(aReceber);
   const lbl = document.getElementById('fin-month-label'); if (lbl) lbl.innerText = finModo === 'mes' ? nomeMes(finMonth) : 'Todo o período';
   const extra = document.getElementById('fin-extra');
-  if (extra) extra.innerHTML = `<span>💸 A pagar: <strong style="color:#ef4444">${formatCurrency(aPagar)}</strong></span><span>📈 Previsto (saldo + a receber − a pagar): <strong style="color:${total + aReceber - aPagar >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(total + aReceber - aPagar)}</strong></span><span>🏦 Saldo acumulado (tudo): <strong style="color:${acumulado >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(acumulado)}</strong></span>`;
+  if (extra) extra.innerHTML = `<span>💸 A pagar: <strong style="color:#ff453a">${formatCurrency(aPagar)}</strong></span><span>📈 Previsto (saldo + a receber − a pagar): <strong style="color:${total + aReceber - aPagar >= 0 ? '#30d158' : '#ff453a'}">${formatCurrency(total + aReceber - aPagar)}</strong></span><span>🏦 Saldo acumulado (tudo): <strong style="color:${acumulado >= 0 ? '#30d158' : '#ff453a'}">${formatCurrency(acumulado)}</strong></span>`;
 }
 
 function renderFinances() {
@@ -706,13 +709,13 @@ function renderFinances() {
   else if (finFilter === 'pendentes') lista = lista.filter(transacaoPendente);
   if (finSearch) lista = lista.filter(t => `${t.desc} ${t.category || ''} ${t.notes || ''}`.toLowerCase().includes(finSearch));
   lista.sort((a, b) => dataTransacao(b).localeCompare(dataTransacao(a)) || (b.id || 0) - (a.id || 0));
-  if (!lista.length) { tList.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum lançamento aqui.</li>'; }
+  if (!lista.length) { tList.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum lançamento aqui.</li>'; }
   lista.forEach(t => {
-    const i = transactions.indexOf(t); const pend = transacaoPendente(t); const dePlantao = transacaoDePlantao(t);
+    const i = transactions.indexOf(t); const pend = transacaoPendente(t); const dePedido = transacaoDePedido(t);
     const li = document.createElement('li'); li.classList.add(t.type === 'income' ? 'income-item' : 'expense-item'); if (pend) li.classList.add('pending-item');
-    li.innerHTML = `<div class="transaction-info" style="flex:1"><span>${dePlantao ? '🚑 ' : ''}${t.recurringId ? '🔁 ' : ''}${esc(t.desc)}${pend ? (t.type === 'income' ? ' <span class="badge-unpaid">a receber</span>' : ' <span class="badge-topay">a pagar</span>') : ''}</span>
+    li.innerHTML = `<div class="transaction-info" style="flex:1"><span>${dePedido ? '📦 ' : ''}${t.recurringId ? '🔁 ' : ''}${esc(t.desc)}${pend ? (t.type === 'income' ? ' <span class="badge-unpaid">a receber</span>' : ' <span class="badge-topay">a pagar</span>') : ''}</span>
         <small class="category-badge">${esc(t.category || 'Sem categoria')}</small> <small class="item-date">${isoParaBR(dataTransacao(t))}</small>${t.notes ? `<small class="item-notes">${esc(t.notes)}</small>` : ''}</div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${t.type === 'income' ? '#22c55e' : '#ef4444'}">${t.type === 'income' ? '+' : '−'}${formatCurrency(t.amount)}</strong><button class="mini-btn ${pend ? '' : 'on'}" title="${pend ? 'Marcar como efetivado' : 'Voltar para pendente'}" onclick="alternarEfetivado(${i})">💵</button><button class="mini-btn" title="Editar" onclick="editarTransacao(${i})">✎</button><button class="mini-btn" title="Apagar" onclick="removeFinance(${i})">✕</button></div>`;
+      <div class="item-actions"><strong style="margin-right:6px; color:${t.type === 'income' ? '#30d158' : '#ff453a'}">${t.type === 'income' ? '+' : '−'}${formatCurrency(t.amount)}</strong><button class="mini-btn ${pend ? '' : 'on'}" title="${pend ? 'Marcar como efetivado' : 'Voltar para pendente'}" onclick="alternarEfetivado(${i})">💵</button><button class="mini-btn" title="Editar" onclick="editarTransacao(${i})">✎</button><button class="mini-btn" title="Apagar" onclick="removeFinance(${i})">✕</button></div>`;
     tList.appendChild(li);
   });
   renderCategoriasFin(); renderMesesFin();
@@ -727,7 +730,7 @@ function renderCategoriasFin() {
     if (!itens.length) return `<div class="cat-block"><h5>${titulo}</h5><div class="stat-line muted">nada ainda</div></div>`;
     return `<div class="cat-block"><h5>${titulo} · ${formatCurrency(total)}</h5>` + itens.map(([c, v]) => `<div class="cat-row"><span class="cat-name">${esc(c)}</span><div class="cat-bar"><div style="width:${Math.round(v / total * 100)}%; background:${cor}"></div></div><span class="cat-val">${formatCurrency(v)} <small>${Math.round(v / total * 100)}%</small></span></div>`).join('') + '</div>';
   };
-  el.innerHTML = bloco('expense', '#ef4444', '💸 Despesas') + bloco('income', '#22c55e', '💰 Receitas');
+  el.innerHTML = bloco('expense', '#ff453a', '💸 Despesas') + bloco('income', '#30d158', '💰 Receitas');
 }
 
 function renderMesesFin() {
@@ -738,7 +741,7 @@ function renderMesesFin() {
   const max = Math.max(1, ...dados.map(d => Math.max(d.inc, d.exp)));
   el.innerHTML = dados.map(d => `<div class="mes-col ${d.m === finMonth && finModo === 'mes' ? 'atual' : ''}" onclick="finMonth='${d.m}'; finModo='mes'; redesenharFinancas();" title="Receitas ${formatCurrency(d.inc)} · Despesas ${formatCurrency(d.exp)}">
       <div class="mes-bars"><div class="mes-bar inc" style="height:${Math.round(d.inc / max * 100)}%"></div><div class="mes-bar exp" style="height:${Math.round(d.exp / max * 100)}%"></div></div>
-      <small>${nomeMes(d.m).slice(0, 3)}</small><small class="mes-saldo" style="color:${d.inc - d.exp >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(d.inc - d.exp).replace('R$', '').trim()}</small></div>`).join('');
+      <small>${nomeMes(d.m).slice(0, 3)}</small><small class="mes-saldo" style="color:${d.inc - d.exp >= 0 ? '#30d158' : '#ff453a'}">${formatCurrency(d.inc - d.exp).replace('R$', '').trim()}</small></div>`).join('');
 }
 
 document.getElementById('type').addEventListener('change', () => preencherCategorias(false));
@@ -770,7 +773,7 @@ function cancelarEdicaoFin() {
 }
 function editarTransacao(index) {
   const t = transactions[index]; if (!t) return;
-  if (transacaoDePlantao(t)) { editarPlantao(t.id); toast('🚑 Este lançamento vem de um plantão — edite o plantão.'); return; }
+  if (transacaoDePedido(t)) { editarPedido(t.id); toast('📦 Este lançamento vem de um pedido da Primos 3D — edite o pedido.'); return; }
   changeTab('finances');
   document.getElementById('finance-id').value = t.id; document.getElementById('desc').value = t.desc; document.getElementById('amount').value = t.amount;
   document.getElementById('fin-date').value = dataTransacao(t); document.getElementById('type').value = t.type; preencherCategorias(false); definirCategoriaNaTela(t.category || 'Outros');
@@ -782,15 +785,15 @@ function editarTransacao(index) {
 }
 function alternarEfetivado(index) {
   const t = transactions[index]; if (!t) return;
-  if (transacaoDePlantao(t)) { alternarPago(t.id); return; }
+  if (transacaoDePedido(t)) { alternarPagoPedido(t.id); return; }
   t.pending = !transacaoPendente(t); if (!t.pending) t.date = hojeISO();
   salvar('finances', transactions); redesenharFinancas();
   toast(t.pending ? '⏳ Voltou para pendente.' : '💵 Efetivado hoje.');
 }
 function removeFinance(index) {
   const t = transactions[index];
-  if (transacaoDePlantao(t) && !confirm('Este lançamento veio de um plantão. Apagar mesmo assim? (o plantão continua na agenda)')) return;
-  if (!transacaoDePlantao(t) && !confirm(`Apagar "${t.desc}"?`)) return;
+  if (transacaoDePedido(t)) { toast('📦 Este lançamento vem de um pedido — para tirar de Finanças, cancele ou apague o pedido na aba Primos 3D.', 6000); return; }
+  if (!confirm(`Apagar "${t.desc}"?`)) return;
   transactions.splice(index, 1); salvar('finances', transactions); redesenharFinancas();
 }
 function redesenharFinancas() { updateFinanceValues(); renderFinances(); renderRecorrentes(); renderJournal(); }
@@ -839,149 +842,273 @@ function removerRecorrente(id) {
 }
 function renderRecorrentes() {
   const ul = document.getElementById('rec-list'); if (!ul) return; ul.innerHTML = '';
-  if (!recurring.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma recorrente. Ex: aluguel, internet, salário CLT, assinatura.</li>'; return; }
+  if (!recurring.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma recorrente. Ex: aluguel, internet, salário CLT, assinatura.</li>'; return; }
   [...recurring].sort((a, b) => (a.day || 0) - (b.day || 0)).forEach(r => {
     const off = r.active === false;
     ul.innerHTML += `<li class="${r.type === 'income' ? 'income-item' : 'expense-item'}" style="${off ? 'opacity:0.45' : ''}"><div class="transaction-info" style="flex:1"><span>🔁 ${esc(r.desc)}${off ? ' <small class="item-date">(pausada)</small>' : ''}</span><small class="category-badge">${esc(r.category)}</small> <small class="item-date">todo dia ${r.day}</small></div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${r.type === 'income' ? '#22c55e' : '#ef4444'}">${formatCurrency(r.amount)}</strong><button class="mini-btn ${off ? '' : 'on'}" title="${off ? 'Reativar' : 'Pausar'}" onclick="alternarRecorrente(${r.id})">${off ? '▶' : '⏸'}</button><button class="mini-btn" title="Editar" onclick="editarRecorrente(${r.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerRecorrente(${r.id})">✕</button></div></li>`;
+      <div class="item-actions"><strong style="margin-right:6px; color:${r.type === 'income' ? '#30d158' : '#ff453a'}">${formatCurrency(r.amount)}</strong><button class="mini-btn ${off ? '' : 'on'}" title="${off ? 'Reativar' : 'Pausar'}" onclick="alternarRecorrente(${r.id})">${off ? '▶' : '⏸'}</button><button class="mini-btn" title="Editar" onclick="editarRecorrente(${r.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerRecorrente(${r.id})">✕</button></div></li>`;
   });
 }
 
-// --- PLANTÕES ---
-let shiftFilter = 'proximos';
-function preencherLocais() {
-  const sel = document.getElementById('shift-place'); if (!sel) return;
-  const atual = sel.value;
-  sel.innerHTML = '<option value="">— escolher turno —</option>' + places.map((p, i) => `<option value="${i}">${esc(p.name)}${p.hours ? ' · ' + p.hours + 'h' : ''}${p.time ? ' · ' + esc(p.time) : ''}${p.amount ? ' · ' + formatCurrency(p.amount) : ''}</option>`).join('') + '<option value="outro">✏️ Outro (digitar)</option>';
-  if ([...sel.options].some(o => o.value === atual)) sel.value = atual;
-  renderPlaces();
+// ============================================================================
+// PRIMOS 3D — pedidos e clientes da empresa de impressão 3D
+// Pedido:  { id, date (criado), clientId, title, qty, material, color, printer, price, due (prazo), status, paid, paidAt, notes }
+// Cliente: { id, name, phone, email, city, notes, date }
+// Pedido com valor que já saiu do orçamento vira receita em Finanças com o MESMO id
+// (categoria "Primos 3D"), "a receber" até marcar 💵. Orçamento/cancelado não entram em Finanças.
+// ============================================================================
+const STATUS_PEDIDO = {
+  orcamento:  { nome: 'Orçamento',  icone: '📝', cor: '#8e8e93' },
+  aprovado:   { nome: 'Aprovado',   icone: '👍', cor: '#0a84ff' },
+  imprimindo: { nome: 'Imprimindo', icone: '🖨️', cor: '#ff9f0a' },
+  pronto:     { nome: 'Pronto',     icone: '✅', cor: '#30d158' },
+  entregue:   { nome: 'Entregue',   icone: '📦', cor: '#64d2ff' },
+  cancelado:  { nome: 'Cancelado',  icone: '✕',  cor: '#ff453a' }
+};
+const FLUXO_PEDIDO = ['orcamento', 'aprovado', 'imprimindo', 'pronto', 'entregue'];
+const MATERIAIS_3D = ['PLA', 'PLA Silk', 'PLA Matte', 'PETG', 'ABS', 'ASA', 'TPU', 'Outro'];
+const IMPRESSORAS_3D = ['Bambu A1 #1 (AMS Lite)', 'Bambu A1 #2 (AMS Lite)', 'Anycubic Kobra X'];
+let orderFilter = 'abertos';
+let orderSearch = '';
+
+function statusPedido(s) { return STATUS_PEDIDO[s] || STATUS_PEDIDO.orcamento; }
+function pedidoAberto(o) { return o.status !== 'entregue' && o.status !== 'cancelado'; }
+function pedidoGeraLancamento(o) { return (Number(o.price) || 0) > 0 && o.status !== 'orcamento' && o.status !== 'cancelado'; }
+function clienteNome(id) { const c = clients.find(x => x.id === id); return c ? c.name : ''; }
+function transacaoDePedido(t) { return orders.some(o => o.id === t.id); }
+
+/** Mantém o lançamento em Finanças igual ao pedido (valor, data, pago/a receber) — ou tira de lá se o pedido não gera receita. */
+function sincronizarLancamentoPedido(o) {
+  const i = transactions.findIndex(t => t.id === o.id);
+  if (!pedidoGeraLancamento(o)) { if (i >= 0) transactions.splice(i, 1); return; }
+  let t = transactions[i];
+  if (!t) { t = { id: o.id, type: 'income', category: 'Primos 3D' }; transactions.push(t); }
+  const cli = clienteNome(o.clientId);
+  t.desc = `Primos 3D: ${o.title}${cli ? ' — ' + cli : ''}`; t.amount = Number(o.price) || 0; t.pending = !o.paid;
+  t.date = o.paid ? (o.paidAt || o.date) : (o.due || o.date);
 }
-function aplicarLocalPlantao() {
-  const v = document.getElementById('shift-place').value;
-  if (v === '' || v === 'outro') { if (v === 'outro') document.getElementById('shift-desc').focus(); return; }
-  const p = places[Number(v)]; if (!p) return;
-  document.getElementById('shift-desc').value = p.local || p.name;
-  if (p.time) document.getElementById('shift-time').value = p.time;
-  if (p.hours) document.getElementById('shift-hours').value = p.hours;
-  if (p.amount) document.getElementById('shift-amount').value = p.amount;
+
+function preencherSelectsPrimos() {
+  const cli = document.getElementById('order-client');
+  if (cli) {
+    const atual = cli.value;
+    cli.innerHTML = '<option value="">— sem cliente —</option>' + [...clients].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('') + '<option value="__novo">＋ Novo cliente (digitar)</option>';
+    if ([...cli.options].some(o => o.value === atual)) cli.value = atual;
+    document.getElementById('order-client-new').hidden = cli.value !== '__novo';
+  }
+  const f = (id, lista, vazio) => { const s = document.getElementById(id); if (s && !s.options.length) s.innerHTML = (vazio ? `<option value="">${vazio}</option>` : '') + lista.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join(''); };
+  f('order-material', MATERIAIS_3D); f('order-printer', IMPRESSORAS_3D, '— a definir —');
+  const st = document.getElementById('order-status');
+  if (st && !st.options.length) st.innerHTML = Object.entries(STATUS_PEDIDO).map(([k, s]) => `<option value="${k}">${s.icone} ${s.nome}</option>`).join('');
 }
-function renderPlaces() {
-  const ul = document.getElementById('place-list'); if (!ul) return; ul.innerHTML = '';
-  if (!places.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum turno cadastrado. Ex: "Hospital X 12h" (07:00, 12h, R$ 1.500).</li>'; return; }
-  places.forEach((p, i) => {
-    ul.innerHTML += `<li><div class="transaction-info"><span>🏥 ${esc(p.name)}${p.local && p.local !== p.name ? ` <small class="item-date">· ${esc(p.local)}</small>` : ''}</span><small class="item-date">${p.time ? 'às ' + esc(p.time) : ''}${p.hours ? ' · ' + p.hours + 'h' : ''}${p.amount ? ' · ' + formatCurrency(p.amount) : ''}</small></div>
-      <div class="item-actions"><button class="mini-btn" title="Editar" onclick="editarLocal(${i})">✎</button><button class="mini-btn" title="Apagar" onclick="removerLocal(${i})">✕</button></div></li>`;
-  });
-}
-document.getElementById('place-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const name = document.getElementById('place-name').value.trim(); if (!name) return;
-  const p = { name, local: (document.getElementById('place-local').value || '').trim() || name, time: document.getElementById('place-time').value, hours: parseFloat(document.getElementById('place-hours').value) || 0, amount: parseFloat(document.getElementById('place-amount').value) || 0 };
-  const idx = document.getElementById('place-id').value;
-  if (idx !== '') places[Number(idx)] = p; else places.push(p);
-  salvar('places', places); document.getElementById('place-form').reset(); document.getElementById('place-id').value = ''; document.getElementById('place-submit').innerText = 'Adicionar turno';
-  preencherLocais();
+document.getElementById('order-client').addEventListener('change', () => {
+  const novo = document.getElementById('order-client').value === '__novo';
+  document.getElementById('order-client-new').hidden = !novo; if (novo) document.getElementById('order-client-new').focus();
 });
-function editarLocal(i) {
-  const p = places[i];
-  document.getElementById('place-id').value = i; document.getElementById('place-name').value = p.name; document.getElementById('place-local').value = p.local || ''; document.getElementById('place-time').value = p.time || '';
-  document.getElementById('place-hours').value = p.hours || ''; document.getElementById('place-amount').value = p.amount || '';
-  document.getElementById('place-submit').innerText = 'Salvar turno'; document.getElementById('place-name').focus();
-}
-function removerLocal(i) { if (!confirm(`Apagar o turno "${places[i].name}"?`)) return; places.splice(i, 1); salvar('places', places); preencherLocais(); }
 
-function transacaoDoPlantao(s) { return transactions.find(t => t.id === s.id); }
-function descricaoLancamento(s) { const [y, m, d] = s.date.split('-'); return `Plantão: ${s.desc} (${d}/${m} às ${s.time})`; }
-/** Mantém o lançamento em Finanças igual ao plantão (valor, data, pago/a receber). */
-function sincronizarLancamentoPlantao(s) {
-  let t = transacaoDoPlantao(s);
-  if (!t) { t = { id: s.id, type: 'income', category: 'Plantão' }; transactions.push(t); }
-  t.desc = descricaoLancamento(s); t.amount = s.amount; t.pending = !s.paid; t.date = s.paid ? (s.paidAt || s.date) : s.date;
-}
-
-function filtrarPlantoes(f, el) { shiftFilter = f; document.querySelectorAll('#shift-filters span').forEach(s => s.classList.remove('active')); if (el) el.classList.add('active'); renderShifts(); }
-function renderShifts() {
-  const sList = document.getElementById('shift-list'); sList.innerHTML = '';
-  const hoje = hojeISO();
-  let lista = [...shifts];
-  if (shiftFilter === 'proximos') lista = lista.filter(s => s.date >= hoje);
-  else if (shiftFilter === 'naopagos') lista = lista.filter(s => !s.paid);
-  else if (shiftFilter === 'passados') lista = lista.filter(s => s.date < hoje);
-  lista.sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
-  if (shiftFilter === 'passados') lista.reverse();
-
-  const aReceber = shifts.filter(s => !s.paid); const totalReceber = aReceber.reduce((a, s) => a + (Number(s.amount) || 0), 0);
-  const mes = hoje.slice(0, 7); const doMes = shifts.filter(s => s.date.startsWith(mes)); const recebidoMes = doMes.filter(s => s.paid).reduce((a, s) => a + (Number(s.amount) || 0), 0);
-  const resumo = document.getElementById('shift-summary');
-  if (resumo) resumo.innerHTML = `<span>⏳ A receber: <strong style="color:${COR_PLANTAO}">${formatCurrency(totalReceber)}</strong> (${aReceber.length})</span><span>💵 Recebido no mês: <strong style="color:#22c55e">${formatCurrency(recebidoMes)}</strong></span><span>📆 Plantões no mês: <strong>${doMes.length}</strong> · ${doMes.reduce((a, s) => a + (Number(s.hours) || 0), 0)}h</span>`;
-
-  if (!lista.length) { sList.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum plantão neste filtro.</li>'; return; }
-  lista.forEach(s => {
-    const li = document.createElement('li'); li.classList.add('shift-item'); if (s.paid) li.classList.add('paid');
-    li.innerHTML = `<div class="transaction-info" style="flex:1"><span>🚑 ${esc(s.desc)} ${s.paid ? '<span class="badge-paid">pago' + (s.paidAt ? ' ' + isoParaBR(s.paidAt).slice(0, 5) : '') + '</span>' : '<span class="badge-unpaid">a receber</span>'}</span>
-        <small class="category-badge" style="color:${COR_PLANTAO}; background: rgba(245,158,11,0.1)">${rotuloDataLonga(s.date)} às ${esc(s.time || '')}${s.hours ? ' · ' + s.hours + 'h' : ''}</small>${s.swap ? `<small class="item-notes" style="color:#a78bfa">🔁 Troca: ${esc(s.swap)}</small>` : ''}${s.notes ? `<small class="item-notes">${esc(s.notes)}</small>` : ''}</div>
-      <div class="item-actions"><strong style="margin-right:6px">${formatCurrency(s.amount)}</strong><button class="mini-btn ${s.paid ? 'on' : ''}" title="${s.paid ? 'Marcar como não pago' : 'Marcar como pago'}" onclick="alternarPago(${s.id})">💵</button><button class="mini-btn" title="Editar" onclick="editarPlantao(${s.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removeShift(${s.id})">✕</button></div>`;
-    sList.appendChild(li);
-  }); renderCalendar();
-}
-document.getElementById('shift-form').addEventListener('submit', (e) => {
+// --- Pedidos ---
+document.getElementById('order-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  const id = document.getElementById('shift-id').value;
+  const id = document.getElementById('order-id').value;
+  const title = document.getElementById('order-title').value.trim(); if (!title) return;
+  let clientId = document.getElementById('order-client').value;
+  if (clientId === '__novo') {
+    const nome = document.getElementById('order-client-new').value.trim();
+    if (!nome) { toast('Digite o nome do novo cliente.'); document.getElementById('order-client-new').focus(); return; }
+    const c = { id: novoId(), name: nome, phone: '', email: '', city: '', notes: '', date: hojeISO() };
+    clients.push(c); salvar('clients', clients); clientId = c.id;
+  } else clientId = clientId ? Number(clientId) : null;
   const dados = {
-    date: document.getElementById('shift-date').value,
-    time: document.getElementById('shift-time').value,
-    hours: parseFloat(document.getElementById('shift-hours').value) || 0,
-    desc: document.getElementById('shift-desc').value.trim(),
-    amount: parseFloat(document.getElementById('shift-amount').value),
-    notes: document.getElementById('shift-notes').value.trim(),
-    swap: document.getElementById('shift-swap').value.trim()
+    clientId, title,
+    qty: parseInt(document.getElementById('order-qty').value) || 1,
+    material: document.getElementById('order-material').value,
+    color: document.getElementById('order-color').value.trim(),
+    printer: document.getElementById('order-printer').value,
+    price: parseFloat(document.getElementById('order-price').value) || 0,
+    due: document.getElementById('order-due').value,
+    status: document.getElementById('order-status').value || 'orcamento',
+    notes: document.getElementById('order-notes').value.trim()
   };
-  if (!dados.date || !dados.time || !dados.desc || isNaN(dados.amount)) return;
-  let s;
-  if (id) { s = shifts.find(x => String(x.id) === id); if (!s) return; Object.assign(s, dados); }
-  else { s = { id: novoId(), paid: false, paidAt: null, ...dados }; shifts.push(s); }
-  sincronizarLancamentoPlantao(s);
-  salvar('shifts', shifts); salvar('finances', transactions);
-  cancelarEdicaoPlantao(); renderShifts(); updateFinanceValues(); renderFinances(); renderJournal(); atualizarSaudacao();
-  toast(id ? '🚑 Plantão atualizado.' : '🚑 Plantão agendado (a receber).');
+  let o;
+  if (id) { o = orders.find(x => String(x.id) === id); if (!o) return; Object.assign(o, dados); }
+  else { o = { id: novoId(), date: hojeISO(), paid: false, paidAt: null, ...dados }; orders.push(o); }
+  sincronizarLancamentoPedido(o);
+  salvar('orders', orders); salvar('finances', transactions);
+  cancelarEdicaoPedido(); redesenharPrimos();
+  toast(id ? '📦 Pedido atualizado.' : `📦 Pedido registrado (${statusPedido(o.status).nome.toLowerCase()}).`);
 });
-function cancelarEdicaoPlantao() {
-  document.getElementById('shift-form').reset(); document.getElementById('shift-id').value = '';
-  document.getElementById('shift-form-title').innerText = 'Agendar Novo Plantão';
-  document.getElementById('shift-submit').innerText = 'Agendar plantão';
-  document.getElementById('shift-cancel').hidden = true;
+function cancelarEdicaoPedido() {
+  document.getElementById('order-form').reset(); document.getElementById('order-id').value = '';
+  preencherSelectsPrimos(); document.getElementById('order-client-new').hidden = true;
+  document.getElementById('order-form-title').innerText = 'Novo pedido';
+  document.getElementById('order-submit').innerText = 'Registrar pedido';
+  document.getElementById('order-cancel').hidden = true;
 }
-function editarPlantao(id) {
-  const s = shifts.find(x => x.id === id); if (!s) return;
-  changeTab('shifts');
-  document.getElementById('shift-id').value = s.id; document.getElementById('shift-place').value = '';
-  document.getElementById('shift-date').value = s.date; document.getElementById('shift-time').value = s.time || '';
-  document.getElementById('shift-hours').value = s.hours || ''; document.getElementById('shift-desc').value = s.desc;
-  document.getElementById('shift-amount').value = s.amount; document.getElementById('shift-notes').value = s.notes || ''; document.getElementById('shift-swap').value = s.swap || '';
-  document.getElementById('shift-form-title').innerText = 'Editar plantão';
-  document.getElementById('shift-submit').innerText = 'Salvar alterações';
-  document.getElementById('shift-cancel').hidden = false;
-  document.getElementById('shift-desc').scrollIntoView({ behavior: 'smooth', block: 'center' });
+function editarPedido(id) {
+  const o = orders.find(x => x.id === id); if (!o) return;
+  changeTab('primos'); preencherSelectsPrimos();
+  document.getElementById('order-id').value = o.id;
+  document.getElementById('order-client').value = o.clientId && clients.some(c => c.id === o.clientId) ? String(o.clientId) : '';
+  document.getElementById('order-client-new').hidden = true;
+  document.getElementById('order-title').value = o.title; document.getElementById('order-qty').value = o.qty || 1;
+  document.getElementById('order-material').value = o.material || 'PLA'; document.getElementById('order-color').value = o.color || '';
+  document.getElementById('order-printer').value = o.printer || ''; document.getElementById('order-price').value = o.price || '';
+  document.getElementById('order-due').value = o.due || ''; document.getElementById('order-status').value = o.status || 'orcamento';
+  document.getElementById('order-notes').value = o.notes || '';
+  document.getElementById('order-form-title').innerText = 'Editar pedido';
+  document.getElementById('order-submit').innerText = 'Salvar alterações';
+  document.getElementById('order-cancel').hidden = false;
+  document.getElementById('order-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
-function alternarPago(id) {
-  const s = shifts.find(x => x.id === id); if (!s) return;
-  s.paid = !s.paid; s.paidAt = s.paid ? hojeISO() : null;
-  sincronizarLancamentoPlantao(s);
-  salvar('shifts', shifts); salvar('finances', transactions);
-  renderShifts(); updateFinanceValues(); renderFinances(); renderJournal();
-  toast(s.paid ? `💵 ${s.desc} marcado como pago.` : `⏳ ${s.desc} voltou para "a receber".`);
+/** ▶ leva o pedido para a próxima etapa: orçamento → aprovado → imprimindo → pronto → entregue. */
+function avancarPedido(id) {
+  const o = orders.find(x => x.id === id); if (!o) return;
+  const i = FLUXO_PEDIDO.indexOf(o.status); if (i < 0 || i >= FLUXO_PEDIDO.length - 1) return;
+  o.status = FLUXO_PEDIDO[i + 1];
+  sincronizarLancamentoPedido(o); salvar('orders', orders); salvar('finances', transactions); redesenharPrimos();
+  const st = statusPedido(o.status); toast(`${st.icone} ${o.title}: ${st.nome.toLowerCase()}.`);
 }
-function removeShift(id) {
-  const s = shifts.find(x => x.id === id); if (!s || !confirm(`Apagar o plantão ${s.desc} de ${isoParaBR(s.date)}?`)) return;
-  shifts = shifts.filter(x => x.id !== id); salvar('shifts', shifts);
-  transactions = transactions.filter(t => t.id !== id); salvar('finances', transactions);
-  renderShifts(); updateFinanceValues(); renderFinances(); renderJournal(); atualizarSaudacao();
+function alternarPagoPedido(id) {
+  const o = orders.find(x => x.id === id); if (!o) return;
+  if (!pedidoGeraLancamento(o)) { toast('💵 Para marcar como pago, o pedido precisa ter valor e sair do orçamento (▶ aprovar).', 5000); return; }
+  o.paid = !o.paid; o.paidAt = o.paid ? hojeISO() : null;
+  sincronizarLancamentoPedido(o); salvar('orders', orders); salvar('finances', transactions); redesenharPrimos();
+  toast(o.paid ? `💵 ${o.title}: pago.` : `⏳ ${o.title} voltou para "a receber".`);
 }
+function removerPedido(id) {
+  const o = orders.find(x => x.id === id); if (!o || !confirm(`Apagar o pedido "${o.title}"? (o lançamento em Finanças também sai)`)) return;
+  orders = orders.filter(x => x.id !== id); transactions = transactions.filter(t => t.id !== id);
+  salvar('orders', orders); salvar('finances', transactions); redesenharPrimos();
+}
+function filtrarPedidos(f, el) { orderFilter = f; document.querySelectorAll('#order-filters span').forEach(s => s.classList.remove('active')); if (el) el.classList.add('active'); renderPedidos(); }
+function buscarPedidos(v) { orderSearch = (v || '').trim().toLowerCase(); renderPedidos(); }
+
+function renderPedidos() {
+  const ul = document.getElementById('order-list'); if (!ul) return;
+  const hoje = hojeISO();
+  let lista = [...orders];
+  if (orderFilter === 'abertos') lista = lista.filter(o => pedidoAberto(o) && o.status !== 'orcamento');
+  else if (orderFilter === 'orcamentos') lista = lista.filter(o => o.status === 'orcamento');
+  else if (orderFilter === 'receber') lista = lista.filter(o => pedidoGeraLancamento(o) && !o.paid);
+  else if (orderFilter === 'entregues') lista = lista.filter(o => o.status === 'entregue' || o.status === 'cancelado');
+  if (orderSearch) lista = lista.filter(o => `${o.title} ${clienteNome(o.clientId)} ${o.material || ''} ${o.color || ''} ${o.printer || ''} ${o.notes || ''}`.toLowerCase().includes(orderSearch));
+  // abertos: prazo mais próximo primeiro (sem prazo no fim); demais: mais recentes primeiro
+  if (orderFilter === 'abertos' || orderFilter === 'receber') lista.sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999') || a.id - b.id);
+  else lista.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id);
+  if (!lista.length) { ul.innerHTML = '<li class="empty-row">Nenhum pedido aqui.</li>'; return; }
+  ul.innerHTML = lista.map(o => {
+    const st = statusPedido(o.status); const cli = clienteNome(o.clientId); const aberto = pedidoAberto(o);
+    const i = FLUXO_PEDIDO.indexOf(o.status); const prox = aberto && i >= 0 && i < FLUXO_PEDIDO.length - 1 ? statusPedido(FLUXO_PEDIDO[i + 1]) : null;
+    const prazo = !o.due ? '' : aberto && o.due < hoje ? `<span class="badge-topay">atrasado · ${isoParaBR(o.due).slice(0, 5)}</span>` : aberto && o.due === hoje ? '<span class="badge-unpaid">entregar hoje</span>' : `<span class="item-date">📅 ${rotuloData(o.due)}</span>`;
+    const pago = pedidoGeraLancamento(o) ? (o.paid ? '<span class="badge-paid">pago</span>' : '<span class="badge-unpaid">a receber</span>') : '';
+    const detalhes = [cli ? '👤 ' + esc(cli) : '', [o.material, o.color].filter(Boolean).map(esc).join(' · '), o.printer ? '🖨️ ' + esc(o.printer) : ''].filter(Boolean).join('  ·  ');
+    return `<li class="order-item" style="border-left-color:${st.cor}; ${o.status === 'cancelado' ? 'opacity:0.5' : ''}">
+      <div class="transaction-info" style="flex:1; min-width:0">
+        <span><strong>${esc(o.title)}</strong>${o.qty > 1 ? ` <span class="item-date">×${o.qty}</span>` : ''}</span>
+        <span class="order-tags"><span class="status-badge" style="color:${st.cor}; background:${st.cor}22">${st.icone} ${st.nome}</span>${pago}${prazo}</span>
+        ${detalhes ? `<small class="item-notes">${detalhes}</small>` : ''}${o.notes ? `<small class="item-notes">${linkify(esc(o.notes))}</small>` : ''}
+      </div>
+      <div class="item-actions">${o.price ? `<strong style="margin-right:6px">${formatCurrency(o.price)}</strong>` : ''}${prox ? `<button class="mini-btn" title="Avançar para: ${prox.nome}" onclick="avancarPedido(${o.id})">▶</button>` : ''}<button class="mini-btn ${o.paid ? 'on' : ''}" title="${o.paid ? 'Marcar como não pago' : 'Marcar como pago'}" onclick="alternarPagoPedido(${o.id})">💵</button><button class="mini-btn" title="Editar" onclick="editarPedido(${o.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerPedido(${o.id})">✕</button></div>
+    </li>`;
+  }).join('');
+}
+
+// --- Clientes ---
+document.getElementById('client-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const id = document.getElementById('client-id').value;
+  const dados = {
+    name: document.getElementById('client-name').value.trim(),
+    phone: document.getElementById('client-phone').value.trim(),
+    email: document.getElementById('client-email').value.trim(),
+    city: document.getElementById('client-city').value.trim(),
+    notes: document.getElementById('client-notes').value.trim()
+  };
+  if (!dados.name) return;
+  if (id) {
+    const c = clients.find(x => String(x.id) === id); if (!c) return; Object.assign(c, dados);
+    orders.filter(o => o.clientId === c.id).forEach(sincronizarLancamentoPedido); // nome novo na descrição do lançamento
+    salvar('finances', transactions);
+  } else clients.push({ id: novoId(), date: hojeISO(), ...dados });
+  salvar('clients', clients); cancelarEdicaoCliente(); redesenharPrimos();
+  toast(id ? '👤 Cliente atualizado.' : '👤 Cliente cadastrado.');
+});
+function cancelarEdicaoCliente() {
+  document.getElementById('client-form').reset(); document.getElementById('client-id').value = '';
+  document.getElementById('client-form-title').innerText = 'Novo cliente';
+  document.getElementById('client-submit').innerText = 'Cadastrar cliente';
+  document.getElementById('client-cancel').hidden = true;
+}
+function editarCliente(id) {
+  const c = clients.find(x => x.id === id); if (!c) return;
+  document.getElementById('client-id').value = c.id; document.getElementById('client-name').value = c.name;
+  document.getElementById('client-phone').value = c.phone || ''; document.getElementById('client-email').value = c.email || '';
+  document.getElementById('client-city').value = c.city || ''; document.getElementById('client-notes').value = c.notes || '';
+  document.getElementById('client-form-title').innerText = 'Editar cliente';
+  document.getElementById('client-submit').innerText = 'Salvar alterações';
+  document.getElementById('client-cancel').hidden = false;
+  document.getElementById('client-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function removerCliente(id) {
+  const c = clients.find(x => x.id === id); if (!c) return;
+  const n = orders.filter(o => o.clientId === id).length;
+  if (!confirm(`Apagar o cliente "${c.name}"?${n ? ` Os ${n} pedido(s) dele continuam, sem cliente.` : ''}`)) return;
+  clients = clients.filter(x => x.id !== id);
+  orders.filter(o => o.clientId === id).forEach(o => { o.clientId = null; sincronizarLancamentoPedido(o); });
+  salvar('clients', clients); if (n) { salvar('orders', orders); salvar('finances', transactions); }
+  redesenharPrimos();
+}
+function novoPedidoParaCliente(id) {
+  cancelarEdicaoPedido(); document.getElementById('order-client').value = String(id);
+  document.getElementById('order-title').scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('order-title').focus();
+}
+/** Link de WhatsApp a partir do telefone (só números; DDD sem o 55 ganha o 55). */
+function linkWhatsApp(tel) { let d = String(tel || '').replace(/\D/g, ''); if (d.length === 10 || d.length === 11) d = '55' + d; return d.length >= 12 ? `https://wa.me/${d}` : ''; }
+
+function renderClientes() {
+  const ul = document.getElementById('client-list'); if (!ul) return;
+  if (!clients.length) { ul.innerHTML = '<li class="empty-row">Nenhum cliente ainda. Cadastre aqui ou direto no pedido (＋ Novo cliente).</li>'; return; }
+  ul.innerHTML = [...clients].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(c => {
+    const ped = orders.filter(o => o.clientId === c.id && o.status !== 'cancelado');
+    const total = ped.filter(pedidoGeraLancamento).reduce((a, o) => a + (Number(o.price) || 0), 0);
+    const wa = linkWhatsApp(c.phone);
+    const contato = [c.phone ? (wa ? `<a href="${wa}" target="_blank" rel="noopener">📱 ${esc(c.phone)}</a>` : '📱 ' + esc(c.phone)) : '', c.email ? '✉️ ' + esc(c.email) : '', c.city ? '📍 ' + esc(c.city) : ''].filter(Boolean).join('  ·  ');
+    return `<li class="client-item">
+      <div class="transaction-info" style="flex:1; min-width:0">
+        <span><strong>${esc(c.name)}</strong> <span class="item-date">${ped.length} pedido${ped.length === 1 ? '' : 's'}${total ? ' · ' + formatCurrency(total) : ''}</span></span>
+        ${contato ? `<small class="item-notes client-contact">${contato}</small>` : ''}${c.notes ? `<small class="item-notes">${esc(c.notes)}</small>` : ''}
+      </div>
+      <div class="item-actions"><button class="mini-btn" title="Novo pedido para este cliente" onclick="novoPedidoParaCliente(${c.id})">＋📦</button><button class="mini-btn" title="Editar" onclick="editarCliente(${c.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerCliente(${c.id})">✕</button></div>
+    </li>`;
+  }).join('');
+}
+
+// --- Painel do módulo ---
+function renderPainelPrimos() {
+  const el = document.getElementById('primos-dash'); if (!el) return;
+  const mes = hojeISO().slice(0, 7); const hoje = hojeISO();
+  const producao = orders.filter(o => pedidoAberto(o) && o.status !== 'orcamento');
+  const imprimindo = orders.filter(o => o.status === 'imprimindo').length;
+  const atrasados = producao.filter(o => o.due && o.due < hoje).length;
+  const orc = orders.filter(o => o.status === 'orcamento').length;
+  const aReceber = orders.filter(o => pedidoGeraLancamento(o) && !o.paid); const totalReceber = aReceber.reduce((a, o) => a + (Number(o.price) || 0), 0);
+  const recebidoMes = orders.filter(o => o.paid && (o.paidAt || '').startsWith(mes)).reduce((a, o) => a + (Number(o.price) || 0), 0);
+  const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
+  el.innerHTML = '<div class="stat-grid">'
+    + tile('📦', `${producao.length}`, `em produção · ${imprimindo} imprimindo${atrasados ? ` · <span style="color:#ff453a">${atrasados} atrasado${atrasados === 1 ? '' : 's'}</span>` : ''}`, '#0a84ff')
+    + tile('📝', `${orc}`, `orçamento${orc === 1 ? '' : 's'} aguardando`, '#8e8e93')
+    + tile('⏳', formatCurrency(totalReceber), `a receber (${aReceber.length})`, '#ff9f0a')
+    + tile('💵', formatCurrency(recebidoMes), 'recebido este mês', '#30d158')
+    + tile('👤', `${clients.length}`, `cliente${clients.length === 1 ? '' : 's'}`, '#bf5af2')
+    + '</div>';
+}
+function renderPrimos() { preencherSelectsPrimos(); renderPainelPrimos(); renderPedidos(); renderClientes(); }
+function redesenharPrimos() { renderPrimos(); updateFinanceValues(); renderFinances(); renderCalendar(); renderJournal(); atualizarSaudacao(); }
 
 // --- TAREFAS (estilo Google Tasks) ---
 // Modelo: { id, text, done, doneAt, list, due: 'aaaa-mm-dd' | '', notes, starred, subtasks: [{ text, done }], createdAt }
 // Listas: tasklists = [{ id, name }]  (a lista 'padrao' sempre existe)
-const COR_TAREFA = '#38bdf8';
+const COR_TAREFA = '#0a84ff';
 let taskView = 'padrao';      // id da lista em exibição, ou '__star' (com estrela) ou '__all' (todas)
 let taskShowDone = false;
 let taskExpanded = {};        // id -> subtarefas abertas?
@@ -1102,7 +1229,7 @@ function renderTasks() {
     ['📅 Próximas', abertas.filter(t => t.due && t.due > hoje)],
     ['📝 Sem prazo', abertas.filter(t => !t.due)]
   ];
-  if (!abertas.length && !feitas.length) { list.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nada por aqui. Adicione uma tarefa acima.</li>'; return; }
+  if (!abertas.length && !feitas.length) { list.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nada por aqui. Adicione uma tarefa acima.</li>'; return; }
   grupos.forEach(([titulo, itens]) => {
     if (!itens.length) return;
     list.innerHTML += `<li class="date-sep">${titulo} <small>${itens.length}</small></li>`;
@@ -1115,9 +1242,9 @@ function renderTasks() {
 }
 function linhaTarefa(t) {
   const p = prazoInfo(t); const subs = t.subtasks || []; const feitasSub = subs.filter(s => s.done).length; const aberto = !!taskExpanded[t.id];
-  return `<li class="task-item ${t.done ? 'done' : ''}" style="border-left-color:${t.starred ? '#fbbf24' : COR_TAREFA}">
+  return `<li class="task-item ${t.done ? 'done' : ''}" style="border-left-color:${t.starred ? '#ffd60a' : COR_TAREFA}">
     <div class="task-main">
-      <input type="checkbox" ${t.done ? 'checked' : ''} onclick="toggleTask(${t.id})" style="accent-color: #38bdf8;">
+      <input type="checkbox" ${t.done ? 'checked' : ''} onclick="toggleTask(${t.id})" style="accent-color: #0a84ff;">
       <div class="task-body" onclick="editarTarefa(${t.id})">
         <span class="task-text">${esc(t.text)}</span>
         <div class="task-meta">${p.rotulo ? `<span class="due ${p.classe}">📅 ${esc(p.rotulo)}</span>` : ''}${taskView === '__star' || taskView === '__all' ? `<span class="task-list-tag">📋 ${esc(listaNome(t.list))}</span>` : ''}${subs.length ? `<span class="sub-count" onclick="event.stopPropagation(); taskExpanded[${t.id}] = !taskExpanded[${t.id}]; renderTasks();">☑ ${feitasSub}/${subs.length}</span>` : ''}${!t.done ? `<span class="quick-dates" onclick="event.stopPropagation()"><button class="mini-btn xs" title="Prazo: hoje" onclick="adiarTarefa(${t.id}, 0)">hoje</button><button class="mini-btn xs" title="Prazo: amanhã" onclick="adiarTarefa(${t.id}, 1)">amanhã</button><button class="mini-btn xs" title="Prazo: +7 dias" onclick="adiarTarefa(${t.id}, 7)">+7d</button></span>` : ''}${t.notes ? `<span class="task-notes">${esc(t.notes)}</span>` : ''}</div>
@@ -1302,11 +1429,11 @@ function cardNota(n) {
 const AREAS_ESTUDO = { negocios: '📈 Negócios', investimentos: '💰 Investimentos', medicina: '🩺 Medicina', idiomas: '🗣️ Idiomas', tecnologia: '💻 Tecnologia', pessoal: '🌱 Desenvolvimento pessoal', outro: '📌 Outro' };
 const TIPOS_MATERIAL = { livro: '📖 Livro', curso: '🎓 Curso', artigo: '📄 Artigo', video: '🎬 Vídeo', podcast: '🎧 Podcast', outro: '📌 Outro' };
 const STATUS_MATERIAL = { afazer: 'A fazer', andamento: 'Em andamento', concluido: 'Concluído' };
-const CORES_TEMA = ['#38bdf8', '#a78bfa', '#22c55e', '#f472b6', '#fbbf24', '#fb923c', '#ef4444', '#94a3b8'];
+const CORES_TEMA = ['#0a84ff', '#bf5af2', '#30d158', '#ff375f', '#ffd60a', '#ffb340', '#ff453a', '#8e8e93'];
 let materialFilter = 'andamento';
 
 function temaNome(id) { const t = topics.find(x => x.id === id); return t ? t.name : 'Geral'; }
-function temaCor(id) { const t = topics.find(x => x.id === id); return t ? t.color : '#64748b'; }
+function temaCor(id) { const t = topics.find(x => x.id === id); return t ? t.color : '#8e8e93'; }
 function inicioSemanaISO(d) { const x = d ? new Date(d) : new Date(); x.setDate(x.getDate() - x.getDay()); return isoDe(x); }
 function minutosNaSemana(topicId) {
   const ini = inicioSemanaISO(); const fim = new Date(); fim.setDate(fim.getDate() + (6 - fim.getDay())); const fimISO = isoDe(fim);
@@ -1359,7 +1486,7 @@ function removerTema(id) {
 }
 function renderTemas() {
   const ul = document.getElementById('topic-list'); if (!ul) return; ul.innerHTML = '';
-  if (!topics.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Crie seu primeiro tema — ex: "Gestão de clínicas", "Renda fixa", "Inglês".</li>'; return; }
+  if (!topics.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Crie seu primeiro tema — ex: "Gestão de clínicas", "Renda fixa", "Inglês".</li>'; return; }
   topics.forEach(t => {
     const min = minutosNaSemana(t.id); const meta = t.weeklyGoalMin || 0; const pct = meta ? Math.min(100, Math.round(min / meta * 100)) : 0;
     const mats = materials.filter(m => m.topicId === t.id); const emAnd = mats.filter(m => m.status === 'andamento').length;
@@ -1409,10 +1536,10 @@ function renderMateriais() {
   const ul = document.getElementById('material-list'); if (!ul) return; ul.innerHTML = '';
   let lista = [...materials]; if (materialFilter !== 'todos') lista = lista.filter(m => m.status === materialFilter);
   lista.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum material aqui.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum material aqui.</li>'; return; }
   lista.forEach(m => {
     const cor = temaCor(m.topicId);
-    ul.innerHTML += `<li class="material-item" style="border-left-color:${cor}"><div class="transaction-info" style="flex:1"><span>${(TIPOS_MATERIAL[m.kind] || '📌').slice(0, 2)} ${m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="color:#e2e8f0">${esc(m.title)} ↗</a>` : esc(m.title)} <small class="category-badge" style="color:${cor}; background:${cor}22">${esc(temaNome(m.topicId))}</small> <small class="item-date">${STATUS_MATERIAL[m.status] || ''}</small></span>
+    ul.innerHTML += `<li class="material-item" style="border-left-color:${cor}"><div class="transaction-info" style="flex:1"><span>${(TIPOS_MATERIAL[m.kind] || '📌').slice(0, 2)} ${m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="color:#f5f5f7">${esc(m.title)} ↗</a>` : esc(m.title)} <small class="category-badge" style="color:${cor}; background:${cor}22">${esc(temaNome(m.topicId))}</small> <small class="item-date">${STATUS_MATERIAL[m.status] || ''}</small></span>
         <div class="progress-line"><input type="range" min="0" max="100" value="${m.progress || 0}" onchange="progressoMaterial(${m.id}, this.value)" title="Progresso"><small>${m.progress || 0}%</small></div>${m.notes ? `<small class="item-notes">${esc(m.notes)}</small>` : ''}</div>
       <div class="item-actions"><button class="mini-btn" title="Avançar status" onclick="avancarMaterial(${m.id})">${m.status === 'concluido' ? '↩' : '▶'}</button><button class="mini-btn" title="Agendar revisões (1, 7, 30 dias)" onclick="agendarRevisao(${m.id})">🔁</button><button class="mini-btn" title="Editar" onclick="editarMaterial(${m.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMaterial(${m.id})">✕</button></div></li>`;
   });
@@ -1432,7 +1559,7 @@ function removerSessao(id) { const s = sessions.find(x => x.id === id); if (!s |
 function renderSessoes() {
   const ul = document.getElementById('session-list'); if (!ul) return; ul.innerHTML = '';
   const lista = [...sessions].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 25);
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma sessão ainda. Use o Pomodoro no Painel ou lance acima.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma sessão ainda. Use o Pomodoro no Painel ou lance acima.</li>'; return; }
   let ultima = '';
   lista.forEach(s => {
     if (s.date !== ultima) { ultima = s.date; const tot = sessions.filter(x => x.date === s.date).reduce((a, x) => a + x.minutes, 0); ul.innerHTML += `<li class="date-sep">${rotuloData(s.date)} <small>${isoParaBR(s.date)} · ${fmtMin(tot)}</small></li>`; }
@@ -1496,10 +1623,10 @@ function renderPainelEstudos() {
   const proxRev = tasks.filter(t => !t.done && t.text.startsWith('🔁 Revisar') && t.due).sort((a, b) => a.due.localeCompare(b.due))[0];
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = '<div class="stat-grid">';
-  html += tile('⏱', fmtMin(semana), metaTotal ? `nesta semana · meta ${fmtMin(metaTotal)} (${Math.min(100, Math.round(semana / metaTotal * 100))}%)` : 'nesta semana', '#a78bfa');
-  html += tile('🔥', `${streak}`, `dia${streak === 1 ? '' : 's'} seguido${streak === 1 ? '' : 's'} estudando`, '#f59e0b');
-  html += tile('📖', `${emAnd.length}`, 'em andamento', '#38bdf8');
-  html += tile('🔁', proxRev ? rotuloData(proxRev.due) : '—', proxRev ? proxRev.text.replace('🔁 Revisar: ', '').slice(0, 30) : 'nenhuma revisão marcada', '#22c55e');
+  html += tile('⏱', fmtMin(semana), metaTotal ? `nesta semana · meta ${fmtMin(metaTotal)} (${Math.min(100, Math.round(semana / metaTotal * 100))}%)` : 'nesta semana', '#bf5af2');
+  html += tile('🔥', `${streak}`, `dia${streak === 1 ? '' : 's'} seguido${streak === 1 ? '' : 's'} estudando`, '#ff9f0a');
+  html += tile('📖', `${emAnd.length}`, 'em andamento', '#0a84ff');
+  html += tile('🔁', proxRev ? rotuloData(proxRev.due) : '—', proxRev ? proxRev.text.replace('🔁 Revisar: ', '').slice(0, 30) : 'nenhuma revisão marcada', '#30d158');
   html += '</div>';
   const porTema = topics.filter(t => !t.archived).map(t => ({ t, min: minutosNaSemana(t.id) })).filter(x => x.min > 0 || x.t.weeklyGoalMin);
   if (porTema.length) html += '<div class="cat-block" style="margin-top:12px"><h5>Semana por tema</h5>' + porTema.map(({ t, min }) => { const meta = t.weeklyGoalMin || 0; const pct = meta ? Math.min(100, Math.round(min / meta * 100)) : (semana ? Math.round(min / semana * 100) : 0); return `<div class="cat-row"><span class="cat-name">${esc(t.name)}</span><div class="cat-bar"><div style="width:${pct}%; background:${t.color}"></div></div><span class="cat-val">${fmtMin(min)}${meta ? ` <small>/ ${fmtMin(meta)}</small>` : ''}</span></div>`; }).join('') + '</div>';
@@ -1516,16 +1643,16 @@ function redesenharEstudos() { preencherTemasSelects(); renderPainelEstudos(); r
 // wealth:   { snapshots: { 'aaaa-mm': patrimônio }, indicators: { cdi, selic, ipca, ref } }
 // ============================================================================
 const CLASSES_ATIVO = {
-  reserva: { nome: 'Reserva de emergência', cor: '#22c55e', icone: '🛟' },
-  rf:      { nome: 'Renda fixa',            cor: '#38bdf8', icone: '🏦' },
-  fundo:   { nome: 'Fundo',                 cor: '#a78bfa', icone: '🧺' },
-  acao:    { nome: 'Ações',                 cor: '#f472b6', icone: '📈' },
-  fii:     { nome: 'FIIs',                  cor: '#fb923c', icone: '🏢' },
-  cripto:  { nome: 'Cripto',                cor: '#fbbf24', icone: '🪙' },
+  reserva: { nome: 'Reserva de emergência', cor: '#30d158', icone: '🛟' },
+  rf:      { nome: 'Renda fixa',            cor: '#0a84ff', icone: '🏦' },
+  fundo:   { nome: 'Fundo',                 cor: '#bf5af2', icone: '🧺' },
+  acao:    { nome: 'Ações',                 cor: '#ff375f', icone: '📈' },
+  fii:     { nome: 'FIIs',                  cor: '#ffb340', icone: '🏢' },
+  cripto:  { nome: 'Cripto',                cor: '#ffd60a', icone: '🪙' },
   prev:    { nome: 'Previdência',           cor: '#2dd4bf', icone: '🧓' },
-  outro:   { nome: 'Outro',                 cor: '#94a3b8', icone: '📌' }
+  outro:   { nome: 'Outro',                 cor: '#8e8e93', icone: '📌' }
 };
-const ESTAGIOS_PROJETO = { ideia: ['💡', 'Ideia', '#94a3b8'], estudo: ['🔍', 'Em estudo', '#38bdf8'], validacao: ['🧪', 'Validação', '#a78bfa'], andamento: ['🚀', 'Em andamento', '#22c55e'], pausado: ['⏸️', 'Pausado', '#f59e0b'], encerrado: ['🏁', 'Encerrado', '#64748b'] };
+const ESTAGIOS_PROJETO = { ideia: ['💡', 'Ideia', '#8e8e93'], estudo: ['🔍', 'Em estudo', '#0a84ff'], validacao: ['🧪', 'Validação', '#bf5af2'], andamento: ['🚀', 'Em andamento', '#30d158'], pausado: ['⏸️', 'Pausado', '#ff9f0a'], encerrado: ['🏁', 'Encerrado', '#8e8e93'] };
 let projectFilter = 'ativos';
 
 function classeAtivo(k) { return CLASSES_ATIVO[k] || CLASSES_ATIVO.outro; }
@@ -1584,13 +1711,13 @@ function removerAtivo(id) {
 }
 function renderAtivos() {
   const ul = document.getElementById('asset-list'); if (!ul) return; ul.innerHTML = '';
-  if (!assets.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Cadastre seu primeiro ativo — ex: "CDB Nubank" (Renda fixa) ou "Reserva Tesouro Selic".</li>'; return; }
+  if (!assets.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Cadastre seu primeiro ativo — ex: "CDB Nubank" (Renda fixa) ou "Reserva Tesouro Selic".</li>'; return; }
   const hoje = hojeISO();
   [...assets].sort((a, b) => (a.archived === b.archived ? (b.current || 0) - (a.current || 0) : a.archived ? 1 : -1)).forEach(a => {
     const c = classeAtivo(a.klass); const inv = investidoEm(a.id); const res = (a.current || 0) - inv; const p = inv ? res / inv * 100 : 0;
     const venc = a.due ? (a.due < hoje ? `<span class="badge-topay">venceu ${isoParaBR(a.due)}</span>` : `<span class="item-date">vence ${isoParaBR(a.due)}</span>`) : '';
     ul.innerHTML += `<li class="asset-item" style="border-left-color:${c.cor}; ${a.archived ? 'opacity:0.45' : ''}"><div class="transaction-info" style="flex:1"><span>${c.icone} ${esc(a.name)} <small class="category-badge" style="color:${c.cor}; background:${c.cor}22">${c.nome}</small>${a.institution ? ` <small class="item-date">${esc(a.institution)}</small>` : ''}${a.rate ? ` <small class="item-date">· ${esc(a.rate)}</small>` : ''} ${venc}${a.archived ? ' <small class="item-date">· arquivado</small>' : ''}</span>
-        <small class="item-date">investido ${formatCurrency(inv)} · resultado <span style="color:${res >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(res)} (${pct(p)})</span> · valor de ${isoParaBR(a.currentAt || hoje)}</small>${a.notes ? `<small class="item-notes">${esc(a.notes)}</small>` : ''}</div>
+        <small class="item-date">investido ${formatCurrency(inv)} · resultado <span style="color:${res >= 0 ? '#30d158' : '#ff453a'}">${formatCurrency(res)} (${pct(p)})</span> · valor de ${isoParaBR(a.currentAt || hoje)}</small>${a.notes ? `<small class="item-notes">${esc(a.notes)}</small>` : ''}</div>
       <div class="item-actions"><strong style="margin-right:6px">${formatCurrency(a.current)}</strong><button class="mini-btn" title="Atualizar valor atual" onclick="atualizarValorAtivo(${a.id})">💰</button><button class="mini-btn" title="Editar" onclick="editarAtivo(${a.id})">✎</button><button class="mini-btn" title="${a.archived ? 'Reativar' : 'Arquivar'}" onclick="arquivarAtivo(${a.id})">${a.archived ? '📤' : '🗄️'}</button><button class="mini-btn" title="Apagar" onclick="removerAtivo(${a.id})">✕</button></div></li>`;
   });
 }
@@ -1620,11 +1747,11 @@ function removerMovimento(id) {
 function renderMovimentos() {
   const ul = document.getElementById('move-list'); if (!ul) return; ul.innerHTML = '';
   const lista = [...moves].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, 20);
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma movimentação ainda.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma movimentação ainda.</li>'; return; }
   lista.forEach(m => {
     const ap = m.type === 'aporte';
     ul.innerHTML += `<li class="${ap ? 'expense-item' : 'income-item'}"><div class="transaction-info" style="flex:1"><span>${ap ? '📥 Aporte' : '📤 Resgate'} · ${esc(ativoNome(m.assetId))}${m.financeId ? ' <small class="item-date">· em Finanças</small>' : ''}</span><small class="item-date">${isoParaBR(m.date)}${m.note ? ' · ' + esc(m.note) : ''}</small></div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${ap ? '#38bdf8' : '#f59e0b'}">${ap ? '+' : '−'}${formatCurrency(m.amount)}</strong><button class="mini-btn" title="Apagar" onclick="removerMovimento(${m.id})">✕</button></div></li>`;
+      <div class="item-actions"><strong style="margin-right:6px; color:${ap ? '#0a84ff' : '#ff9f0a'}">${ap ? '+' : '−'}${formatCurrency(m.amount)}</strong><button class="mini-btn" title="Apagar" onclick="removerMovimento(${m.id})">✕</button></div></li>`;
   });
 }
 
@@ -1644,13 +1771,13 @@ function editarMeta(id) { const g = goals.find(x => x.id === id); if (!g) return
 function removerMeta(id) { const g = goals.find(x => x.id === id); if (!g || !confirm(`Apagar a meta "${g.name}"?`)) return; goals = goals.filter(x => x.id !== id); salvar('goals', goals); redesenharNegocios(); }
 function renderMetas() {
   const ul = document.getElementById('goal-list'); if (!ul) return; ul.innerHTML = '';
-  if (!goals.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Ex: "Reserva de 6 meses" (R$ 30.000, vinculada à reserva) ou "Capital pra clínica".</li>'; return; }
+  if (!goals.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Ex: "Reserva de 6 meses" (R$ 30.000, vinculada à reserva) ou "Capital pra clínica".</li>'; return; }
   goals.forEach(g => {
     const atual = valorMeta(g); const p = g.target ? Math.min(100, Math.round(atual / g.target * 100)) : 0; const falta = Math.max(0, g.target - atual);
     let porMes = '';
     if (g.deadline && falta > 0) { const [y, m, d] = g.deadline.split('-').map(Number); const meses = Math.max(1, Math.round((new Date(y, m - 1, d) - new Date()) / (30.44 * 86400000))); porMes = ` · ${formatCurrency(falta / meses)}/mês por ${meses} ${meses === 1 ? 'mês' : 'meses'}`; }
-    ul.innerHTML += `<li class="goal-item" style="border-left-color:${p >= 100 ? '#22c55e' : '#fbbf24'}"><div class="transaction-info" style="flex:1"><span>🎯 ${esc(g.name)} ${p >= 100 ? '<span class="badge-paid">alcançada</span>' : ''}<small class="item-date"> · ${rotuloVinculo(g)}${g.deadline ? ' · até ' + isoParaBR(g.deadline) : ''}</small></span>
-        <div class="cat-bar" style="margin-top:6px"><div style="width:${p}%; background:${p >= 100 ? '#22c55e' : '#fbbf24'}"></div></div>
+    ul.innerHTML += `<li class="goal-item" style="border-left-color:${p >= 100 ? '#30d158' : '#ffd60a'}"><div class="transaction-info" style="flex:1"><span>🎯 ${esc(g.name)} ${p >= 100 ? '<span class="badge-paid">alcançada</span>' : ''}<small class="item-date"> · ${rotuloVinculo(g)}${g.deadline ? ' · até ' + isoParaBR(g.deadline) : ''}</small></span>
+        <div class="cat-bar" style="margin-top:6px"><div style="width:${p}%; background:${p >= 100 ? '#30d158' : '#ffd60a'}"></div></div>
         <small class="item-date">${formatCurrency(atual)} de ${formatCurrency(g.target)} (${p}%)${falta > 0 ? ` · faltam ${formatCurrency(falta)}${porMes}` : ''}</small>${g.note ? `<small class="item-notes">${esc(g.note)}</small>` : ''}</div>
       <div class="item-actions"><button class="mini-btn" title="Editar" onclick="editarMeta(${g.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMeta(${g.id})">✕</button></div></li>`;
   });
@@ -1690,7 +1817,7 @@ function renderProjetos() {
       <select class="stage-select" style="color:${e[2]}" onchange="mudarEstagio(${p.id}, this.value)">${Object.entries(ESTAGIOS_PROJETO).map(([k, v]) => `<option value="${k}" ${k === p.stage ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('')}</select>
       ${p.desc ? `<div class="note-body">${esc(p.desc)}</div>` : ''}
       ${tot ? `<div class="note-check"><small class="item-date">Próximos passos · ${feitos}/${tot}</small>${p.steps.map((s, i) => `<label class="subtask ${s.done ? 'done' : ''}"><input type="checkbox" ${s.done ? 'checked' : ''} onclick="togglePasso(${p.id}, ${i})"> ${esc(s.text)}</label>`).join('')}</div>` : ''}
-      ${p.budget || p.spent ? `<div><small class="item-date">💸 gasto ${formatCurrency(p.spent || 0)}${p.budget ? ` de ${formatCurrency(p.budget)} previstos (${gastoPct}%)` : ''}</small><div class="cat-bar" style="margin-top:4px"><div style="width:${gastoPct}%; background:${gastoPct > 100 ? '#ef4444' : '#f59e0b'}"></div></div></div>` : ''}
+      ${p.budget || p.spent ? `<div><small class="item-date">💸 gasto ${formatCurrency(p.spent || 0)}${p.budget ? ` de ${formatCurrency(p.budget)} previstos (${gastoPct}%)` : ''}</small><div class="cat-bar" style="margin-top:4px"><div style="width:${gastoPct}%; background:${gastoPct > 100 ? '#ff453a' : '#ff9f0a'}"></div></div></div>` : ''}
       ${p.contacts ? `<small class="item-notes">👥 ${esc(p.contacts)}</small>` : ''}${p.notes ? `<small class="item-notes">${esc(p.notes)}</small>` : ''}
       <div class="note-foot"><small class="item-date" style="margin-left:auto">${new Date(p.updatedAt || p.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</small></div>
     </div>`;
@@ -1714,17 +1841,17 @@ function renderPainelNegocios() {
   const mes = hojeISO().slice(0, 7); const aportadoMes = moves.filter(m => m.type === 'aporte' && !m.initial && m.date.startsWith(mes)).reduce((a, m) => a + m.amount, 0);
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = '<div class="stat-grid">';
-  html += tile('🏦', formatCurrency(total), 'patrimônio investido (valor atual)', '#38bdf8');
-  html += tile('📥', formatCurrency(inv), `aportado no total · ${formatCurrency(aportadoMes)} neste mês`, '#a78bfa');
-  html += tile('📈', formatCurrency(res), `resultado simples (${pct(p)})`, res >= 0 ? '#22c55e' : '#ef4444');
-  html += tile('🛟', formatCurrency(reserva), 'reserva de emergência', '#22c55e');
+  html += tile('🏦', formatCurrency(total), 'patrimônio investido (valor atual)', '#0a84ff');
+  html += tile('📥', formatCurrency(inv), `aportado no total · ${formatCurrency(aportadoMes)} neste mês`, '#bf5af2');
+  html += tile('📈', formatCurrency(res), `resultado simples (${pct(p)})`, res >= 0 ? '#30d158' : '#ff453a');
+  html += tile('🛟', formatCurrency(reserva), 'reserva de emergência', '#30d158');
   html += '</div>';
   // por classe
   const classes = Object.keys(CLASSES_ATIVO).map(k => ({ k, v: totalClasse(k) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
   if (classes.length) html += '<div class="cat-block" style="margin-top:14px"><h5>Por classe</h5>' + classes.map(({ k, v }) => { const c = classeAtivo(k); return `<div class="cat-row"><span class="cat-name">${c.icone} ${c.nome}</span><div class="cat-bar"><div style="width:${Math.round(v / total * 100)}%; background:${c.cor}"></div></div><span class="cat-val">${formatCurrency(v)} <small>${Math.round(v / total * 100)}%</small></span></div>`; }).join('') + '</div>';
   // evolução mensal (últimos 6 meses com registro)
   const snaps = Object.entries(wealth.snapshots || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-6);
-  if (snaps.length >= 2) { const max = Math.max(1, ...snaps.map(s => s[1])); html += '<div class="cat-block"><h5>Evolução do patrimônio</h5><div class="fin-meses" style="height:120px">' + snaps.map(([m, v]) => `<div class="mes-col" title="${formatCurrency(v)}"><div class="mes-bars" style="height:70px"><div class="mes-bar" style="width:60%; height:${Math.round(v / max * 100)}%; background:#38bdf8"></div></div><small>${nomeMes(m).slice(0, 3)}</small><small class="mes-saldo" style="color:#94a3b8">${(v / 1000).toFixed(1)}k</small></div>`).join('') + '</div></div>'; }
+  if (snaps.length >= 2) { const max = Math.max(1, ...snaps.map(s => s[1])); html += '<div class="cat-block"><h5>Evolução do patrimônio</h5><div class="fin-meses" style="height:120px">' + snaps.map(([m, v]) => `<div class="mes-col" title="${formatCurrency(v)}"><div class="mes-bars" style="height:70px"><div class="mes-bar" style="width:60%; height:${Math.round(v / max * 100)}%; background:#0a84ff"></div></div><small>${nomeMes(m).slice(0, 3)}</small><small class="mes-saldo" style="color:#8e8e93">${(v / 1000).toFixed(1)}k</small></div>`).join('') + '</div></div>'; }
   // vencimentos próximos (60 dias)
   const lim = new Date(); lim.setDate(lim.getDate() + 60); const limISO = isoDe(lim); const hoje = hojeISO();
   const venc = assets.filter(a => !a.archived && a.due && a.due <= limISO).sort((a, b) => a.due.localeCompare(b.due));
@@ -1797,7 +1924,7 @@ function removerTreino(id) { const w = workouts.find(x => x.id === id); if (!w |
 function renderTreinos() {
   const ul = document.getElementById('workout-list'); if (!ul) return; ul.innerHTML = '';
   const lista = [...workouts].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, 20);
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum treino ainda.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum treino ainda.</li>'; return; }
   lista.forEach(w => {
     const t = TIPOS_TREINO[w.type] || TIPOS_TREINO.outro;
     ul.innerHTML += `<li class="health-item"><div class="transaction-info" style="flex:1"><span>${t[0]} ${t[1]} <small class="item-date">${rotuloData(w.date)} · ${isoParaBR(w.date)}${w.minutes ? ' · ' + w.minutes + ' min' : ''} · ${'🔥'.repeat(w.intensity || 2)}</small></span>${(w.exercises || []).length ? `<small class="item-notes">${w.exercises.map(esc).join(' · ')}</small>` : ''}${w.note ? `<small class="item-notes">${esc(w.note)}</small>` : ''}</div>
@@ -1819,10 +1946,10 @@ function renderMedidas() {
   const lista = [...measures].sort((a, b) => a.date.localeCompare(b.date));
   const pesos = lista.filter(m => m.weight > 0).slice(-12);
   if (ch) {
-    if (pesos.length >= 2) { const min = Math.min(...pesos.map(m => m.weight)) - 1; const max = Math.max(...pesos.map(m => m.weight)) + 1; ch.innerHTML = '<div class="fin-meses" style="grid-template-columns:repeat(' + pesos.length + ',1fr); height:130px">' + pesos.map(m => `<div class="mes-col" title="${isoParaBR(m.date)}: ${m.weight} kg"><div class="mes-bars" style="height:80px"><div class="mes-bar" style="width:60%; height:${Math.round((m.weight - min) / (max - min) * 100)}%; background:#f472b6"></div></div><small>${isoParaBR(m.date).slice(0, 5)}</small><small class="mes-saldo" style="color:#e2e8f0">${m.weight}</small></div>`).join('') + '</div>'; }
+    if (pesos.length >= 2) { const min = Math.min(...pesos.map(m => m.weight)) - 1; const max = Math.max(...pesos.map(m => m.weight)) + 1; ch.innerHTML = '<div class="fin-meses" style="grid-template-columns:repeat(' + pesos.length + ',1fr); height:130px">' + pesos.map(m => `<div class="mes-col" title="${isoParaBR(m.date)}: ${m.weight} kg"><div class="mes-bars" style="height:80px"><div class="mes-bar" style="width:60%; height:${Math.round((m.weight - min) / (max - min) * 100)}%; background:#ff375f"></div></div><small>${isoParaBR(m.date).slice(0, 5)}</small><small class="mes-saldo" style="color:#f5f5f7">${m.weight}</small></div>`).join('') + '</div>'; }
     else ch.innerHTML = '<div class="stat-line muted">Registre pelo menos 2 pesagens pra ver a evolução.</div>';
   }
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma medida ainda.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma medida ainda.</li>'; return; }
   [...lista].reverse().slice(0, 10).forEach(m => {
     ul.innerHTML += `<li class="health-item"><div class="transaction-info" style="flex:1"><span>${m.weight ? `<strong>${m.weight} kg</strong>` : ''}${m.waist ? ` · cintura ${m.waist} cm` : ''}${m.bodyfat ? ` · ${m.bodyfat}% gordura` : ''}</span><small class="item-date">${isoParaBR(m.date)}${m.note ? ' · ' + esc(m.note) : ''}</small></div><div class="item-actions"><button class="mini-btn" title="Apagar" onclick="removerMedida(${m.id})">✕</button></div></li>`;
   });
@@ -1839,7 +1966,7 @@ function removerRefeicao(id) { meals = meals.filter(x => x.id !== id); salvar('m
 function renderRefeicoes() {
   const ul = document.getElementById('meal-list'); if (!ul) return; ul.innerHTML = '';
   const lista = [...meals].sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || ''))).slice(0, 15);
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Diário simples: o que comeu e se foi boa, ok ou ruim. Sem calorias, sem culpa.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Diário simples: o que comeu e se foi boa, ok ou ruim. Sem calorias, sem culpa.</li>'; return; }
   let ultima = '';
   lista.forEach(m => {
     if (m.date !== ultima) { ultima = m.date; const doDia = meals.filter(x => x.date === m.date); const boas = doDia.filter(x => x.quality === 'boa').length; ul.innerHTML += `<li class="date-sep">${rotuloData(m.date)} <small>${isoParaBR(m.date)} · ${boas}/${doDia.length} boas</small></li>`; }
@@ -1878,7 +2005,7 @@ function renderMedico() {
   const hoje = hojeISO();
   const abertos = medical.filter(m => !m.done).sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
   const feitos = medical.filter(m => m.done).sort((a, b) => (b.doneAt || b.date || '').localeCompare(a.doneAt || a.date || '')).slice(0, 8);
-  if (!medical.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Seus próprios cuidados: consulta, exame, vacina, remédio. Com data, vira compromisso 🩺 no calendário.</li>'; return; }
+  if (!medical.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Seus próprios cuidados: consulta, exame, vacina, remédio. Com data, vira compromisso 🩺 no calendário.</li>'; return; }
   const linha = m => { const k = TIPOS_MEDICO[m.kind] || TIPOS_MEDICO.outro; const atras = m.date && m.date < hoje && !m.done; return `<li class="health-item" style="${m.done ? 'opacity:0.5' : ''}"><div class="transaction-info" style="flex:1"><span>${k[0]} ${esc(m.title)} <small class="item-date">${k[1]}${m.date ? ' · ' + rotuloData(m.date) + (m.time ? ' ' + esc(m.time) : '') : ' · sem data'}${atras ? ' <span class="badge-topay">passou</span>' : ''}</small></span>${m.place || m.notes ? `<small class="item-notes">${esc([m.place, m.notes].filter(Boolean).join(' · '))}</small>` : ''}</div><div class="item-actions"><button class="mini-btn ${m.done ? 'on' : ''}" title="${m.done ? 'Reabrir' : 'Concluído'}" onclick="concluirMedico(${m.id})">${m.done ? '↩' : '✓'}</button><button class="mini-btn" title="Editar" onclick="editarMedico(${m.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMedico(${m.id})">✕</button></div></li>`; };
   abertos.forEach(m => ul.innerHTML += linha(m));
   if (feitos.length) { ul.innerHTML += `<li class="date-sep">Concluídos <small>${medical.filter(m => m.done).length}</small></li>`; feitos.forEach(m => ul.innerHTML += linha(m)); }
@@ -1896,10 +2023,10 @@ function renderPainelSaude() {
   const goal = hydration.goal || 2500; const pct = Math.min(100, Math.round((hydration.ml || 0) / goal * 100));
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = '<div class="stat-grid">';
-  html += tile('🏋️', `${semana.length}`, `treino${semana.length === 1 ? '' : 's'} nesta semana · ${minSemana} min`, '#22c55e');
-  html += tile('💧', `${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L`, `de ${(goal / 1000).toFixed(1).replace('.', ',')} L hoje (${pct}%)`, '#38bdf8');
-  html += tile('⚖️', ultimo ? `${ultimo.weight} kg` : '—', ultimo ? `${isoParaBR(ultimo.date)}${anterior ? ` · ${delta > 0 ? '+' : ''}${delta.toFixed(1).replace('.', ',')} kg` : ''}` : 'sem pesagem', '#f472b6');
-  html += tile('🩺', prox ? rotuloData(prox.date) : '—', prox ? `${(TIPOS_MEDICO[prox.kind] || TIPOS_MEDICO.outro)[1]}: ${esc(prox.title).slice(0, 28)}` : 'nada marcado', '#a78bfa');
+  html += tile('🏋️', `${semana.length}`, `treino${semana.length === 1 ? '' : 's'} nesta semana · ${minSemana} min`, '#30d158');
+  html += tile('💧', `${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L`, `de ${(goal / 1000).toFixed(1).replace('.', ',')} L hoje (${pct}%)`, '#0a84ff');
+  html += tile('⚖️', ultimo ? `${ultimo.weight} kg` : '—', ultimo ? `${isoParaBR(ultimo.date)}${anterior ? ` · ${delta > 0 ? '+' : ''}${delta.toFixed(1).replace('.', ',')} kg` : ''}` : 'sem pesagem', '#ff375f');
+  html += tile('🩺', prox ? rotuloData(prox.date) : '—', prox ? `${(TIPOS_MEDICO[prox.kind] || TIPOS_MEDICO.outro)[1]}: ${esc(prox.title).slice(0, 28)}` : 'nada marcado', '#bf5af2');
   html += '</div>';
   html += `<div class="water-box"><div class="water-bar"><div style="width:${pct}%"></div></div><div class="water-btns"><button class="mini-btn" onclick="beberAgua(250)">+250 ml</button><button class="mini-btn" onclick="beberAgua(500)">+500 ml</button><button class="mini-btn" onclick="beberAgua(750)">+750 ml</button><button class="mini-btn" onclick="beberAgua(-250)" title="Tirar 250 ml">−250</button><button class="mini-btn" onclick="definirMetaAgua()" title="Mudar meta">🎯 meta</button></div></div>`;
   el.innerHTML = html;
@@ -1911,19 +2038,19 @@ function preencherSelectsSaude() {
 function renderSaude() { preencherSelectsSaude(); renderPainelSaude(); renderTreinos(); renderMedidas(); renderRefeicoes(); renderMedico(); }
 
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, shifts, places, events, finances: transactions, recurring, tasks, tasklists, notes, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); location.reload(); } catch (error) { alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function exportData() { const data = { habits, habitlog: habitLog, orders, clients, events, finances: transactions, recurring, tasks, tasklists, notes, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.orders) salvar('orders', data.orders); if (data.clients) salvar('clients', data.clients); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); location.reload(); } catch (error) { alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // SINCRONIZAÇÃO (Google Sheets via Apps Script — ver sync/Code.gs)
-// Como funciona: cada módulo (habits, shifts, ...) tem um carimbo de hora
+// Como funciona: cada módulo (habits, orders, ...) tem um carimbo de hora
 // "updatedAt" da última vez que foi salvo neste aparelho. Ao sincronizar, o
 // app manda tudo com os carimbos; o Code.gs guarda só o que for mais novo do
 // que a planilha tem e devolve o estado final; o app adota daqui o que a
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'shifts', 'places', 'events', 'finances', 'recurring', 'tasks', 'tasklists', 'notes', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'events', 'finances', 'recurring', 'tasks', 'tasklists', 'notes', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -1978,9 +2105,9 @@ async function sincronizar() {
       if (bruto !== null) dados[m] = { updatedAt: syncMeta[m] || 0, valor: JSON.parse(bruto) };
     });
 
-    // Google Calendar: só pede o espelhamento quando plantões/compromissos mudaram desde o último envio
+    // Google Calendar: só pede o espelhamento quando os compromissos mudaram desde o último envio
     const agendaStamp = Number(localStorage.getItem('lifeos_agenda_stamp')) || 0;
-    const precisaAgenda = !!syncConfig.agenda && (agendaForcar || (syncMeta.shifts || 0) > agendaStamp || (syncMeta.events || 0) > agendaStamp);
+    const precisaAgenda = !!syncConfig.agenda && (agendaForcar || (syncMeta.events || 0) > agendaStamp);
     agendaForcar = false;
 
     // Content-Type text/plain de propósito: evita o "preflight" CORS que o Apps Script não responde.
@@ -1995,7 +2122,7 @@ async function sincronizar() {
     const mudou = aplicarRemoto(r.dados || {});
     if (precisaAgenda) {
       if (r.agenda && r.agenda.ok) {
-        localStorage.setItem('lifeos_agenda_stamp', String(Math.max(syncMeta.shifts || 0, syncMeta.events || 0)));
+        localStorage.setItem('lifeos_agenda_stamp', String(syncMeta.events || 0));
         const a = r.agenda; setAgendaStatus('ok', `${a.total} na agenda · +${a.criados} criado${a.criados === 1 ? '' : 's'}, ${a.atualizados} atualizado${a.atualizados === 1 ? '' : 's'}, ${a.removidos} removido${a.removidos === 1 ? '' : 's'}`);
       } else if (r.agenda) setAgendaStatus('erro', r.agenda.erro || 'falha no Calendar');
       else setAgendaStatus('erro', 'o Code.gs implantado ainda é a versão 1 (sem agenda). Cole a v2 e crie uma nova versão da implantação.');
@@ -2040,9 +2167,8 @@ function aplicarRemoto(remoto) {
 function redesenharTudo() {
   habits = JSON.parse(localStorage.getItem('lifeos_habits')) || habits;
   habitLog = JSON.parse(localStorage.getItem('lifeos_habitlog')) || habitLog; if (!habitLog.dias) habitLog.dias = {};
-  shifts = JSON.parse(localStorage.getItem('lifeos_shifts')) || [];
   events = JSON.parse(localStorage.getItem('lifeos_events')) || [];
-  places = JSON.parse(localStorage.getItem('lifeos_places')) || places;
+  orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
   transactions = JSON.parse(localStorage.getItem('lifeos_finances')) || [];
   recurring = JSON.parse(localStorage.getItem('lifeos_recurring')) || [];
   tasks = (JSON.parse(localStorage.getItem('lifeos_tasks')) || []).map(t => typeof t === 'string' ? { text: t, done: false } : t);
@@ -2054,7 +2180,7 @@ function redesenharTudo() {
   assets = JSON.parse(localStorage.getItem('lifeos_assets')) || []; moves = JSON.parse(localStorage.getItem('lifeos_moves')) || []; goals = JSON.parse(localStorage.getItem('lifeos_goals')) || []; projects = JSON.parse(localStorage.getItem('lifeos_projects')) || []; wealth = JSON.parse(localStorage.getItem('lifeos_wealth')) || wealth;
   workouts = JSON.parse(localStorage.getItem('lifeos_workouts')) || []; measures = JSON.parse(localStorage.getItem('lifeos_measures')) || []; hydration = JSON.parse(localStorage.getItem('lifeos_hydration')) || hydration; meals = JSON.parse(localStorage.getItem('lifeos_meals')) || []; medical = JSON.parse(localStorage.getItem('lifeos_medical')) || [];
   profile = JSON.parse(localStorage.getItem('lifeos_profile')) || profile; aplicarPerfil();
-  renderFocusTab(); preencherLocais(); renderShifts(); renderEvents(); updateFinanceValues(); renderFinances(); renderRecorrentes(); renderTaskLists(); renderTasks(); renderNotes(); redesenharEstudos(); redesenharNegocios(); renderSaude(); updateStudyStats(); renderJournal(); atualizarSaudacao();
+  renderFocusTab(); renderPrimos(); renderEvents(); updateFinanceValues(); renderFinances(); renderRecorrentes(); renderTaskLists(); renderTasks(); renderNotes(); redesenharEstudos(); redesenharNegocios(); renderSaude(); updateStudyStats(); renderJournal(); atualizarSaudacao();
 }
 
 function setAgendaStatus(estado, texto) {
@@ -2062,7 +2188,7 @@ function setAgendaStatus(estado, texto) {
   localStorage.setItem('lifeos_agenda_status', JSON.stringify({ estado, texto, quando: Date.now() }));
   const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   el.innerText = (estado === 'ok' ? '📆 Google Agenda ' + hora + ': ' : '📆 Google Agenda — erro: ') + texto;
-  el.style.color = estado === 'ok' ? '#22c55e' : '#ef4444';
+  el.style.color = estado === 'ok' ? '#30d158' : '#ff453a';
 }
 function enviarAgendaAgora() {
   if (!syncConfig.agenda) { toast('Marque "Enviar para o Google Calendar" e clique em Salvar e testar primeiro.'); return; }
@@ -2074,12 +2200,12 @@ function setSyncStatus(estado, detalhe) {
   const ultima = localStorage.getItem('lifeos_sync_ultima');
   const hora = ultima ? new Date(Number(ultima)).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
   const mapa = {
-    naoconfig: ['⚪', 'Sincronização não configurada — preencha URL e token abaixo.', '#64748b'],
-    andamento: ['🔄', 'Sincronizando...', '#38bdf8'],
-    ok:        ['🟢', 'Sincronizado' + (hora ? ' às ' + hora : '') + ' · automático a cada 30 s', '#22c55e'],
-    pendente:  ['🟡', 'Alterações pendentes' + (hora ? ' (último sync ' + hora + ')' : ''), '#f59e0b'],
-    offline:   ['🔴', 'Offline — vai sincronizar quando a internet voltar.', '#ef4444'],
-    erro:      ['🔴', 'Erro: ' + (detalhe || 'falha na sincronização'), '#ef4444']
+    naoconfig: ['⚪', 'Sincronização não configurada — preencha URL e token abaixo.', '#8e8e93'],
+    andamento: ['🔄', 'Sincronizando...', '#0a84ff'],
+    ok:        ['🟢', 'Sincronizado' + (hora ? ' às ' + hora : '') + ' · automático a cada 30 s', '#30d158'],
+    pendente:  ['🟡', 'Alterações pendentes' + (hora ? ' (último sync ' + hora + ')' : ''), '#ff9f0a'],
+    offline:   ['🔴', 'Offline — vai sincronizar quando a internet voltar.', '#ff453a'],
+    erro:      ['🔴', 'Erro: ' + (detalhe || 'falha na sincronização'), '#ff453a']
   };
   const [icone, texto, cor] = mapa[estado] || mapa.naoconfig;
   if (el) { el.innerText = icone + ' ' + texto; el.style.color = cor; }
@@ -2112,7 +2238,7 @@ function carregarSyncConfigNaTela() {
   if (t) t.value = syncConfig.token || '';
   const a = document.getElementById('sync-agenda'); if (a) a.checked = !!syncConfig.agenda;
   const st = JSON.parse(localStorage.getItem('lifeos_agenda_status') || 'null'); const el = document.getElementById('agenda-status');
-  if (st && el) { el.innerText = (st.estado === 'ok' ? '📆 Google Agenda ' + new Date(st.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ': ' : '📆 Google Agenda — erro: ') + st.texto; el.style.color = st.estado === 'ok' ? '#22c55e' : '#ef4444'; }
+  if (st && el) { el.innerText = (st.estado === 'ok' ? '📆 Google Agenda ' + new Date(st.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ': ' : '📆 Google Agenda — erro: ') + st.texto; el.style.color = st.estado === 'ok' ? '#30d158' : '#ff453a'; }
 }
 
 // Gatilhos automáticos: voltou a internet / voltou pro app (celular) / a cada 30 s com o app visível
@@ -2124,8 +2250,8 @@ setInterval(() => { if (document.visibilityState === 'visible' && syncConfigurad
 changeJournalTab('day', document.querySelector('#journal-tabs span.active'));
 if (normalizarNotas()) localStorage.setItem('lifeos_notes', JSON.stringify(notes));
 renderPaletaNota(); if (normalizarTarefas()) { localStorage.setItem('lifeos_tasks', JSON.stringify(tasks)); localStorage.setItem('lifeos_tasklists', JSON.stringify(tasklists)); }
-renderTaskLists(); preencherTiposEvento(); preencherLocais(); preencherCategorias(false); preencherCategoriasRec(); document.getElementById('fin-date').value = hojeISO(); gerarRecorrentes();
-updatePomodoroTime(); updateStudyStats(); renderFocusTab(); renderCalendar(); updateFinanceValues(); renderFinances(); renderShifts(); renderTasks(); renderNotes(); renderEvents(); renderRecorrentes();
+renderTaskLists(); preencherTiposEvento(); preencherCategorias(false); preencherCategoriasRec(); document.getElementById('fin-date').value = hojeISO(); gerarRecorrentes();
+updatePomodoroTime(); updateStudyStats(); renderFocusTab(); renderCalendar(); updateFinanceValues(); renderFinances(); renderPrimos(); renderTasks(); renderNotes(); renderEvents(); renderRecorrentes();
 document.getElementById('session-date').value = hojeISO(); garantirRitual(); redesenharEstudos(); ['workout-date', 'measure-date', 'meal-date'].forEach(i => document.getElementById(i).value = hojeISO()); renderSaude(); document.getElementById('move-date').value = hojeISO(); document.getElementById('asset-current-at').value = hojeISO(); redesenharNegocios(); renderEvents(); renderCalendar();
 aplicarPerfil(); carregarPrefsNaTela(); atualizarSaudacao(); atualizarBotaoDia();
 if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStorage.setItem('lifeos_perfil_avisado', '1'); setTimeout(() => toast('👤 Bem-vindo ao Genesis! Coloque seu nome em ⚙️ Config → Perfil.', 8000), 1500); }

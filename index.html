@@ -2,32 +2,37 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Genesis">
   <title>Dashboard Genesis</title>
+  <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
   <div class="container">
     <nav class="tabs">
-      <button class="tab-btn active" id="btn-focus" onclick="changeTab('focus')">🎯 Painel Central</button>
-      <button class="tab-btn" id="btn-home" onclick="changeTab('home')">📅 Calendário</button>
-      <button class="tab-btn" id="btn-finances" onclick="changeTab('finances')">💰 Finanças</button>
-      <button class="tab-btn" id="btn-shifts" onclick="changeTab('shifts')">🚑 Plantões</button>
-      <button class="tab-btn" id="btn-tasks" onclick="changeTab('tasks')">✅ Tarefas</button>
-      <button class="tab-btn" id="btn-notes" onclick="changeTab('notes')">📝 Notas</button>
-      <button class="tab-btn" id="btn-studies" onclick="changeTab('studies')">📚 Estudos</button>
-      <button class="tab-btn" id="btn-business" onclick="changeTab('business')">📈 Negócios</button>
-      <button class="tab-btn" id="btn-health" onclick="changeTab('health')">🩺 Saúde</button>
-      <button class="tab-btn" id="btn-settings" onclick="changeTab('settings')">⚙️ Config <span id="sync-dot" class="sync-dot"></span></button>
+      <button class="tab-btn active" id="btn-focus" onclick="changeTab('focus')"><span class="tab-ico">🎯</span><span class="tab-lbl">Painel</span></button>
+      <button class="tab-btn" id="btn-primos" onclick="changeTab('primos')"><span class="tab-ico">🖨️</span><span class="tab-lbl">Primos 3D</span></button>
+      <button class="tab-btn" id="btn-home" onclick="changeTab('home')"><span class="tab-ico">📅</span><span class="tab-lbl">Agenda</span></button>
+      <button class="tab-btn" id="btn-finances" onclick="changeTab('finances')"><span class="tab-ico">💰</span><span class="tab-lbl">Finanças</span></button>
+      <button class="tab-btn" id="btn-tasks" onclick="changeTab('tasks')"><span class="tab-ico">✅</span><span class="tab-lbl">Tarefas</span></button>
+      <button class="tab-btn" id="btn-notes" onclick="changeTab('notes')"><span class="tab-ico">📝</span><span class="tab-lbl">Notas</span></button>
+      <button class="tab-btn" id="btn-studies" onclick="changeTab('studies')"><span class="tab-ico">📚</span><span class="tab-lbl">Estudos</span></button>
+      <button class="tab-btn" id="btn-business" onclick="changeTab('business')"><span class="tab-ico">📈</span><span class="tab-lbl">Negócios</span></button>
+      <button class="tab-btn" id="btn-health" onclick="changeTab('health')"><span class="tab-ico">🩺</span><span class="tab-lbl">Saúde</span></button>
+      <button class="tab-btn" id="btn-settings" onclick="changeTab('settings')"><span class="tab-ico">⚙️<span id="sync-dot" class="sync-dot"></span></span><span class="tab-lbl">Ajustes</span></button>
     </nav>
 
     <div id="focus" class="tab-content active">
-      <div class="life-os-banner"></div>
       <div class="life-os-header">
         <div class="avatar-placeholder">🎩</div>
-        <div style="flex: 1;">
-          <h1 id="header-title" style="font-size: 1.8rem; color: #fff;">Life OS</h1>
+        <div style="flex: 1; min-width: 0;">
+          <h1 id="header-title">Life OS</h1>
           <div class="trinca" title="Trinca de Ases — projeto em conjunto"><span class="naipe preto">A♠</span><span class="naipe vermelho">A♥</span><span class="naipe vermelho">A♦</span><small>Trinca de Ases</small></div>
           <button class="start-day-btn" id="btn-iniciar-dia" onclick="iniciarDia()">➔ Iniciar o Dia</button>
         </div>
@@ -44,19 +49,19 @@
 
           <div class="card overview-card">
             <h4 class="text-blue" style="margin-bottom: 10px;">👤 OVERVIEW</h4>
-            <p id="greeting-text" style="color: #f8fafc; font-weight: 500;">Olá!</p>
+            <p id="greeting-text" style="color: #ffffff; font-weight: 500;">Olá!</p>
             <p id="greeting-sub" class="greeting-sub"></p>
             <p id="frase-dia" class="frase-dia"></p>
             <div class="progress-bar-bg" style="margin-top:15px;"><div class="progress-bar-fill" id="progress-fill"></div></div>
-            <span id="progress-text" style="font-size: 0.75rem; color: #64748b;">0% Concluído</span>
+            <span id="progress-text" style="font-size: 0.75rem; color: #8e8e93;">0% Concluído</span>
           </div>
 
           <div class="card pomodoro-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-              <h2 id="pomodoro-title" style="color: #ef4444; font-size: 0.9rem; margin:0; letter-spacing: 1px;">⏱ POMODORO</h2>
+              <h2 id="pomodoro-title" style="color: #ff453a; font-size: 0.9rem; margin:0; letter-spacing: 1px;">⏱ POMODORO</h2>
               <div style="display:flex; align-items:center; gap:5px;">
                 <input type="number" id="pomodoro-input" value="50" min="1" max="180" onchange="updatePomodoroTime()">
-                <span style="font-size: 0.8rem; color:#94a3b8;">min</span>
+                <span style="font-size: 0.8rem; color:#8e8e93;">min</span>
               </div>
             </div>
             <div class="focus-header-tabs" id="pomodoro-modo" style="border:none; padding:0 0 8px; gap:6px; font-size:0.78rem;"><span class="active" onclick="alternarModoPomodoro('foco', this)">⏱ Foco</span><span onclick="alternarModoPomodoro('meditacao', this)">🧘 Meditação</span></div>
@@ -79,7 +84,7 @@
 
         <div class="right-col">
           <div class="card journals-section">
-            <h2 style="color: #22c55e; font-size: 1rem; margin-bottom: 15px; letter-spacing: 1px;">📔 RESUMO</h2>
+            <h2 style="color: #30d158; font-size: 1rem; margin-bottom: 15px; letter-spacing: 1px;">📔 RESUMO</h2>
             <div class="focus-header-tabs" id="journal-tabs" style="margin-bottom: 15px;">
               <span class="active" onclick="changeJournalTab('day', this)">▵ Hoje</span>
               <span onclick="changeJournalTab('week', this)">▵ Semana</span>
@@ -89,7 +94,7 @@
             </div>
             <div class="journal-cards-container" id="journal-content"></div>
             
-            <h2 style="color: #22c55e; font-size: 1rem; margin-top: 30px; margin-bottom: 15px; letter-spacing: 1px;">🎮 HÁBITOS</h2>
+            <h2 style="color: #30d158; font-size: 1rem; margin-top: 30px; margin-bottom: 15px; letter-spacing: 1px;">🎮 HÁBITOS</h2>
             <div class="focus-header-tabs" id="habit-tabs">
                <span class="active" onclick="changeHabitTab('do', this)">🔄 Do</span>
                <span onclick="changeHabitTab('todo', this)">⏹ To-do</span>
@@ -105,13 +110,14 @@
 
     <!-- Módulo 1: Calendário / Agenda geral -->
     <div id="home" class="tab-content">
+      <h1 class="page-title">Agenda</h1>
       <div class="card" style="margin-top: 20px;">
         <div class="calendar-header"><button id="prev-month">&lt;</button><h2 id="month-year">Mês Ano</h2><button id="next-month">&gt;</button></div>
         <div class="calendar-weekdays"><div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div></div>
         <div id="calendar-days" class="calendar-days"></div>
         <div class="calendar-legend">
           <button type="button" class="mini-btn" onclick="irParaHoje()">📍 Hoje</button>
-          <span><i style="background:#f59e0b"></i>Plantão</span><span><i style="background:#38bdf8"></i>Trabalho</span><span><i style="background:#a78bfa"></i>Pessoal</span><span><i style="background:#22c55e"></i>Saúde</span><span><i style="background:#f472b6"></i>Estudo</span><span><i style="background:#fbbf24"></i>Negócios</span><span><i style="background:#fb923c"></i>Social</span>
+          <span><i style="background:#ff9f0a"></i>Entrega 3D</span><span><i style="background:#0a84ff"></i>Trabalho</span><span><i style="background:#bf5af2"></i>Pessoal</span><span><i style="background:#30d158"></i>Saúde</span><span><i style="background:#ff375f"></i>Estudo</span><span><i style="background:#ffd60a"></i>Negócios</span><span><i style="background:#ffb340"></i>Social</span>
         </div>
       </div>
       <div class="card" style="margin-top: 20px;">
@@ -146,6 +152,7 @@
 
     <!-- Módulo 2: Finanças -->
     <div id="finances" class="tab-content">
+      <h1 class="page-title">Finanças</h1>
       <div class="card fin-month-bar" style="margin-top: 20px;">
         <div class="fin-month-nav"><button type="button" class="mini-btn" onclick="mudarMesFin(-1)">◀</button><h2 id="fin-month-label" style="margin:0">Mês</h2><button type="button" class="mini-btn" onclick="mudarMesFin(1)">▶</button><button type="button" class="mini-btn" onclick="irParaMesAtual()">📍 Este mês</button></div>
         <div class="focus-header-tabs" id="fin-modo" style="border:none; padding:0;"><span class="active" onclick="alternarModoFin('mes', this)">📅 Mês</span><span onclick="alternarModoFin('tudo', this)">♾️ Tudo</span></div>
@@ -154,7 +161,7 @@
         <div class="balance-item"><span>Receitas</span><h3 id="total-income" class="income">R$ 0,00</h3></div>
         <div class="balance-item"><span>Despesas</span><h3 id="total-expense" class="expense">R$ 0,00</h3></div>
         <div class="balance-item"><span>Saldo</span><h3 id="net-balance">R$ 0,00</h3></div>
-        <div class="balance-item"><span>A receber</span><h3 id="total-pending" style="color:#f59e0b">R$ 0,00</h3></div>
+        <div class="balance-item"><span>A receber</span><h3 id="total-pending" style="color:#ff9f0a">R$ 0,00</h3></div>
       </div>
       <div id="fin-extra" class="summary-row" style="padding: 0 6px;"></div>
       <div class="card" style="margin-top: 20px;">
@@ -216,60 +223,79 @@
       </div>
     </div>
 
-    <!-- Módulo 3: Plantões -->
-    <div id="shifts" class="tab-content">
+    <!-- Módulo 3: Primos 3D (pedidos e clientes) -->
+    <div id="primos" class="tab-content">
+      <h1 class="page-title">Primos 3D</h1>
+      <div class="card">
+        <div id="primos-dash"></div>
+      </div>
       <div class="card" style="margin-top: 20px;">
-        <h2 id="shift-form-title">Agendar Novo Plantão</h2>
-        <form id="shift-form">
-          <input type="hidden" id="shift-id">
-          <label for="shift-place">Local (preenche hora, duração e valor padrão):</label>
-          <select id="shift-place" onchange="aplicarLocalPlantao()"></select>
-          <label for="shift-desc">Nome do local / tipo:</label><input type="text" id="shift-desc" placeholder="Ex: Hospital X — pronto-socorro" required>
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
-            <div><label for="shift-date">Data:</label><input type="date" id="shift-date" required></div>
-            <div><label for="shift-time">Início:</label><input type="time" id="shift-time" required></div>
-            <div><label for="shift-hours">Duração (h):</label><input type="number" id="shift-hours" step="0.5" min="0" placeholder="12"></div>
+        <h2 id="order-form-title">Novo pedido</h2>
+        <form id="order-form">
+          <input type="hidden" id="order-id">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div><label for="order-client">Cliente:</label><select id="order-client"></select><input type="text" id="order-client-new" placeholder="nome do novo cliente" hidden style="margin-top:6px"></div>
+            <div><label for="order-status">Etapa:</label><select id="order-status"></select></div>
           </div>
-          <label for="shift-amount">Valor (R$):</label><input type="number" id="shift-amount" step="0.01" required>
-          <label for="shift-swap">🔁 Troca (opcional):</label><input type="text" id="shift-swap" placeholder="com quem e por qual dia — ex: com Fulano, por 16/09 07–13h">
-          <label for="shift-notes">Observações:</label><input type="text" id="shift-notes" placeholder="opcional: troca, cobertura, NF...">
+          <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 10px;">
+            <div><label for="order-title">Peça / descrição:</label><input type="text" id="order-title" placeholder="Ex: Chaveiro personalizado, suporte de celular" required></div>
+            <div><label for="order-qty">Qtd.:</label><input type="number" id="order-qty" min="1" value="1"></div>
+          </div>
+          <div class="row3" style="display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 10px;">
+            <div><label for="order-material">Material:</label><select id="order-material"></select></div>
+            <div><label for="order-color">Cor(es):</label><input type="text" id="order-color" placeholder="Preto, branco..."></div>
+            <div><label for="order-printer">Impressora:</label><select id="order-printer"></select></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div><label for="order-price">Valor total (R$):</label><input type="number" id="order-price" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
+            <div><label for="order-due">Prazo de entrega:</label><input type="date" id="order-due"></div>
+          </div>
+          <label for="order-notes">Observações:</label><input type="text" id="order-notes" placeholder="link do modelo, medidas, forma de entrega...">
+          <p class="hint" style="margin: 2px 0 0;">Saiu do orçamento e tem valor → entra em Finanças como <em>a receber</em> (categoria Primos 3D). 💵 marca como pago; ▶ avança a etapa.</p>
           <div style="display:flex; gap:10px;">
-            <button type="submit" id="shift-submit" style="flex:1">Agendar plantão</button>
-            <button type="button" id="shift-cancel" class="btn" hidden onclick="cancelarEdicaoPlantao()">Cancelar</button>
+            <button type="submit" id="order-submit" style="flex:1">Registrar pedido</button>
+            <button type="button" id="order-cancel" class="btn" hidden onclick="cancelarEdicaoPedido()">Cancelar</button>
           </div>
         </form>
       </div>
       <div class="card" style="margin-top: 20px;">
-        <h2>Plantões</h2>
-        <div id="shift-summary" class="summary-row"></div>
-        <div class="focus-header-tabs filter-row" id="shift-filters">
-          <span class="active" onclick="filtrarPlantoes('proximos', this)">📅 Próximos</span>
-          <span onclick="filtrarPlantoes('naopagos', this)">⏳ A receber</span>
-          <span onclick="filtrarPlantoes('passados', this)">🕘 Passados</span>
-          <span onclick="filtrarPlantoes('todos', this)">📋 Todos</span>
+        <h2>Pedidos</h2>
+        <input type="search" id="order-search" placeholder="🔍 buscar por peça, cliente, material, cor..." oninput="buscarPedidos(this.value)" style="margin-bottom: 10px;">
+        <div class="focus-header-tabs filter-row" id="order-filters">
+          <span class="active" onclick="filtrarPedidos('abertos', this)">Em produção</span>
+          <span onclick="filtrarPedidos('orcamentos', this)">Orçamentos</span>
+          <span onclick="filtrarPedidos('receber', this)">A receber</span>
+          <span onclick="filtrarPedidos('entregues', this)">Finalizados</span>
+          <span onclick="filtrarPedidos('todos', this)">Todos</span>
         </div>
-        <ul id="shift-list" class="transaction-list"></ul>
+        <ul id="order-list" class="transaction-list"></ul>
       </div>
       <div class="card" style="margin-top: 20px;">
-        <h2>Turnos de plantão</h2>
-        <p class="hint">Um turno = local + horário + duração + valor. Cadastre um por tipo de plantão (ex: <strong>Hospital X 12h</strong> 07:00 · 12h · R$ 1.500; <strong>Clínica Y 6h</strong> 13:00 · 6h · R$ 700). Ao escolher o turno no formulário acima, tudo vem preenchido.</p>
-        <form id="place-form">
-          <input type="hidden" id="place-id">
-          <div style="display: grid; grid-template-columns: 1.5fr 1.5fr 1fr 1fr 1fr; gap: 10px;">
-            <div><label for="place-name">Turno:</label><input type="text" id="place-name" placeholder="Hospital X 12h" required></div>
-            <div><label for="place-local">Local (opcional):</label><input type="text" id="place-local" placeholder="Hospital X"></div>
-            <div><label for="place-time">Início:</label><input type="time" id="place-time"></div>
-            <div><label for="place-hours">Horas:</label><input type="number" id="place-hours" step="0.5" min="0" placeholder="12"></div>
-            <div><label for="place-amount">Valor (R$):</label><input type="number" id="place-amount" step="0.01" min="0"></div>
+        <h2 id="client-form-title">Novo cliente</h2>
+        <form id="client-form">
+          <input type="hidden" id="client-id">
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px;">
+            <div><label for="client-name">Nome:</label><input type="text" id="client-name" placeholder="Nome ou empresa" required autocomplete="off"></div>
+            <div><label for="client-phone">WhatsApp / telefone:</label><input type="tel" id="client-phone" placeholder="(31) 9 9999-9999" autocomplete="off"></div>
           </div>
-          <button type="submit" id="place-submit">Adicionar turno</button>
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px;">
+            <div><label for="client-email">E-mail:</label><input type="email" id="client-email" placeholder="opcional" autocomplete="off"></div>
+            <div><label for="client-city">Cidade:</label><input type="text" id="client-city" placeholder="Viçosa" autocomplete="off"></div>
+          </div>
+          <label for="client-notes">Observações:</label><input type="text" id="client-notes" placeholder="como chegou até você, preferências...">
+          <div style="display:flex; gap:10px;">
+            <button type="submit" id="client-submit" style="flex:1">Cadastrar cliente</button>
+            <button type="button" id="client-cancel" class="btn" hidden onclick="cancelarEdicaoCliente()">Cancelar</button>
+          </div>
         </form>
-        <ul id="place-list" class="transaction-list" style="margin-top: 15px;"></ul>
+        <h2 style="margin-top: 22px;">Clientes</h2>
+        <ul id="client-list" class="transaction-list"></ul>
       </div>
     </div>
 
-    <!-- Módulo 4: Tarefas -->
+<!-- Módulo 4: Tarefas -->
     <div id="tasks" class="tab-content">
+      <h1 class="page-title">Tarefas</h1>
       <div class="card" style="margin-top: 20px;">
         <div class="focus-header-tabs task-tabs" id="task-lists"></div>
         <div id="task-list-tools" class="task-tools"></div>
@@ -302,6 +328,7 @@
 
     <!-- Módulo 5: Notas -->
     <div id="notes" class="tab-content">
+      <h1 class="page-title">Notas</h1>
       <div class="card" style="margin-top: 20px;">
         <h2 id="note-form-title">Nova Anotação</h2>
         <form id="note-form">
@@ -314,7 +341,7 @@
             <div><label for="note-labels-input">Marcadores (separados por vírgula):</label><input type="text" id="note-labels-input" placeholder="trabalho, ideias, negócios"></div>
             <label class="check-line" style="margin-bottom: 12px;"><input type="checkbox" id="note-pin"> 📌 Fixar no topo</label>
           </div>
-          <div class="color-row"><span style="font-size:0.8rem; color:#94a3b8">Cor:</span><div id="note-colors" class="color-dots"></div></div>
+          <div class="color-row"><span style="font-size:0.8rem; color:#8e8e93">Cor:</span><div id="note-colors" class="color-dots"></div></div>
           <div style="display:flex; gap:10px;">
             <button type="submit" id="note-submit" style="flex:1">Salvar Nota</button>
             <button type="button" id="note-cancel" class="btn" hidden onclick="cancelarEdicaoNota()">Cancelar</button>
@@ -336,6 +363,7 @@
 
     <!-- Módulo 7: Estudos -->
     <div id="studies" class="tab-content">
+      <h1 class="page-title">Estudos</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>📚 Estudos</h2>
         <div id="study-dash"></div>
@@ -357,7 +385,7 @@
         </div>
         <div class="card">
           <h2>Sessões de estudo</h2>
-          <p class="hint">O Pomodoro registra sozinho. Aqui você lança o que estudou fora dele (leitura no plantão, aula, podcast no carro).</p>
+          <p class="hint">O Pomodoro registra sozinho. Aqui você lança o que estudou fora dele (leitura, aula, podcast no carro).</p>
           <form id="session-form">
             <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 10px;">
               <div><label for="session-topic">Tema:</label><select id="session-topic"></select></div>
@@ -422,6 +450,7 @@
 
     <!-- Módulo 8: Negócios & Investimentos -->
     <div id="business" class="tab-content">
+      <h1 class="page-title">Negócios</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>📈 Negócios & Investimentos</h2>
         <div id="biz-dash"></div>
@@ -524,6 +553,7 @@
 
     <!-- Módulo 9: Saúde -->
     <div id="health" class="tab-content">
+      <h1 class="page-title">Saúde</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>🩺 Saúde</h2>
         <div id="health-dash"></div>
@@ -601,6 +631,7 @@
 
     <!-- Módulo 6: Config -->
     <div id="settings" class="tab-content">
+      <h1 class="page-title">Ajustes</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>👤 Perfil</h2>
         <p class="hint">Como o app fala com você. O nome aparece no cumprimento do Painel; as iniciais (ou um apelido curto) no cabeçalho. Sincroniza entre seus aparelhos.</p>
@@ -614,11 +645,11 @@
       <div class="card" style="margin-top: 20px;">
         <h2>Segurança e Backup</h2>
         <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-          <button onclick="exportData()" style="flex: 1; background-color: #22c55e;">⬇️ Exportar Backup</button>
-          <button onclick="document.getElementById('import-file').click()" style="flex: 1; background-color: #f59e0b;">⬆️ Importar Backup</button>
+          <button onclick="exportData()" style="flex: 1; background-color: #30d158;">⬇️ Exportar Backup</button>
+          <button onclick="document.getElementById('import-file').click()" style="flex: 1; background-color: #ff9f0a;">⬆️ Importar Backup</button>
           <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importData(event)">
         </div>
-        <div id="backup-status" style="font-size: 0.9rem; color: #38bdf8; text-align: center; height: 20px;"></div>
+        <div id="backup-status" style="font-size: 0.9rem; color: #0a84ff; text-align: center; height: 20px;"></div>
       </div>
       <div class="card" style="margin-top: 20px;">
         <h2>☁️ Sincronização (PC ↔ Celular)</h2>
@@ -630,15 +661,15 @@
           <input type="password" id="sync-token" placeholder="a frase que você definiu no Code.gs (nunca é exibida)" autocomplete="off">
         </div>
         <div style="display: flex; gap: 15px; margin-top: 15px;">
-          <button class="btn" onclick="salvarSyncConfig()" style="flex: 1; background-color: #38bdf8; color: #121212;">💾 Salvar e testar</button>
+          <button class="btn" onclick="salvarSyncConfig()" style="flex: 1; background-color: #0a84ff; color: #fff;">💾 Salvar e testar</button>
           <button class="btn" onclick="sincronizar()" style="flex: 1;">🔄 Sincronizar agora</button>
         </div>
         <div id="sync-status" style="font-size: 0.9rem; text-align: center; margin-top: 12px; min-height: 20px;"></div>
         <div class="agenda-box">
-          <label class="check-line"><input type="checkbox" id="sync-agenda"> 📆 Enviar plantões e compromissos para o <strong>Google Calendar</strong> (agenda "Genesis")</label>
-          <p class="hint" style="margin: 6px 0 8px;">Precisa do <code>Code.gs</code> versão 2 implantado no Apps Script. Depois de marcar, clique em "Salvar e testar". Cada plantão/compromisso vira um evento; mudou no app, muda na agenda.</p>
+          <label class="check-line"><input type="checkbox" id="sync-agenda"> 📆 Enviar compromissos para o <strong>Google Calendar</strong> (agenda "Genesis")</label>
+          <p class="hint" style="margin: 6px 0 8px;">Precisa do <code>Code.gs</code> versão 2 implantado no Apps Script. Depois de marcar, clique em "Salvar e testar". Cada compromisso vira um evento; mudou no app, muda na agenda.</p>
           <button class="btn" type="button" onclick="enviarAgendaAgora()" style="width:100%">📆 Enviar agenda agora</button>
-          <div id="agenda-status" style="font-size: 0.85rem; text-align: center; margin-top: 10px; min-height: 18px; color:#64748b;"></div>
+          <div id="agenda-status" style="font-size: 0.85rem; text-align: center; margin-top: 10px; min-height: 18px; color:#8e8e93;"></div>
         </div>
       </div>
     </div>
@@ -651,7 +682,7 @@
       <div class="modal-header"><h3 id="modal-date-title">Data</h3><button class="close-modal" onclick="closeModal()">✕</button></div>
       <div class="modal-body">
         <h4>📅 Neste dia:</h4><ul id="modal-shift-list" class="transaction-list"></ul>
-        <div class="modal-actions" style="display:flex; gap:10px;"><button onclick="goToAddShift()">🚑 + Plantão</button><button onclick="goToAddEvent()">📅 + Compromisso</button></div>
+        <div class="modal-actions" style="display:flex; gap:10px;"><button onclick="goToAddOrder()">📦 + Entrega</button><button onclick="goToAddEvent()">📅 + Compromisso</button></div>
       </div>
     </div>
   </div>

@@ -1,10 +1,12 @@
-const CACHE_NAME = 'genesis-cache-v3';
+const CACHE_NAME = 'genesis-cache-v4';
 const urlsToCache = [
   './',
   './index.html',
   './style.css',
   './app.js',
-  './manifest.json'
+  './manifest.json',
+  './icon-180.png',
+  './icon-512.png'
 ];
 
 // Instala o guardião offline e salva os arquivos do seu app
