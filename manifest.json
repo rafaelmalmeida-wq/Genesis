@@ -1,6 +1,6 @@
 {
-  "name": "Dashboard Genesis",
-  "short_name": "Genesis",
+  "name": "JARVIS",
+  "short_name": "JARVIS",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#f2f2f7",

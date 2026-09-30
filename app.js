@@ -5,6 +5,7 @@ function changeTab(tabId) {
   document.getElementById('btn-' + tabId).classList.add('active');
   if (typeof atualizarBotaoConfigAba === 'function') atualizarBotaoConfigAba();
   window.scrollTo(0, 0); // como no iOS: trocar de aba volta ao topo
+  atualizarCasaJarvis(tabId);
   if (tabId === 'cerebro' && typeof renderCerebro === 'function') renderCerebro();
 }
 
@@ -147,7 +148,7 @@ function updateTimerDisplay() {
   const txt = h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
   document.getElementById('timer-display').innerText = txt;
   const pfd = document.getElementById('pf-pomo-display'); if (pfd) { pfd.innerText = txt; pfd.classList.toggle('rodando', !!timerInterval); }
-  document.title = timerInterval ? `${txt} · Genesis` : 'Dashboard Genesis';
+  document.title = timerInterval ? `${txt} · JARVIS` : 'JARVIS';
 }
 
 function updateStudyStats() {
@@ -3141,7 +3142,7 @@ const TEMAS = {
 const TEMAS_RENOMEADOS = { colorido: 'violeta', gamificado: 'gamer' };
 const MODOS_COR = { colorido: ['🎨', 'Colorido'], neutro: ['🩶', 'Neutro'] };
 const ABAS_INFO = [
-  ['btn-cerebro', '🧠 Cérebro'], ['btn-focus', '🎯 Painel Central'], ['btn-primos', '🖨️ Primos 3D'], ['btn-home', '📅 Agenda'], ['btn-finances', '💰 Finanças'],
+  ['btn-cerebro', '🧠 JARVIS'], ['btn-focus', '🎯 Painel Central'], ['btn-primos', '🖨️ Primos 3D'], ['btn-home', '📅 Agenda'], ['btn-finances', '💰 Finanças'],
   ['btn-tasks', '✅ Tarefas'], ['btn-notes', '📝 Notas'], ['btn-studies', '📚 Estudos'],
   ['btn-business', '📈 Negócios'], ['btn-health', '🩺 Saúde'], ['btn-leisure', '🎬 Lazer'], ['btn-trips', '✈️ Viagens'], ['btn-net', '🤝 Rede'], ['btn-clinic', '🏥 Clínica'], ['btn-prod', '🖨️ Produção'], ['btn-settings', '⚙️ Config']
 ];
@@ -4070,7 +4071,8 @@ function aplicarDitado(salvarDireto) {
 }
 
 // --- Janela de voz (folha que sobe de baixo) ---
-function abrirVoz(modo) {
+/** `texto` (opcional): já vem escrito (da barra do JARVIS) — em vez de ouvir, entende direto. */
+function abrirVoz(modo, texto) {
   vozModo = modo; vozResultado = null;
   const $ = id => document.getElementById(id);
   $('voice-title').innerText = modo === 'claude' ? '✳ Pedir mudança ao Claude' : '🎤 Ditado';
@@ -4083,7 +4085,7 @@ function abrirVoz(modo) {
   $('voice-send').hidden = modo !== 'claude'; $('voice-interpret').hidden = modo === 'claude';
   renderPedidosClaude(); if (modo === 'claude') atualizarClaude(true);
   $('voice-sheet').style.display = 'flex';
-  iniciarGravacao();
+  if (texto) { $('voice-text').value = texto; interpretarVoz(); } else iniciarGravacao();
 }
 function fecharVoz() { pararGravacao(); document.getElementById('voice-sheet').style.display = 'none'; }
 function vozAberta() { return document.getElementById('voice-sheet').style.display === 'flex'; }
@@ -4508,7 +4510,7 @@ function lacoCerebro() {
   if (continuar) cer.raf = requestAnimationFrame(lacoCerebro);
   else salvarCameraCerebro();
 }
-function pedirQuadroCerebro() { if (!cer.raf) cer.raf = requestAnimationFrame(lacoCerebro); }
+function pedirQuadroCerebro() { if (jv.modo === '3d') return; if (!cer.raf) cer.raf = requestAnimationFrame(lacoCerebro); }
 function aquecerCerebro(a) { cer.alpha = Math.max(cer.alpha, a); pedirQuadroCerebro(); }
 function salvarCameraCerebro() { try { prefs.cerebroCam = { x: Math.round(cer.cam.x), y: Math.round(cer.cam.y), k: Math.round(cer.cam.k * 1000) / 1000 }; localStorage.setItem('lifeos_prefs', JSON.stringify(prefs)); } catch (e) { } }
 function enquadrarCerebro(animar) {
@@ -4520,7 +4522,9 @@ function enquadrarCerebro(animar) {
   if (animar) { cer.animCam = { t: 0, de: { ...cer.cam }, para }; pedirQuadroCerebro(); } else cer.cam = para;
 }
 function focarNoCerebro(n, zoom) {
-  if (!n) return; cer.sel = n; mostrarCartaoCerebro(n);
+  if (!n) return;
+  if (jv.modo === '3d') { irParaNoJarvis(n.id); return; }
+  cer.sel = n; mostrarCartaoCerebro(n);
   cer.animCam = { t: 0, de: { ...cer.cam }, para: { x: n.x, y: n.y + (cer.h > 500 ? 0 : 30 / Math.max(cer.cam.k, 0.5)), k: Math.max(cer.cam.k, zoom || (n.tipo === 'item' ? 2.1 : n.tipo === 'secao' ? 1.3 : 0.95)) } };
   pedirQuadroCerebro();
 }
@@ -4592,8 +4596,12 @@ function mostrarCartaoCerebro(n) {
     ${viz.length ? `<div class="cer-viz">${viz.slice(0, 24).map(v => `<button type="button" class="chip" onclick="focarNoCerebro(cer.mapa['${esc(v.id)}'])"><span class="cer-ponto sm" style="background:${esc(v.cor)}"></span>${esc(v.nome)}</button>`).join('')}${viz.length > 24 ? `<span class="item-date">+${viz.length - 24}</span>` : ''}</div>` : ''}
     ${!podeAbrir && n.tipo === 'secao' ? `<p class="hint" style="margin:8px 0 0">Esta seção cresce com as suas notas: crie uma nota aqui (ou use o marcador <strong>${esc(semAcentoCer(n.nome))}</strong>) e ela vira uma bolinha ligada a esta seção.</p>` : ''}`;
   el.hidden = false;
+  if (jv.modo === '3d') { document.getElementById('jv-painel').hidden = true; ajustarDeslocamentoJarvis(); } // no 3D, uma janelinha por vez
 }
-function esconderCartaoCerebro() { const el = document.getElementById('cer-cartao'); if (el) el.hidden = true; }
+function esconderCartaoCerebro() {
+  const el = document.getElementById('cer-cartao'); if (el) el.hidden = true;
+  if (jv.modo === '3d') { JarvisBrain.selecionar(null); if (jv.area) document.getElementById('jv-painel').hidden = false; ajustarDeslocamentoJarvis(); }
+}
 /** "Abrir": vai para a aba (e seção) do item e, se houver, abre o formulário dele. */
 function abrirNoCerebro(n) {
   if (!n) return; const a = n.abrir;
@@ -4634,6 +4642,8 @@ function medirCerebro() {
 }
 /** Monta (ou remonta) o cérebro com os dados atuais. Mantém a posição de quem já existia. */
 function renderCerebro() {
+  if (!jv.modo && !iniciarJarvis()) return; // o 3D ainda está carregando
+  if (jv.modo === '3d') { renderJarvis(); return; }
   const cv = document.getElementById('cer-canvas'); if (!cv) return;
   if (!cer.canvas) { cer.canvas = cv; cer.ctx = cv.getContext('2d'); prepararGestosCerebro(cv); window.addEventListener('resize', () => { if (document.getElementById('cerebro').classList.contains('active')) { medirCerebro(); pedirQuadroCerebro(); } }); }
   const antigos = cer.mapa; const g = montarGrafoCerebro();
@@ -4653,6 +4663,215 @@ function abrirCerebro() {
   if (!cer.montado) { cer.montado = true; const c = prefs.cerebroCam; if (c && c.k) cer.cam = { x: c.x, y: c.y, k: c.k }; else enquadrarCerebro(false); }
   pedirQuadroCerebro();
 }
+
+// ============================================================================
+// JARVIS — a página inicial: o cérebro em 3D (jarvis3d.js + Three.js local em vendor/)
+// e a barra "Como vamos atuar hoje?". Usa o MESMO grafo do cérebro 2D (montarGrafoCerebro).
+// Tocar numa área: ela vem para a frente, mostra a ramificação (setores) e o JARVIS abre
+// uma janelinha com um resumo curto e o próximo passo. Nada disso grava dados.
+// Se o aparelho não tiver WebGL (ou o 3D não carregar), fica o cérebro 2D com as abas normais.
+// ============================================================================
+const jv = { modo: null, esperando: false, area: null, assinatura: '', fundo: '' };
+
+function corFundoJarvis() { return getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#f2f2f7'; }
+/** Liga o 3D (quando o jarvis3d.js terminar de carregar). Devolve false enquanto ainda está carregando. */
+function iniciarJarvis() {
+  if (jv.modo) return true;
+  if (!window.JarvisBrain) {
+    if (!jv.esperando) {
+      jv.esperando = true;
+      window.addEventListener('jarvis3d-pronto', () => { if (!jv.modo) renderCerebro(); }, { once: true });
+      setTimeout(falhouJarvis3d, 6000);
+    }
+    return false;
+  }
+  const ok = JarvisBrain.iniciar(document.getElementById('jv-3d'), { rotulos: document.getElementById('jv-rotulos'), fundo: corFundoJarvis(), onArea: abrirAreaJarvis, onNo: escolherNoJarvis, onToqueVazio: toqueVazioJarvis });
+  jv.modo = ok ? '3d' : '2d'; jv.fundo = corFundoJarvis();
+  document.getElementById('cerebro').classList.add(ok ? 'modo-3d' : 'modo-2d');
+  atualizarCasaJarvis(abaAtual());
+  return true;
+}
+/** O 3D não carregou (sem internet na primeira vez, aparelho sem WebGL...): fica o cérebro 2D. */
+function falhouJarvis3d() { if (jv.modo) return; jv.modo = '2d'; document.getElementById('cerebro').classList.add('modo-2d'); renderCerebro(); }
+/** Na página inicial (3D) somem a barra de abas e as bolinhas flutuantes: fica só o cérebro e a barra do JARVIS. */
+function atualizarCasaJarvis(tabId) {
+  document.body.classList.toggle('jarvis-home', tabId === 'cerebro' && jv.modo === '3d');
+  if (jv.modo === '3d' && tabId !== 'cerebro') { JarvisBrain.pausar(); fecharBaseJarvis(); }
+}
+function renderJarvis() {
+  const g = montarGrafoCerebro();
+  cer.nos = g.nos; cer.mapa = g.mapa; cer.links = g.links; // o cartão, a busca e as ligações usam estes
+  const assinatura = g.nos.map(n => n.id + ':' + n.nome).join('|') + '#' + g.links.length;
+  if (assinatura !== jv.assinatura) { jv.assinatura = assinatura; JarvisBrain.carregar({ nos: g.nos, links: g.links }); } // só redesenha se algo mudou
+  const fundo = corFundoJarvis(); if (fundo !== jv.fundo) { jv.fundo = fundo; JarvisBrain.definirFundo(fundo); }
+  if (cer.sel) { cer.sel = cer.mapa[cer.sel.id] || null; if (!cer.sel) esconderCartaoCerebro(); }
+  renderTopoJarvis();
+  if (jv.area) renderPainelArea(jv.area);
+  if (abaAtual() === 'cerebro') JarvisBrain.retomar();
+}
+
+// --- o que o JARVIS diz no topo: saudação + o essencial do dia numa linha ---
+function renderTopoJarvis() {
+  const h = new Date().getHours();
+  const saud = h < 5 ? 'Boa madrugada' : h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
+  const nome = String(profile.name || '').trim().split(/\s+/)[0];
+  document.getElementById('jv-saudacao').innerText = nome ? `${saud}, ${nome}.` : `${saud}.`;
+  document.getElementById('jv-resumo').innerText = resumoJarvis();
+}
+function resumoJarvis() {
+  const hoje = hojeISO(); const partes = [];
+  const prod = orders.filter(o => pedidoAberto(o) && o.status !== 'orcamento');
+  const atrasados = prod.filter(o => o.due && o.due < hoje).length, entregarHoje = prod.filter(o => o.due === hoje).length;
+  const orc = orders.filter(o => o.status === 'orcamento').length;
+  const evHoje = events.filter(e => e.date === hoje && !e.done).length;
+  const tarHoje = tasks.filter(t => !t.done && t.due && t.due <= hoje).length;
+  if (atrasados) partes.push(plural(atrasados, 'pedido atrasado', 'pedidos atrasados'));
+  if (entregarHoje) partes.push(plural(entregarHoje, 'entrega hoje', 'entregas hoje')); else if (prod.length) partes.push(`${prod.length} em produção`);
+  if (orc) partes.push(plural(orc, 'orçamento esperando', 'orçamentos esperando'));
+  if (evHoje) partes.push(plural(evHoje, 'compromisso hoje', 'compromissos hoje'));
+  if (tarHoje) partes.push(plural(tarHoje, 'tarefa para hoje', 'tarefas para hoje'));
+  return partes.length ? partes.slice(0, 3).join(' · ') : 'Tudo em ordem por aqui. Por onde começamos?';
+}
+
+// --- a janelinha do JARVIS de cada área: resumo, indicadores e o próximo passo (regras simples, tudo local) ---
+function analiseAreaJarvis(area) {
+  const hoje = hojeISO(), mes = hoje.slice(0, 7);
+  const notasDaArea = cer.nos.filter(n => n.nota && n.area === area).length;
+  if (area === 'primos') {
+    const prod = orders.filter(o => pedidoAberto(o) && o.status !== 'orcamento');
+    const atrasados = prod.filter(o => o.due && o.due < hoje).sort((a, b) => a.due.localeCompare(b.due));
+    const proximos = prod.filter(o => o.due && o.due >= hoje).sort((a, b) => a.due.localeCompare(b.due));
+    const orc = orders.filter(o => o.status === 'orcamento');
+    const aReceber = orders.filter(o => pedidoGeraLancamento(o) && !o.paid); const totalReceber = aReceber.reduce((a, o) => a + (Number(o.price) || 0), 0);
+    const entreguesSemPagar = aReceber.filter(o => o.status === 'entregue').reduce((a, o) => a + (Number(o.price) || 0), 0);
+    const recebidoMes = orders.filter(o => o.paid && (o.paidAt || '').startsWith(mes)).reduce((a, o) => a + (Number(o.price) || 0), 0);
+    const cli = o => { const c = clienteNome(o.clientId); return c ? ` (${esc(c)})` : ''; };
+    let fala;
+    if (!orders.length) fala = 'Ainda não há pedidos registrados. Cadastre o primeiro e eu passo a vigiar prazos, o que cobrar e para onde vai o dinheiro.';
+    else if (atrasados.length) fala = `<b>${plural(atrasados.length, 'pedido atrasado', 'pedidos atrasados')}</b>. Eu começaria por <b>${esc(atrasados[0].title)}</b>${cli(atrasados[0])}, prazo era ${isoParaBR(atrasados[0].due).slice(0, 5)}. Um aviso ao cliente agora vale mais que um pedido de desculpas depois.`;
+    else if (proximos.length && proximos[0].due <= somarDiasCer(hoje, 1)) fala = `Foco ${proximos[0].due === hoje ? 'de hoje' : 'até amanhã'}: entregar <b>${esc(proximos[0].title)}</b>${cli(proximos[0])}.${proximos.length > 1 ? ` Depois vem ${plural(proximos.length - 1, 'outro', 'outros')} na fila.` : ''}`;
+    else if (entreguesSemPagar > 0) fala = `Há <b>${formatCurrency(entreguesSemPagar)}</b> em peças já entregues esperando pagamento. É o dinheiro mais fácil do mês: eu começaria cobrando.`;
+    else if (orc.length) fala = `<b>${plural(orc.length, 'orçamento esperando', 'orçamentos esperando')}</b> resposta. Um lembrete gentil hoje costuma virar pedido amanhã.`;
+    else if (prod.length) fala = `Produção andando: ${plural(prod.length, 'pedido', 'pedidos')} em curso e nenhum atrasado. Bom momento para prospectar o próximo cliente.`;
+    else fala = 'Fila vazia e nada para receber. Ótima hora para prospectar, fotografar peças ou testar um produto novo.';
+    return { fala, ind: [[prod.length, 'em produção', '#007aff'], [orc.length, orc.length === 1 ? 'orçamento' : 'orçamentos', '#8e8e93'], [formatCurrency(totalReceber), 'a receber', '#ff9500'], [formatCurrency(recebidoMes), 'recebido no mês', '#34c759']], abrir: ['primos', 'Primos 3D'] };
+  }
+  if (area === 'eng') {
+    const trab = shifts.filter(s => s.date >= hoje).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+    const fala = trab.length ? `Próximo trabalho na agenda: <b>${esc(trab[0].desc || 'Trabalho')}</b> em ${isoParaBR(trab[0].date).slice(0, 5)}.`
+      : notasDaArea ? `${plural(notasDaArea, 'nota ligada', 'notas ligadas')} a esta área. Toque num setor para ver ou criar mais.`
+        : 'Esta área cresce com suas notas de projetos, obras, normas e cálculos. Toque num setor e crie a primeira: ela vira uma bolinha aqui.';
+    return { fala, ind: [[notasDaArea, 'notas', '#007aff'], [trab.length, 'na agenda', '#5856d6']], abrir: null };
+  }
+  if (area === 'sst') {
+    const fala = notasDaArea ? `${plural(notasDaArea, 'nota ligada', 'notas ligadas')} à Segurança do Trabalho. Toque num setor para abrir ou criar mais.`
+      : 'Aqui entram NRs, inspeções, treinamentos e EPIs. Toque num setor e crie uma nota (ou use o marcador “sst”): eu organizo tudo por aqui.';
+    return { fala, ind: [[notasDaArea, 'notas', '#e0a800']], abrir: null };
+  }
+  if (area === 'mercado') {
+    const fala = (assets.length ? `Carteira com ${plural(assets.length, 'ativo', 'ativos')}${goals.length ? ` e ${plural(goals.length, 'meta', 'metas')}` : ''}.` : 'Nenhum ativo cadastrado ainda.')
+      + ' Em breve acompanho o Bitcoin por aqui; só preciso do seu OK para buscar a cotação numa fonte pública.';
+    return { fala, ind: [[assets.length, 'ativos', '#34c759'], [goals.length, 'metas', '#30b0c7']], abrir: ['business', 'Negócios'] };
+  }
+  if (area === 'academia') {
+    const tr = workouts.filter(w => w.date >= somarDiasCer(hoje, -6)); const min = tr.reduce((a, w) => a + (Number(w.minutes) || 0), 0);
+    const fala = tr.length ? `${plural(tr.length, 'treino', 'treinos')} nos últimos 7 dias. ${tr.length >= 3 ? 'Constância boa, é ela que dá resultado.' : 'Dá para encaixar mais um: até 20 minutos contam.'}`
+      : 'Nenhum treino registrado nos últimos 7 dias. Que tal um leve hoje? Até 20 minutos contam.';
+    return { fala, ind: [[tr.length, 'treinos (7 dias)', '#ff2d55'], [`${min} min`, 'de treino', '#ff9500']], abrir: ['health', 'Saúde'] };
+  }
+  const abertas = tasks.filter(t => !t.done), paraHoje = abertas.filter(t => t.due && t.due <= hoje);
+  const evHoje = events.filter(e => e.date === hoje && !e.done).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+  const fala = paraHoje.length ? `Para hoje: <b>${esc(paraHoje[0].text)}</b>${paraHoje.length > 1 ? ` e mais ${paraHoje.length - 1}` : ''}.`
+    : evHoje.length ? `Hoje tem <b>${esc(evHoje[0].title)}</b>${evHoje[0].time ? ' às ' + esc(evHoje[0].time) : ''}.`
+      : 'Dia sem prazos apertados. Bom para adiantar algo importante antes que vire urgente.';
+  return { fala, ind: [[abertas.length, 'tarefas abertas', '#5856d6'], [evHoje.length, 'compromissos hoje', '#ff3b30'], [`${habits.filter(h => h.done).length}/${habits.length}`, 'hábitos', '#34c759']], abrir: ['focus', 'Painel'] };
+}
+function renderPainelArea(area) {
+  const a = AREAS_CEREBRO.find(x => x.id === area), el = document.getElementById('jv-painel'); if (!a || !el) return;
+  const an = analiseAreaJarvis(area);
+  const setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === area);
+  const itens = cer.nos.filter(n => n.tipo === 'item' && n.area === area).length;
+  el.innerHTML = `<div class="jv-painel-topo"><span class="cer-ponto" style="background:${a.cor}"></span><div class="jv-painel-nome"><strong>${esc(a.nome)}</strong><small>${plural(itens, 'item ligado', 'itens ligados')}</small></div><button type="button" class="close-modal" onclick="voltarJarvis()" aria-label="Fechar">✕</button></div>
+    <div class="jv-fala"><span class="jv-glifo"></span><p>${an.fala}</p></div>
+    ${an.ind.length ? `<div class="jv-ind">${an.ind.map(([v, r, c]) => `<div><strong style="color:${c}">${esc(v)}</strong><small>${esc(r)}</small></div>`).join('')}</div>` : ''}
+    <div class="jv-setores">${setores.map(s => `<button type="button" class="chip" onclick="irParaNoJarvis('${esc(s.id)}')"><span class="cer-ponto sm" style="background:${esc(s.cor)}"></span>${esc(s.nome)}</button>`).join('')}</div>
+    ${an.abrir ? `<button type="button" class="btn jv-abrir" onclick="changeTab('${an.abrir[0]}')">Abrir ${esc(an.abrir[1])} ›</button>` : ''}`;
+  el.hidden = !document.getElementById('cer-cartao').hidden;
+}
+
+// --- navegação: área → setor → item, e a volta para a visão geral ---
+/** O 3D avisa que uma área foi tocada (ele mesmo já girou até ela). */
+function abrirAreaJarvis(area) {
+  jv.area = area; cer.sel = null; document.getElementById('cer-cartao').hidden = true;
+  document.getElementById('cerebro').classList.add('jv-focado');
+  renderPainelArea(area); ajustarDeslocamentoJarvis();
+}
+/** O 3D avisa que um setor/item foi tocado: mostra o cartão dele (Abrir, ＋ Nota, ligações). */
+function escolherNoJarvis(id) {
+  const n = cer.mapa[id]; if (!n) return;
+  if (n.area && jv.area !== n.area) { jv.area = n.area; document.getElementById('cerebro').classList.add('jv-focado'); renderPainelArea(n.area); }
+  cer.sel = n; mostrarCartaoCerebro(n);
+}
+/** Da busca, dos setores ou das ligações do cartão: gira até a bolinha e mostra o que ela é. */
+function irParaNoJarvis(id) {
+  const n = cer.mapa[id]; if (!n) return; limparBarraJarvis();
+  if (n.tipo === 'centro') { voltarJarvis(); return; }
+  if (n.tipo === 'area') { JarvisBrain.focarArea(n.area); abrirAreaJarvis(n.area); return; }
+  JarvisBrain.focarNo(id); escolherNoJarvis(id);
+}
+function toqueVazioJarvis() { if (!document.getElementById('cer-cartao').hidden) { cer.sel = null; esconderCartaoCerebro(); } }
+function voltarJarvis() {
+  jv.area = null; cer.sel = null;
+  document.getElementById('cer-cartao').hidden = true; document.getElementById('jv-painel').hidden = true;
+  document.getElementById('cerebro').classList.remove('jv-focado');
+  JarvisBrain.voltar(); ajustarDeslocamentoJarvis();
+}
+/** A janelinha cobre parte da tela (à direita no PC, embaixo no celular): o cérebro vai para o espaço livre. */
+function ajustarDeslocamentoJarvis() {
+  const jan = ['jv-painel', 'cer-cartao'].map(id => document.getElementById(id)).find(el => !el.hidden);
+  if (!jan) { JarvisBrain.deslocar(0, 0); return; }
+  const r = jan.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
+  if (W > 800) JarvisBrain.deslocar(r.left / 2 - W / 2, 0);
+  else { const topo = document.querySelector('.jv-topo').getBoundingClientRect().bottom; JarvisBrain.deslocar(0, (topo + r.top) / 2 - H / 2); }
+}
+
+// --- a barra "Como vamos atuar hoje?": achar algo no cérebro ou registrar pelo ditado ---
+// (Conversar com o JARVIS de verdade, pelo computador, é a próxima etapa.)
+function sugerirJarvis(v) {
+  const el = document.getElementById('jv-sugestoes'); const q = semAcentoCer(v);
+  if (!q) { el.hidden = true; el.innerHTML = ''; return; }
+  const ordem = { area: 0, secao: 1, item: 2 };
+  const achados = cer.nos.filter(n => n.tipo !== 'centro' && semAcentoCer(n.nome).includes(q)).sort((a, b) => ordem[a.tipo] - ordem[b.tipo]).slice(0, 6);
+  el.innerHTML = achados.map(n => `<button type="button" onclick="irParaNoJarvis('${esc(n.id)}')"><span class="cer-ponto sm" style="background:${esc(n.cor)}"></span><span class="jv-sug-nome">${esc(n.nome)}</span><small>${TIPO_CEREBRO[n.tipo]}</small></button>`).join('')
+    + `<button type="button" class="jv-sug-ditado" onclick="comandoJarvis()"><span>🎤</span><span class="jv-sug-nome">Registrar “${esc(v.trim())}”</span><small>pedido, despesa, tarefa…</small></button>`;
+  el.hidden = false;
+}
+function limparBarraJarvis() { const i = document.getElementById('jv-cmd'); i.value = ''; i.blur(); sugerirJarvis(''); }
+function comandoJarvis(ev) {
+  if (ev) ev.preventDefault();
+  const txt = document.getElementById('jv-cmd').value.trim();
+  if (!txt) { abrirVoz('ditado'); return; }
+  const q = semAcentoCer(txt); const exato = cer.nos.find(n => n.tipo !== 'centro' && semAcentoCer(n.nome) === q);
+  if (exato) { irParaNoJarvis(exato.id); return; }
+  limparBarraJarvis(); abrirVoz('ditado', txt); // o ditado entende "gastei 90 em filamento", "pedido do João..." etc.
+}
+
+// --- a "base": as abas de sempre, num menu discreto (o botão de grade no canto) ---
+function abrirBaseJarvis() {
+  const botoes = [...document.querySelectorAll('.tabs .tab-btn')].filter(b => b.id !== 'btn-cerebro' && !b.hidden);
+  document.getElementById('jv-base-grade').innerHTML = botoes.map(b => `<button type="button" class="jv-app" onclick="fecharBaseJarvis(); changeTab('${b.id.slice(4)}')">${b.querySelector('.tab-ico').outerHTML.replace(' id="sync-dot"', '')}<span>${esc(b.querySelector('.tab-lbl').textContent)}</span></button>`).join('')
+    + `<button type="button" class="jv-app" onclick="fecharBaseJarvis(); abrirVoz('claude')"><span class="tab-ico" style="background:#d97757"><b>✳</b></span><span>Pedir ao Claude</span></button>`;
+  document.getElementById('jv-base').style.display = 'flex';
+}
+function fecharBaseJarvis() { const el = document.getElementById('jv-base'); if (el) el.style.display = 'none'; }
+document.getElementById('jv-base').addEventListener('click', e => { if (e.target.id === 'jv-base') fecharBaseJarvis(); });
+window.addEventListener('resize', () => { if (jv.modo === '3d') ajustarDeslocamentoJarvis(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape' || jv.modo !== '3d' || abaAtual() !== 'cerebro') return;
+  if (document.getElementById('jv-base').style.display === 'flex') fecharBaseJarvis();
+  else if (!document.getElementById('cer-cartao').hidden) { cer.sel = null; esconderCartaoCerebro(); }
+  else if (jv.area) voltarJarvis();
+});
 
 // --- Entregas × pedidos da Primos 3D ---
 // Na versão da Trinca, as compras a caminho ficavam no módulo `orders`; aqui `orders` são os pedidos da
@@ -7117,7 +7336,7 @@ montarPaineis(); renderConfigFlut();
 verSecaoAgenda('cal'); document.getElementById('event-type').addEventListener('change', alternarCamposReuniao);
 document.getElementById('session-date').value = hojeISO(); garantirRitual(); redesenharEstudos(); ['workout-date', 'measure-date', 'meal-date'].forEach(i => document.getElementById(i).value = hojeISO()); renderSaude(); document.getElementById('move-date').value = hojeISO(); document.getElementById('asset-current-at').value = hojeISO(); redesenharNegocios(); renderEvents(); renderCalendar();
 aplicarPerfil(); carregarPrefsNaTela(); atualizarSaudacao(); atualizarBotaoDia();
-if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStorage.setItem('lifeos_perfil_avisado', '1'); setTimeout(() => toast('👤 Bem-vindo ao Genesis! Coloque seu nome em Ajustes → Perfil.', 8000), 1500); }
+if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStorage.setItem('lifeos_perfil_avisado', '1'); setTimeout(() => toast('👤 Bem-vindo ao JARVIS! Coloque seu nome em Ajustes → Perfil.', 8000), 1500); }
 carregarClaudeConfigNaTela(); atualizarIndicadorClaude(); atualizarClaude(true);
 renderCerebro(); // página inicial: o cérebro
 carregarSyncConfigNaTela(); setSyncStatus(syncConfigurado() ? (syncPendente ? "pendente" : "ok") : "naoconfig"); sincronizar();

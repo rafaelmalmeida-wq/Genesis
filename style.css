@@ -1387,3 +1387,128 @@ html[data-tema="ios"] { background: var(--bg); color-scheme: light; }
   .cer-legenda::-webkit-scrollbar { display: none; }
   .cer-cartao { left: 10px; right: 10px; width: auto; bottom: 10px; max-height: 55%; }
 }
+
+/* ============================================================================
+   JARVIS (página inicial em 3D) — tela cheia: o cérebro, a saudação, a barra
+   "Como vamos atuar hoje?" e a janelinha de cada área. A barra de abas e as
+   bolinhas flutuantes somem aqui (body.jarvis-home); o botão de grade abre a "base".
+   Enquanto o 3D carrega, nada do 2D aparece; se ele falhar, #cerebro ganha .modo-2d.
+   ============================================================================ */
+#cerebro .jv-3d, #cerebro .jv-topo, #cerebro .jv-menu, #cerebro .jv-rodape, #cerebro .jv-painel { display: none; }
+#cerebro:not(.modo-2d) #cer-canvas, #cerebro:not(.modo-2d) .cer-topo, #cerebro:not(.modo-2d) .cer-ferramentas, #cerebro:not(.modo-2d) .cer-legenda { display: none; }
+body:has(#cerebro.active:not(.modo-2d):not(.modo-3d)) .tabs, body:has(#cerebro.active:not(.modo-2d):not(.modo-3d)) .fab-stack { visibility: hidden; }
+body.jarvis-home { overflow: hidden; }
+body.jarvis-home .tabs, body.jarvis-home .fab-stack { display: none !important; }
+body.jarvis-home #cerebro { animation: none; }
+body.jarvis-home .cer-palco { position: fixed; inset: 0; height: auto; min-height: 0; border-radius: 0; box-shadow: none; z-index: 1;
+  background: radial-gradient(ellipse 80% 62% at 50% 46%, var(--card) 0%, var(--bg) 78%); }
+#cerebro.modo-3d .jv-3d { display: block; position: absolute; inset: 0; z-index: 0; } /* os nomes ficam sempre por baixo das janelinhas */
+.jv-gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+.jv-gl:active { cursor: grabbing; }
+
+/* nomes flutuando sobre as bolinhas ("nuvens" de informação) */
+.jv-rotulos { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.jv-rotulo { position: absolute; left: 0; top: 0; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 220px; transform-origin: 50% 100%; will-change: transform, opacity; transition: opacity 0.3s ease;
+  padding: 5px 10px 5px 8px; border-radius: 13px; background: rgba(255, 255, 255, 0.8); color: var(--txt); font: 500 12px/1.1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08), inset 0 0 0 0.5px rgba(0, 0, 0, 0.07); }
+.jv-rotulo span { overflow: hidden; text-overflow: ellipsis; }
+.jv-rotulo i { width: 7px; height: 7px; border-radius: 50%; background: var(--cor); box-shadow: 0 0 6px var(--cor); flex-shrink: 0; }
+.jv-rotulo::after { content: ""; position: absolute; left: 50%; top: 100%; width: 1px; height: 8px; background: linear-gradient(var(--cor), transparent); opacity: 0.55; }
+.jv-rotulo.embaixo { transform-origin: 50% 0; }
+.jv-rotulo.embaixo::after { top: auto; bottom: 100%; background: linear-gradient(transparent, var(--cor)); }
+.jv-rotulo.jv-area { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; padding: 7px 13px 7px 10px; border-radius: 16px; color: var(--txt-forte); }
+.jv-rotulo.jv-area i { width: 9px; height: 9px; }
+.jv-rotulo.jv-item { font-size: 11px; font-weight: 400; padding: 4px 8px 4px 7px; background: rgba(255, 255, 255, 0.66); }
+.jv-rotulo.jv-item i { width: 6px; height: 6px; }
+.jv-rotulo.sel { background: var(--card); box-shadow: 0 0 0 2px var(--cor), 0 4px 16px rgba(0, 0, 0, 0.14); font-weight: 600; }
+
+/* topo: marca, saudação e o resumo do dia */
+#cerebro.modo-3d .jv-topo { display: block; position: absolute; z-index: 3; top: calc(env(safe-area-inset-top) + 22px); left: 24px; right: 84px; pointer-events: none; }
+.jv-topo > * { pointer-events: auto; }
+.jv-marca { display: flex; align-items: center; gap: 9px; font: 600 11px/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; letter-spacing: 0.34em; color: var(--txt3); }
+.jv-marca::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #5e9cff; box-shadow: 0 0 10px #5e9cff; animation: jvPulso 2.6s ease-in-out infinite; }
+.jv-saudacao { margin: 10px 0 3px; font-size: 2rem; font-weight: 700; letter-spacing: -0.025em; line-height: 1.1; color: var(--txt-forte); }
+.jv-resumo { margin: 0; font-size: 0.95rem; color: var(--txt2); max-width: 520px; }
+.jv-voltar { display: none; margin-top: 12px; border: none; background: rgba(255, 255, 255, 0.8); color: var(--blue, #007aff); font-size: 0.95rem; font-weight: 600; padding: 8px 14px 8px 11px; border-radius: 18px; cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+#cerebro.jv-focado .jv-voltar { display: inline-flex; }
+#cerebro.jv-focado .jv-saudacao, #cerebro.jv-focado .jv-resumo { display: none; }
+@keyframes jvPulso { 0%, 100% { opacity: 0.55; transform: scale(0.9); } 50% { opacity: 1; transform: scale(1.1); } }
+
+/* botão discreto da "base" (as abas de sempre) */
+#cerebro.modo-3d .jv-menu { display: flex; position: absolute; z-index: 3; top: calc(env(safe-area-inset-top) + 18px); right: 20px; width: 42px; height: 42px; border-radius: 50%; border: none; align-items: center; justify-content: center; cursor: pointer;
+  background: rgba(255, 255, 255, 0.8); color: var(--txt2); box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1), inset 0 0 0 0.5px rgba(0, 0, 0, 0.06); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+.jv-menu svg { width: 18px; height: 18px; }
+.jv-menu:active { transform: scale(0.94); }
+#jv-base .jv-base-conteudo { max-width: 560px; }
+.jv-base-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 14px 8px; padding: 6px 4px 22px; }
+.jv-app { display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: none; cursor: pointer; color: var(--txt); font-size: 0.75rem; padding: 4px; border-radius: 12px; }
+.jv-app:hover { background: var(--bg); }
+.jv-app .tab-ico { width: 54px; height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.5rem; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.14); }
+.jv-app .tab-ico svg { width: 30px; height: 30px; }
+.jv-app span:last-child { text-align: center; line-height: 1.15; }
+
+/* a barra "Como vamos atuar hoje?" */
+#cerebro.modo-3d .jv-rodape { display: block; position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(env(safe-area-inset-bottom) + 18px); width: min(620px, calc(100% - 28px)); z-index: 6; }
+#cerebro .jv-barra { display: flex; flex-direction: row; align-items: center; gap: 10px; padding: 7px 7px 7px 14px; border-radius: 28px; background: rgba(255, 255, 255, 0.84); -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.12), inset 0 0 0 0.5px rgba(0, 0, 0, 0.08); }
+#cerebro .jv-barra input { flex: 1; min-width: 0; margin: 0; padding: 10px 0; border: none; outline: none; background: transparent; box-shadow: none; font-size: 16px; color: var(--txt); }
+#cerebro .jv-barra input::placeholder { color: var(--txt3); }
+.jv-mic { width: 40px; height: 40px; flex-shrink: 0; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; background: var(--blue, #007aff); color: #fff; }
+.jv-mic svg { width: 20px; height: 20px; }
+.jv-mic:active { transform: scale(0.94); }
+.jv-glifo { width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; background: radial-gradient(circle, #ffffff 0 16%, #7fb2ff 36%, rgba(94, 156, 255, 0.35) 56%, rgba(94, 156, 255, 0) 72%); box-shadow: 0 0 12px rgba(94, 156, 255, 0.55); animation: jvPulso 2.6s ease-in-out infinite; }
+.jv-sugestoes { margin-bottom: 8px; padding: 5px; border-radius: 18px; background: var(--card); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.14); max-height: 42vh; overflow-y: auto; animation: sheetUp 0.2s ease; }
+.jv-sugestoes[hidden] { display: none; }
+.jv-sugestoes button { display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; background: none; border: none; padding: 10px 11px; border-radius: 12px; font-size: 0.95rem; color: var(--txt); cursor: pointer; }
+.jv-sugestoes button:hover { background: var(--bg); }
+.jv-sug-nome { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-sugestoes small { color: var(--txt3); font-size: 0.74rem; flex-shrink: 0; }
+.jv-sugestoes .jv-sug-ditado { border-top: 0.5px solid var(--borda); border-radius: 0 0 12px 12px; color: var(--blue, #007aff); }
+
+/* a janelinha do JARVIS (área) e o cartão de um setor/item — à direita no PC, embaixo no celular */
+#cerebro.modo-3d .jv-painel:not([hidden]), #cerebro.modo-3d .cer-cartao:not([hidden]) { display: block; position: absolute; right: 22px; left: auto; top: 50%; bottom: auto; transform: translateY(-50%); width: 360px; max-height: calc(100% - 220px); overflow-y: auto; z-index: 5;
+  padding: 16px 18px; border-radius: 22px; background: rgba(255, 255, 255, 0.9); -webkit-backdrop-filter: saturate(180%) blur(24px); backdrop-filter: saturate(180%) blur(24px); box-shadow: 0 14px 44px rgba(0, 0, 0, 0.15), inset 0 0 0 0.5px rgba(0, 0, 0, 0.06); animation: jvEntra 0.3s cubic-bezier(0.2, 0.9, 0.3, 1); }
+@keyframes jvEntra { from { opacity: 0; margin-top: 16px; } to { opacity: 1; margin-top: 0; } }
+.jv-painel-topo { display: flex; align-items: center; gap: 10px; }
+.jv-painel-topo .cer-ponto { width: 14px; height: 14px; }
+.jv-painel-nome { flex: 1; min-width: 0; }
+.jv-painel-nome strong { display: block; font-size: 1.15rem; color: var(--txt-forte); letter-spacing: -0.01em; }
+.jv-painel-nome small { color: var(--txt3); font-size: 0.78rem; }
+.jv-fala { display: flex; align-items: flex-start; gap: 10px; margin: 14px 0 12px; padding: 12px 13px; border-radius: 16px; background: rgba(94, 156, 255, 0.09); }
+.jv-fala .jv-glifo { margin-top: 1px; }
+.jv-fala p { margin: 0; font-size: 0.94rem; line-height: 1.42; color: var(--txt); }
+.jv-fala b { color: var(--txt-forte); }
+.jv-ind { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.jv-ind > div { padding: 9px 11px; border-radius: 13px; background: var(--bg); min-width: 0; }
+.jv-ind strong { display: block; font-size: 1.05rem; letter-spacing: -0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jv-ind small { color: var(--txt3); font-size: 0.72rem; }
+.jv-setores { display: flex; flex-wrap: wrap; gap: 6px; }
+.jv-setores .chip { display: inline-flex; align-items: center; gap: 6px; border: none; background: var(--bg); color: var(--txt); padding: 6px 11px; border-radius: 14px; font-size: 0.82rem; cursor: pointer; }
+.jv-abrir { width: 100%; margin: 12px 0 0 !important; padding: 11px !important; border-radius: 13px !important; background: var(--blue, #007aff) !important; color: #fff !important; font-weight: 600; }
+
+/* temas escuros: vidro escuro */
+[data-tema="escuro"] .jv-rotulo, [data-tema="medio"] .jv-rotulo, [data-tema="profissional"] .jv-rotulo, [data-tema="violeta"] .jv-rotulo, [data-tema="gamer"] .jv-rotulo,
+[data-tema="escuro"] #cerebro .jv-barra, [data-tema="medio"] #cerebro .jv-barra, [data-tema="profissional"] #cerebro .jv-barra, [data-tema="violeta"] #cerebro .jv-barra, [data-tema="gamer"] #cerebro .jv-barra,
+[data-tema="escuro"] #cerebro.modo-3d .jv-menu, [data-tema="medio"] #cerebro.modo-3d .jv-menu, [data-tema="profissional"] #cerebro.modo-3d .jv-menu, [data-tema="violeta"] #cerebro.modo-3d .jv-menu, [data-tema="gamer"] #cerebro.modo-3d .jv-menu,
+[data-tema="escuro"] .jv-voltar, [data-tema="medio"] .jv-voltar, [data-tema="profissional"] .jv-voltar, [data-tema="violeta"] .jv-voltar, [data-tema="gamer"] .jv-voltar,
+[data-tema="escuro"] #cerebro.modo-3d .jv-painel:not([hidden]), [data-tema="medio"] #cerebro.modo-3d .jv-painel:not([hidden]), [data-tema="profissional"] #cerebro.modo-3d .jv-painel:not([hidden]), [data-tema="violeta"] #cerebro.modo-3d .jv-painel:not([hidden]), [data-tema="gamer"] #cerebro.modo-3d .jv-painel:not([hidden]),
+[data-tema="escuro"] #cerebro.modo-3d .cer-cartao:not([hidden]), [data-tema="medio"] #cerebro.modo-3d .cer-cartao:not([hidden]), [data-tema="profissional"] #cerebro.modo-3d .cer-cartao:not([hidden]), [data-tema="violeta"] #cerebro.modo-3d .cer-cartao:not([hidden]), [data-tema="gamer"] #cerebro.modo-3d .cer-cartao:not([hidden]) { background: rgba(28, 28, 30, 0.78); }
+
+/* celular: janelinha embaixo (acima da barra), cérebro sobe um pouco */
+@media (max-width: 800px) {
+  #cerebro.modo-3d .jv-topo { left: 18px; right: 74px; top: calc(env(safe-area-inset-top) + 16px); }
+  .jv-saudacao { font-size: 1.75rem; }
+  .jv-resumo { font-size: 0.9rem; }
+  #cerebro.modo-3d .jv-menu { right: 16px; top: calc(env(safe-area-inset-top) + 12px); }
+  #cerebro.modo-3d .jv-rodape { bottom: calc(env(safe-area-inset-bottom) + 12px); width: calc(100% - 20px); }
+  #cerebro.modo-3d .jv-painel:not([hidden]), #cerebro.modo-3d .cer-cartao:not([hidden]) { left: 10px; right: 10px; width: auto; top: auto; transform: none; bottom: calc(env(safe-area-inset-bottom) + 76px); max-height: 50%; padding: 12px 13px; border-radius: 20px; }
+  .jv-fala { margin: 10px 0 8px; padding: 10px 11px; }
+  .jv-fala p { font-size: 0.88rem; line-height: 1.36; }
+  .jv-ind { gap: 6px; margin-bottom: 8px; }
+  .jv-ind > div { padding: 6px 9px; }
+  .jv-ind strong { font-size: 0.95rem; }
+  .jv-painel-nome strong { font-size: 1.05rem; }
+  .jv-setores .chip { padding: 5px 10px; font-size: 0.78rem; }
+  .jv-abrir { margin-top: 9px !important; padding: 9px !important; }
+  .jv-rotulo.jv-area { font-size: 13px; padding: 6px 11px 6px 9px; }
+}
