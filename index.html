@@ -23,7 +23,8 @@
   <div class="container">
     <nav class="tabs">
       <a class="tabs-logo" href="#" onclick="changeTab('focus'); return false;" title="Genesis"><img src="favicon-64.png" alt="Genesis" width="28" height="28"></a>
-      <button class="tab-btn active" id="btn-focus" onclick="changeTab('focus')"><span class="tab-ico" style="background:#007aff"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/></svg></span><span class="tab-lbl">Painel</span></button>
+      <button class="tab-btn active" id="btn-cerebro" onclick="changeTab('cerebro')"><span class="tab-ico" style="background:#1c1c1e"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.6" fill="#fff" stroke="none"/><circle cx="5" cy="6.5" r="1.7" fill="#fff" stroke="none"/><circle cx="19" cy="6" r="1.7" fill="#fff" stroke="none"/><circle cx="18.5" cy="18.5" r="1.7" fill="#fff" stroke="none"/><circle cx="5.5" cy="18" r="1.7" fill="#fff" stroke="none"/><path d="M6.3 7.6l3.8 2.9M17.7 7.2l-3.8 3.2M17.2 17.3l-3.4-3.4M6.8 16.8l3.3-3.1" stroke-width="1.4"/></svg></span><span class="tab-lbl">Cérebro</span></button>
+      <button class="tab-btn" id="btn-focus" onclick="changeTab('focus')"><span class="tab-ico" style="background:#007aff"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/></svg></span><span class="tab-lbl">Painel</span></button>
       <button class="tab-btn" id="btn-primos" onclick="changeTab('primos')"><span class="tab-ico" style="background:#ff9500"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7.5 4.2v8.6L12 20.5l-7.5-4.2V7.7z"/><path d="M4.5 7.7L12 12l7.5-4.3M12 12v8.5"/></svg></span><span class="tab-lbl">Primos 3D</span></button>
       <button class="tab-btn" id="btn-home" onclick="changeTab('home')"><span class="tab-ico" style="background:#ff3b30"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span><span class="tab-lbl">Agenda</span></button>
       <button class="tab-btn" id="btn-finances" onclick="changeTab('finances')"><span class="tab-ico" style="background:#34c759"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.8 8.3c-.6-1.4-2.1-2.3-3.8-2.3-2.1 0-3.7 1.1-3.7 2.8 0 3.9 7.6 2.2 7.6 6.1 0 1.8-1.7 3-3.9 3-1.8 0-3.3-.9-3.9-2.3M12 3.5v17"/></svg></span><span class="tab-lbl">Finanças</span></button>
@@ -40,7 +41,21 @@
       <button class="tab-btn" id="btn-settings" onclick="changeTab('settings')"><span class="tab-ico" style="background:#8e8e93"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3L5.5 5.5"/><circle cx="12" cy="12" r="6.6"/></svg><span id="sync-dot" class="sync-dot"></span></span><span class="tab-lbl">Ajustes</span></button>
     </nav>
 
-    <div id="focus" class="tab-content active">
+    <!-- Módulo 0: Cérebro (página inicial: mapa de tudo, estilo Graph View do Obsidian) -->
+    <div id="cerebro" class="tab-content active">
+      <div class="cer-palco">
+        <canvas id="cer-canvas" aria-label="Cérebro: mapa de tudo no Genesis. Toque numa bolinha para ver as ligações."></canvas>
+        <div class="cer-topo">
+          <div class="cer-titulo"><h1 class="page-title">Cérebro</h1><small id="cer-info"></small></div>
+          <div class="cer-busca-box"><input type="search" id="cer-busca" placeholder="🔍 Buscar no cérebro" oninput="buscarNoCerebro(this.value)" autocomplete="off"><div id="cer-busca-res" class="cer-busca-res" hidden></div></div>
+        </div>
+        <div class="cer-ferramentas"><button type="button" class="mini-btn" onclick="enquadrarCerebro(true)" title="Ver tudo">⤢</button><button type="button" class="mini-btn" onclick="cer.cam.k=Math.min(5,cer.cam.k*1.35); pedirQuadroCerebro()" title="Aproximar">＋</button><button type="button" class="mini-btn" onclick="cer.cam.k=Math.max(0.15,cer.cam.k/1.35); pedirQuadroCerebro()" title="Afastar">−</button></div>
+        <div id="cer-legenda" class="cer-legenda"></div>
+        <div id="cer-cartao" class="cer-cartao" hidden></div>
+      </div>
+    </div>
+
+    <div id="focus" class="tab-content">
       <div class="life-os-banner"></div>
       <div class="life-os-header">
         <img class="app-logo" src="icon-180.png" alt="Genesis" width="60" height="60">

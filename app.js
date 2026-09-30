@@ -5,6 +5,7 @@ function changeTab(tabId) {
   document.getElementById('btn-' + tabId).classList.add('active');
   if (typeof atualizarBotaoConfigAba === 'function') atualizarBotaoConfigAba();
   window.scrollTo(0, 0); // como no iOS: trocar de aba volta ao topo
+  if (tabId === 'cerebro' && typeof renderCerebro === 'function') renderCerebro();
 }
 
 // --- UTILITÁRIOS ---
@@ -3140,7 +3141,7 @@ const TEMAS = {
 const TEMAS_RENOMEADOS = { colorido: 'violeta', gamificado: 'gamer' };
 const MODOS_COR = { colorido: ['🎨', 'Colorido'], neutro: ['🩶', 'Neutro'] };
 const ABAS_INFO = [
-  ['btn-focus', '🎯 Painel Central'], ['btn-primos', '🖨️ Primos 3D'], ['btn-home', '📅 Agenda'], ['btn-finances', '💰 Finanças'],
+  ['btn-cerebro', '🧠 Cérebro'], ['btn-focus', '🎯 Painel Central'], ['btn-primos', '🖨️ Primos 3D'], ['btn-home', '📅 Agenda'], ['btn-finances', '💰 Finanças'],
   ['btn-tasks', '✅ Tarefas'], ['btn-notes', '📝 Notas'], ['btn-studies', '📚 Estudos'],
   ['btn-business', '📈 Negócios'], ['btn-health', '🩺 Saúde'], ['btn-leisure', '🎬 Lazer'], ['btn-trips', '✈️ Viagens'], ['btn-net', '🤝 Rede'], ['btn-clinic', '🏥 Clínica'], ['btn-prod', '🖨️ Produção'], ['btn-settings', '⚙️ Config']
 ];
@@ -3162,13 +3163,13 @@ function cfgAparencia() {
   const ids = ABAS_INFO.map(a => a[0]);
   if (Array.isArray(c.ordem) && !c.ordem.includes('btn-primos')) c.ordem.splice(1, 0, 'btn-primos'); // Primos 3D logo depois do Painel
   c.ordem = ordemTravada([...new Set([...(c.ordem || []).filter(i => ids.includes(i)), ...ids])]);
-  c.ocultas = (c.ocultas || []).filter(i => ids.includes(i) && i !== 'btn-settings' && i !== 'btn-focus');
+  c.ocultas = (c.ocultas || []).filter(i => ids.includes(i) && i !== 'btn-settings' && i !== 'btn-focus' && i !== 'btn-cerebro');
   return c;
 }
 /** Painel Central sempre na ponta de cima/esquerda; Config sempre na de baixo/direita. */
 function ordemTravada(ordem) {
-  const meio = ordem.filter(i => i !== 'btn-focus' && i !== 'btn-settings');
-  return ['btn-focus', ...meio, 'btn-settings'];
+  const meio = ordem.filter(i => i !== 'btn-cerebro' && i !== 'btn-focus' && i !== 'btn-settings');
+  return ['btn-cerebro', 'btn-focus', ...meio, 'btn-settings'];
 }
 function salvarAparencia() { localStorage.setItem('lifeos_prefs', JSON.stringify(prefs)); aplicarAparencia(); }
 function aplicarAparencia() {
@@ -3191,7 +3192,7 @@ function escolherModoCor(m) {
 }
 function escolherPosicaoAbas(p) { cfgAparencia().abas = p; salvarAparencia(); }
 function moverAba(id, dir) {
-  if (id === 'btn-focus' || id === 'btn-settings') return;   // as duas pontas são fixas
+  if (id === 'btn-cerebro' || id === 'btn-focus' || id === 'btn-settings') return;   // as pontas são fixas
   const c = cfgAparencia(); const i = c.ordem.indexOf(id); const j = i + dir;
   if (i < 0 || j < 1 || j >= c.ordem.length - 1) return;      // não passa por cima das pontas
   c.ordem.splice(j, 0, c.ordem.splice(i, 1)[0]); salvarAparencia();
@@ -3219,7 +3220,7 @@ function renderAparencia() {
   const lista = document.getElementById('abas-ordem');
   if (lista) lista.innerHTML = c.ordem.map((id, i) => {
     const nome = (ABAS_INFO.find(a => a[0] === id) || [id, id])[1]; const oculta = c.ocultas.includes(id);
-    const fixa = id === 'btn-settings' || id === 'btn-focus';   // as duas pontas não saem do lugar
+    const fixa = id === 'btn-settings' || id === 'btn-focus' || id === 'btn-cerebro';   // as duas pontas não saem do lugar
     return `<li class="aba-linha ${oculta ? 'oculta' : ''}"><span class="aba-nome">${nome}</span>
       <span class="item-actions">
         <button class="mini-btn xs" title="${fixa ? 'Esta aba fica sempre na ponta' : 'Subir'}" onclick="moverAba('${id}', -1)" ${fixa || i <= 1 ? 'disabled' : ''}>↑</button>
@@ -4274,6 +4275,384 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 setInterval(() => { if (document.visibilityState === 'visible' && claudeConfigurado() && emAndamentoClaude()) atualizarClaude(true); }, 20000);
 document.getElementById('voice-sheet').addEventListener('click', (e) => { if (e.target.id === 'voice-sheet') fecharVoz(); });
 
+
+// ============================================================================
+// CÉREBRO — a página inicial em forma de grafo (inspirado no Graph View do Obsidian)
+// Cada bolinha é uma ÁREA da vida (Primos 3D, Engenharia, SST, Mercado, Academia,
+// Dia a dia), uma SEÇÃO (Pedidos, Treinos, NRs...) ou um ITEM de verdade do app
+// (pedido, cliente, nota, tarefa, compromisso, treino...). As linhas são as ligações:
+// hierarquia (área → seção → item) + atalhos (nota com marcador da área, [[link]] entre
+// notas, pedido ↔ cliente). Arrastar move, pinça/roda aproxima, tocar mostra o cartão
+// e "Abrir" leva à página. Os nomes aparecem aos poucos conforme você aproxima.
+// Nada disso é gravado: o grafo é montado a partir dos dados do app a cada abertura
+// (no futuro também das notas do Obsidian). Só a câmera fica guardada neste aparelho.
+// Física: repulsão com Barnes–Hut (quadtree) + molas nas ligações + gravidade central.
+// ============================================================================
+const AREAS_CEREBRO = [
+  { id: 'primos', nome: 'Primos 3D', cor: '#ff9500', marcador: 'primos 3d', palavras: ['primos', 'impressao 3d', 'impressão 3d', 'filamento', '3d', 'pla', 'petg', 'impressora', 'bambu', 'kobra', 'orcamento peca'],
+    secoes: [['Pedidos', { tab: 'primos' }], ['Clientes', { tab: 'primos', rolar: 'client-list' }], ['Produção', { tab: 'prod' }], ['Custos e preços', { tab: 'prod' }]] },
+  { id: 'eng', nome: 'Engenharia Civil', cor: '#007aff', marcador: 'engenharia', palavras: ['engenharia', 'obra', 'projeto', 'estrutura', 'nbr', 'calculo', 'cálculo'],
+    secoes: [['Projetos'], ['Obras'], ['Normas técnicas'], ['Cálculos'], ['Clientes da engenharia'], ['Trabalhos na agenda', { tab: 'home', sec: 'plantoes' }]] },
+  { id: 'sst', nome: 'Segurança do Trabalho', cor: '#e0a800', marcador: 'sst', palavras: ['sst', 'seguranca do trabalho', 'segurança do trabalho', 'nr', 'epi', 'inspecao', 'inspeção', 'treinamento'],
+    secoes: [['NRs'], ['Inspeções'], ['Treinamentos'], ['EPIs'], ['Documentos e laudos']] },
+  { id: 'mercado', nome: 'Mercado', cor: '#34c759', marcador: 'mercado', palavras: ['mercado', 'bitcoin', 'btc', 'cripto', 'investimento'],
+    secoes: [['Bitcoin'], ['Carteira', { tab: 'business' }], ['Metas', { tab: 'business' }], ['Patrimônio', { tab: 'business' }]] },
+  { id: 'academia', nome: 'Academia', cor: '#ff2d55', marcador: 'academia', palavras: ['academia', 'treino', 'musculacao', 'musculação', 'dieta'],
+    secoes: [['Treinos', { tab: 'health' }], ['Medidas', { tab: 'health' }], ['Alimentação', { tab: 'health' }], ['Hidratação', { tab: 'health' }]] },
+  { id: 'dia', nome: 'Dia a dia', cor: '#5856d6', marcador: 'dia a dia', palavras: [],
+    secoes: [['Painel', { tab: 'focus' }], ['Agenda', { tab: 'home' }], ['Finanças', { tab: 'finances' }], ['Tarefas', { tab: 'tasks' }], ['Notas', { tab: 'notes' }], ['Estudos', { tab: 'studies' }], ['Lazer', { tab: 'leisure' }], ['Viagens', { tab: 'trips' }], ['Rede', { tab: 'net' }], ['Entregas', { tab: 'notes' }]] }
+];
+const TIPO_CEREBRO = { centro: 'Você', area: 'Área', secao: 'Seção', item: 'Item' };
+
+// --- estado ---
+const cer = { nos: [], mapa: {}, links: [], cam: { x: 0, y: 0, k: 1 }, alpha: 0, sel: null, hover: null, raf: 0, montado: false, w: 0, h: 0, dpr: 1, canvas: null, ctx: null, ptrs: new Map(), gesto: null, inercia: null, ultimoToque: { t: 0, id: null } };
+
+function slugCer(s) { return semAcentoCer(s).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+function semAcentoCer(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim(); }
+function rotuloDoItem(x) { return String(x.title || x.nome || x.name || x.item || x.text || x.desc || x.label || [x.material, x.cor || x.color].filter(Boolean).join(' ') || '(sem nome)').slice(0, 60); }
+/** Mistura a cor com branco (clarear) — para seções e itens ficarem na família da área. */
+function clarearCer(hex, t) { const n = parseInt(hex.slice(1), 16); const r = n >> 16, g = (n >> 8) & 255, b = n & 255; const m = c => Math.round(c + (255 - c) * t); return `rgb(${m(r)}, ${m(g)}, ${m(b)})`; }
+
+// --- monta o grafo a partir dos dados do app ---
+function montarGrafoCerebro() {
+  const nos = [], mapa = {}, links = [], vistos = new Set();
+  const no = (id, dados) => { if (mapa[id]) return mapa[id]; const n = { id, x: 0, y: 0, vx: 0, vy: 0, grau: 0, ...dados }; nos.push(n); mapa[id] = n; return n; };
+  const liga = (a, b, forca) => { if (!mapa[a] || !mapa[b] || a === b) return; const k = a < b ? a + '|' + b : b + '|' + a; if (vistos.has(k)) return; vistos.add(k); links.push({ a: mapa[a], b: mapa[b], forca: forca || 1 }); mapa[a].grau++; mapa[b].grau++; };
+  no('centro', { nome: (profile && profile.name) || 'Genesis', tipo: 'centro', cor: '#1c1c1e', area: null });
+  const secaoPorNome = {};
+  AREAS_CEREBRO.forEach(a => {
+    no('a-' + a.id, { nome: a.nome, tipo: 'area', cor: a.cor, area: a.id });
+    liga('centro', 'a-' + a.id, 1);
+    a.secoes.forEach(([nome, abrir]) => { const id = `s-${a.id}-${slugCer(nome)}`; no(id, { nome, tipo: 'secao', cor: clarearCer(a.cor, 0.18), area: a.id, abrir: abrir || null }); liga('a-' + a.id, id, 1); secaoPorNome[a.id + ':' + slugCer(nome)] = id; });
+  });
+  const sec = (area, nome) => secaoPorNome[area + ':' + slugCer(nome)];
+  const item = (id, nome, area, secao, abrir, extra) => { const n = no(id, { nome, tipo: 'item', cor: clarearCer((AREAS_CEREBRO.find(a => a.id === area) || { cor: '#8e8e93' }).cor, 0.35), area, abrir, ...(extra || {}) }); if (secao) liga(secao, id, 1); return n; };
+  const hoje = hojeISO();
+  // Primos 3D
+  (typeof clients !== 'undefined' ? clients : []).forEach(c => item('cli-' + c.id, c.name, 'primos', sec('primos', 'Clientes'), { tab: 'primos', fn: 'editarCliente', id: c.id }));
+  (typeof orders !== 'undefined' ? orders : []).filter(o => pedidoAberto(o) || (o.date || '') >= somarDiasCer(hoje, -45)).forEach(o => { item('ped-' + o.id, o.title, 'primos', sec('primos', 'Pedidos'), { tab: 'primos', fn: 'editarPedido', id: o.id }); if (o.clientId) liga('ped-' + o.id, 'cli-' + o.clientId, 0.6); });
+  (typeof maquinas !== 'undefined' ? maquinas : []).forEach(m => item('maq-' + m.id, rotuloDoItem(m), 'primos', sec('primos', 'Produção'), { tab: 'prod', fn: 'editarMaquina', id: m.id }));
+  (typeof produtos !== 'undefined' ? produtos : []).forEach(p => item('prod-' + p.id, rotuloDoItem(p), 'primos', sec('primos', 'Custos e preços'), { tab: 'prod', fn: 'editarProduto', id: p.id }));
+  (typeof filamentos !== 'undefined' ? filamentos : []).slice(0, 40).forEach(f => item('fil-' + f.id, rotuloDoItem(f), 'primos', sec('primos', 'Produção'), { tab: 'prod', fn: 'editarFilamento', id: f.id }));
+  // Engenharia: trabalhos (plantões/turnos) que vêm por aí
+  (typeof shifts !== 'undefined' ? shifts : []).filter(s => s.date >= hoje).slice(0, 30).forEach(s => item('tur-' + s.id, `${s.desc || 'Trabalho'} ${isoParaBR(s.date).slice(0, 5)}`, 'eng', sec('eng', 'Trabalhos na agenda'), { tab: 'home', sec: 'plantoes', fn: 'editarPlantao', id: s.id }));
+  // Mercado
+  (typeof assets !== 'undefined' ? assets : []).forEach(x => item('ativo-' + x.id, rotuloDoItem(x), 'mercado', sec('mercado', 'Carteira'), { tab: 'business', fn: 'editarAtivo', id: x.id }));
+  (typeof goals !== 'undefined' ? goals : []).forEach(x => item('meta-' + x.id, rotuloDoItem(x), 'mercado', sec('mercado', 'Metas'), { tab: 'business', fn: 'editarMeta', id: x.id }));
+  // Academia
+  (typeof workouts !== 'undefined' ? workouts : []).slice(-20).forEach(w => item('treino-' + w.id, `${(TIPOS_TREINO[w.type] || ['🏋️', 'Treino'])[1]} ${isoParaBR(w.date).slice(0, 5)}`, 'academia', sec('academia', 'Treinos'), { tab: 'health', fn: 'editarTreino', id: w.id }));
+  // Dia a dia
+  (typeof tasks !== 'undefined' ? tasks : []).filter(t => !t.done).slice(0, 80).forEach(t => item('tar-' + t.id, t.text, 'dia', sec('dia', 'Tarefas'), { tab: 'tasks', fn: 'editarTarefa', id: t.id }));
+  (typeof events !== 'undefined' ? events : []).filter(e => !e.done && e.date >= hoje && e.date <= somarDiasCer(hoje, 30)).forEach(e => item('ev-' + e.id, e.title, 'dia', sec('dia', 'Agenda'), { tab: 'home', sec: 'compromissos', fn: 'editarEvento', id: e.id }));
+  (typeof topics !== 'undefined' ? topics : []).filter(t => !t.archived).forEach(t => item('tema-' + t.id, t.name, 'dia', sec('dia', 'Estudos'), { tab: 'studies', fn: 'editarTema', id: t.id }));
+  (typeof trips !== 'undefined' ? trips : []).forEach(t => item('viagem-' + t.id, rotuloDoItem(t), 'dia', sec('dia', 'Viagens'), { tab: 'trips', fn: 'abrirViagem', id: t.id }));
+  (typeof contacts !== 'undefined' ? contacts : []).slice(0, 60).forEach(c => item('rede-' + c.id, rotuloDoItem(c), 'dia', sec('dia', 'Rede'), { tab: 'net', fn: 'editarContato', id: c.id }));
+  (typeof entregas !== 'undefined' ? entregas : []).filter(e => e.status !== 'entregue').forEach(e => item('ent-' + e.id, rotuloDoItem(e), 'dia', sec('dia', 'Entregas'), { tab: 'notes', fn: 'editarEntrega', id: e.id }));
+  (typeof habits !== 'undefined' ? habits : []).forEach((h, i) => item('hab-' + i, `${h.icon || ''} ${h.text}`.trim(), 'dia', sec('dia', 'Painel'), { tab: 'focus' }));
+  // Finanças: categoria → lançamentos dos últimos 90 dias (o que deixa o cérebro "denso", como no Obsidian)
+  const noventa = somarDiasCer(hoje, -90);
+  (typeof transactions !== 'undefined' ? transactions : []).filter(t => dataTransacao(t) >= noventa).slice(-160).forEach(t => {
+    const cat = t.category || 'Sem categoria'; const idCat = 'cat-' + slugCer(cat);
+    const areaCat = /primos|filamento/i.test(cat) ? 'primos' : /engenharia/i.test(cat) ? 'eng' : /invest/i.test(cat) ? 'mercado' : 'dia';
+    if (!mapa[idCat]) { item(idCat, cat, areaCat, sec('dia', 'Finanças'), { tab: 'finances' }, { categoria: true }); if (areaCat !== 'dia') liga(idCat, 'a-' + areaCat, 0.5); mapa[idCat].r0 = 1; }
+    item('fin-' + t.id, `${t.type === 'income' ? '+' : '−'}${formatCurrency(t.amount)} ${t.desc}`.slice(0, 60), areaCat, idCat, { tab: 'finances' });
+  });
+  // Notas: ligam na área/seção pelo marcador (ou por palavras do título) e entre si por [[título]]
+  const notasVivas = (typeof notes !== 'undefined' ? notes : []).filter(n => !n.archived);
+  notasVivas.forEach(n => {
+    const titulo = n.title || (n.content || '').split('\n')[0] || 'Nota';
+    const marcas = (n.labels || []).map(semAcentoCer);
+    const textoBusca = semAcentoCer(titulo + ' ' + (n.labels || []).join(' '));
+    const area = AREAS_CEREBRO.find(a => a.id !== 'dia' && (marcas.includes(semAcentoCer(a.marcador)) || a.palavras.some(p => marcas.includes(semAcentoCer(p))))) || AREAS_CEREBRO.find(a => a.id !== 'dia' && a.palavras.some(p => new RegExp('(^|[^a-z0-9])' + semAcentoCer(p) + '([^a-z0-9]|$)').test(textoBusca)));
+    const idNo = 'nota-' + n.id;
+    item(idNo, titulo.slice(0, 60), area ? area.id : 'dia', sec('dia', 'Notas'), { tab: 'notes', fn: 'editarNota', id: n.id }, { nota: true });
+    if (area) {
+      const secDaNota = area.secoes.map(([nome]) => sec(area.id, nome)).find(sid => marcas.includes(semAcentoCer(mapa[sid].nome)));
+      liga(idNo, secDaNota || ('a-' + area.id), 0.7);
+    }
+  });
+  // Tarefas, compromissos e entregas que falam de uma área também se ligam a ela (NR → SST, obra → Engenharia...)
+  const areaDoTexto = txt => { const t = semAcentoCer(txt); return AREAS_CEREBRO.find(a => a.id !== 'dia' && a.palavras.some(p => new RegExp('(^|[^a-z0-9])' + semAcentoCer(p) + '([^a-z0-9]|$)').test(t))); };
+  nos.filter(n => n.tipo === 'item' && !n.nota && !n.categoria && n.area === 'dia').forEach(n => { const a = areaDoTexto(n.nome); if (a) liga(n.id, 'a-' + a.id, 0.45); });
+  // [[links]] no texto das notas → liga com a nota (ou qualquer bolinha) de mesmo nome
+  const porNome = {}; nos.forEach(n => { porNome[semAcentoCer(n.nome)] = porNome[semAcentoCer(n.nome)] || n.id; });
+  notasVivas.forEach(n => { const texto = (n.content || '') + ' ' + (n.checklist || []).map(i => i.text).join(' '); (texto.match(/\[\[([^\]]+)\]\]/g) || []).forEach(m => { const alvo = porNome[semAcentoCer(m.slice(2, -2))]; if (alvo) liga('nota-' + n.id, alvo, 0.5); }); });
+  // tamanho: pelo tipo e pelo número de ligações
+  nos.forEach(n => { const base = n.categoria ? 5 : { centro: 15, area: 11, secao: 6.5, item: 3.4 }[n.tipo]; n.r = base + Math.min(6, Math.sqrt(n.grau) * (n.tipo === 'item' ? 0.7 : 0.9)); });
+  return { nos, mapa, links };
+}
+function somarDiasCer(iso, n) { const [y, m, d] = iso.split('-').map(Number); const dt = new Date(y, m - 1, d); dt.setDate(dt.getDate() + n); return isoDe(dt); }
+
+// --- posições iniciais: áreas em roda, seções em volta da área, itens em volta da seção ---
+function posicionarInicialCerebro() {
+  let s = 7; const rnd = () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; }; // aleatório com semente (mesmo desenho toda vez)
+  const areas = cer.nos.filter(n => n.tipo === 'area');
+  const centro = cer.mapa.centro; centro.x = 0; centro.y = 0;
+  areas.forEach((a, i) => { const ang = i / areas.length * Math.PI * 2 - Math.PI / 2; a.x = Math.cos(ang) * 210; a.y = Math.sin(ang) * 210; a.ang = ang; });
+  const filhos = {}; cer.links.forEach(l => { (filhos[l.a.id] = filhos[l.a.id] || []).push(l.b); (filhos[l.b.id] = filhos[l.b.id] || []).push(l.a); });
+  cer.nos.filter(n => n.tipo === 'secao').forEach(sn => { const a = cer.mapa['a-' + sn.area]; sn.x = a.x + (rnd() - 0.5) * 90 + Math.cos(a.ang) * 60; sn.y = a.y + (rnd() - 0.5) * 90 + Math.sin(a.ang) * 60; });
+  cer.nos.filter(n => n.tipo === 'item').forEach(it => { const pai = (filhos[it.id] || []).find(p => p.tipo === 'secao') || cer.mapa['a-' + it.area] || centro; it.x = pai.x + (rnd() - 0.5) * 60; it.y = pai.y + (rnd() - 0.5) * 60; });
+}
+
+// --- física ---
+function passoCerebro() {
+  const nos = cer.nos, alpha = cer.alpha; if (!nos.length) return;
+  // repulsão (Barnes–Hut): quadtree com massa = carga de cada nó
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  nos.forEach(n => { if (n.x < x0) x0 = n.x; if (n.y < y0) y0 = n.y; if (n.x > x1) x1 = n.x; if (n.y > y1) y1 = n.y; });
+  const lado = Math.max(x1 - x0, y1 - y0) + 1;
+  const raiz = { x0, y0, s: lado, m: 0, cx: 0, cy: 0, filhos: null, no: null };
+  const inserir = (q, n) => {
+    if (!q.filhos && !q.no && q.m === 0) { q.no = n; q.m = n.carga; q.cx = n.x; q.cy = n.y; return; }
+    if (!q.filhos) { if (q.s < 0.5) { q.m += n.carga; return; } const h = q.s / 2; q.filhos = [0, 1, 2, 3].map(i => ({ x0: q.x0 + (i & 1) * h, y0: q.y0 + (i >> 1) * h, s: h, m: 0, cx: 0, cy: 0, filhos: null, no: null })); const antigo = q.no; q.no = null; if (antigo) { q.m -= antigo.carga; inserirFilho(q, antigo); } }
+    inserirFilho(q, n);
+  };
+  const inserirFilho = (q, n) => { const h = q.s / 2; const i = (n.x >= q.x0 + h ? 1 : 0) + (n.y >= q.y0 + h ? 2 : 0); q.cx = (q.cx * q.m + n.x * n.carga) / (q.m + n.carga); q.cy = (q.cy * q.m + n.y * n.carga) / (q.m + n.carga); q.m += n.carga; inserir(q.filhos[i], n); };
+  nos.forEach(n => { n.carga = n.tipo === 'centro' ? 900 : n.tipo === 'area' ? 520 : n.tipo === 'secao' ? 170 : 55; inserir(raiz, n); });
+  const theta2 = 0.81;
+  const forca = (q, n) => {
+    if (q.m === 0 || q.no === n) return;
+    const dx = q.cx - n.x, dy = q.cy - n.y; let d2 = dx * dx + dy * dy;
+    if (!q.filhos || (q.s * q.s) / d2 < theta2) {
+      if (d2 < 1) d2 = 1; if (d2 > 4e5) return;
+      const f = -q.m * alpha / d2; n.vx += dx * f * 0.9; n.vy += dy * f * 0.9; return;
+    }
+    q.filhos.forEach(c => forca(c, n));
+  };
+  nos.forEach(n => forca(raiz, n));
+  // molas
+  cer.links.forEach(l => {
+    const a = l.a, b = l.b; const tipos = a.tipo + b.tipo;
+    const alvo = /centro/.test(tipos) ? 200 : /area/.test(tipos) && /secao/.test(tipos) ? 90 : /secao/.test(tipos) ? 34 : 55;
+    let dx = b.x - a.x, dy = b.y - a.y; const d = Math.sqrt(dx * dx + dy * dy) || 1;
+    const k = (d - alvo) / d * alpha * 0.55 * l.forca; dx *= k; dy *= k;
+    const pa = b.grau / (a.grau + b.grau), pb = 1 - pa;
+    b.vx -= dx * pb; b.vy -= dy * pb; a.vx += dx * pa; a.vy += dy * pa;
+  });
+  // gravidade suave (forma de bola, como no Obsidian) e atrito
+  nos.forEach(n => {
+    n.vx -= n.x * 0.018 * alpha; n.vy -= n.y * 0.018 * alpha;
+    if (n.fx !== undefined) { n.x = n.fx; n.y = n.fy; n.vx = n.vy = 0; return; }
+    n.vx *= 0.6; n.vy *= 0.6; n.x += n.vx; n.y += n.vy;
+  });
+  cer.alpha += (0 - cer.alpha) * 0.0228;
+}
+
+// --- câmera e desenho ---
+function telaParaMundo(sx, sy) { return { x: (sx - cer.w / 2) / cer.cam.k + cer.cam.x, y: (sy - cer.h / 2) / cer.cam.k + cer.cam.y }; }
+function mundoParaTela(x, y) { return { x: (x - cer.cam.x) * cer.cam.k + cer.w / 2, y: (y - cer.cam.y) * cer.cam.k + cer.h / 2 }; }
+function vizinhosCer(n) { const s = new Set(); if (!n) return s; cer.links.forEach(l => { if (l.a === n) s.add(l.b); else if (l.b === n) s.add(l.a); }); return s; }
+function suave(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+function desenharCerebro() {
+  const ctx = cer.ctx; if (!ctx) return;
+  const css = getComputedStyle(document.documentElement);
+  const claro = typeof temaClaro === 'function' ? temaClaro() : true;
+  const corTexto = css.getPropertyValue('--txt').trim() || '#1c1c1e';
+  ctx.setTransform(cer.dpr, 0, 0, cer.dpr, 0, 0);
+  ctx.clearRect(0, 0, cer.w, cer.h);
+  const foco = cer.sel || cer.hover; const viz = vizinhosCer(foco);
+  const apagado = n => foco && n !== foco && !viz.has(n);
+  const k = cer.cam.k;
+  // ligações
+  ctx.save(); ctx.translate(cer.w / 2, cer.h / 2); ctx.scale(k, k); ctx.translate(-cer.cam.x, -cer.cam.y);
+  ctx.lineWidth = 1 / k;
+  cer.links.forEach(l => {
+    const lig = foco && (l.a === foco || l.b === foco);
+    ctx.strokeStyle = lig ? (foco.cor.startsWith('#') ? foco.cor + 'aa' : foco.cor) : (claro ? (foco ? 'rgba(60,60,67,0.05)' : 'rgba(60,60,67,0.16)') : (foco ? 'rgba(235,235,245,0.04)' : 'rgba(235,235,245,0.13)'));
+    ctx.lineWidth = (lig ? 1.6 : 1) / k;
+    ctx.beginPath(); ctx.moveTo(l.a.x, l.a.y); ctx.lineTo(l.b.x, l.b.y); ctx.stroke();
+  });
+  // bolinhas
+  cer.nos.forEach(n => {
+    const alfa = apagado(n) ? 0.18 : 1;
+    ctx.globalAlpha = alfa;
+    if (n.tipo === 'area' || n.tipo === 'centro') { ctx.shadowColor = n.cor + '66'; ctx.shadowBlur = 14; } else ctx.shadowBlur = 0;
+    ctx.fillStyle = n.cor; ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    if (n.tipo !== 'item') { ctx.lineWidth = 2 / k; ctx.strokeStyle = claro ? '#ffffff' : 'rgba(255,255,255,0.35)'; ctx.stroke(); }
+    if (n === cer.sel) { ctx.lineWidth = 2.5 / k; ctx.strokeStyle = n.cor; ctx.beginPath(); ctx.arc(n.x, n.y, n.r + 4 / k, 0, Math.PI * 2); ctx.stroke(); }
+  });
+  ctx.globalAlpha = 1; ctx.restore();
+  // nomes (em coordenadas de tela, para ficarem nítidos): áreas sempre; seções e itens aparecem ao aproximar
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  // prioridade: foco e vizinhos > centro > áreas > seções > categorias > itens (mais ligados primeiro);
+  // um nome só aparece se não cobrir outro já escrito — assim nada fica embolado
+  const prio = n => (foco && (n === foco || viz.has(n)) ? 0 : 10) + ({ centro: 1, area: 2, secao: 3, item: n.categoria ? 4 : 5 }[n.tipo]) - Math.min(0.9, n.grau / 50);
+  const ocupados = [];
+  [...cer.nos].sort((a, b) => prio(a) - prio(b)).forEach(n => {
+    let op = n.tipo === 'centro' || n.tipo === 'area' ? 1 : n.tipo === 'secao' || n.categoria ? suave(0.5, 0.85, k) : suave(1.25, 1.9, k);
+    if (foco && (n === foco || viz.has(n))) op = Math.max(op, 0.95);
+    if (apagado(n)) op *= 0.15;
+    if (op < 0.03) return;
+    const p = mundoParaTela(n.x, n.y); if (p.x < -80 || p.x > cer.w + 80 || p.y < -40 || p.y > cer.h + 40) return;
+    const tam = n.tipo === 'centro' ? 15 : n.tipo === 'area' ? 13.5 : n.tipo === 'secao' ? 12 : 11;
+    ctx.font = `${n.tipo === 'item' && !n.categoria ? 400 : 600} ${tam}px -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif`;
+    const y = p.y + n.r * k + 4;
+    const larg = ctx.measureText(n.nome).width; const ret = { x0: p.x - larg / 2 - 2, x1: p.x + larg / 2 + 2, y0: y - 1, y1: y + tam + 1 };
+    if (ocupados.some(o => ret.x0 < o.x1 && ret.x1 > o.x0 && ret.y0 < o.y1 && ret.y1 > o.y0)) return;
+    ocupados.push(ret);
+    ctx.globalAlpha = op;
+    ctx.lineWidth = 3.5; ctx.strokeStyle = claro ? 'rgba(242,242,247,0.9)' : 'rgba(0,0,0,0.6)'; ctx.strokeText(n.nome, p.x, y);
+    ctx.fillStyle = n.tipo === 'area' ? n.cor : corTexto; ctx.fillText(n.nome, p.x, y);
+  });
+  ctx.globalAlpha = 1;
+}
+function lacoCerebro() {
+  cer.raf = 0;
+  if (!document.getElementById('cerebro') || !document.getElementById('cerebro').classList.contains('active')) return;
+  let continuar = false;
+  if (cer.alpha > 0.004) { passoCerebro(); continuar = true; }
+  if (cer.inercia) { const v = cer.inercia; cer.cam.x -= v.x / cer.cam.k; cer.cam.y -= v.y / cer.cam.k; v.x *= 0.92; v.y *= 0.92; if (Math.abs(v.x) + Math.abs(v.y) < 0.2) cer.inercia = null; else continuar = true; }
+  if (cer.animCam) { const a = cer.animCam; a.t = Math.min(1, a.t + 0.07); const e = 1 - Math.pow(1 - a.t, 3); cer.cam.x = a.de.x + (a.para.x - a.de.x) * e; cer.cam.y = a.de.y + (a.para.y - a.de.y) * e; cer.cam.k = a.de.k + (a.para.k - a.de.k) * e; if (a.t >= 1) cer.animCam = null; else continuar = true; }
+  desenharCerebro();
+  if (continuar) cer.raf = requestAnimationFrame(lacoCerebro);
+  else salvarCameraCerebro();
+}
+function pedirQuadroCerebro() { if (!cer.raf) cer.raf = requestAnimationFrame(lacoCerebro); }
+function aquecerCerebro(a) { cer.alpha = Math.max(cer.alpha, a); pedirQuadroCerebro(); }
+function salvarCameraCerebro() { try { prefs.cerebroCam = { x: Math.round(cer.cam.x), y: Math.round(cer.cam.y), k: Math.round(cer.cam.k * 1000) / 1000 }; localStorage.setItem('lifeos_prefs', JSON.stringify(prefs)); } catch (e) { } }
+function enquadrarCerebro(animar) {
+  if (!cer.nos.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  cer.nos.forEach(n => { x0 = Math.min(x0, n.x - n.r); y0 = Math.min(y0, n.y - n.r); x1 = Math.max(x1, n.x + n.r); y1 = Math.max(y1, n.y + n.r); });
+  const k = Math.min(1.6, Math.min(cer.w / (x1 - x0 + 90), cer.h / (y1 - y0 + 120)));
+  const para = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, k };
+  if (animar) { cer.animCam = { t: 0, de: { ...cer.cam }, para }; pedirQuadroCerebro(); } else cer.cam = para;
+}
+function focarNoCerebro(n, zoom) {
+  if (!n) return; cer.sel = n; mostrarCartaoCerebro(n);
+  cer.animCam = { t: 0, de: { ...cer.cam }, para: { x: n.x, y: n.y + (cer.h > 500 ? 0 : 30 / Math.max(cer.cam.k, 0.5)), k: Math.max(cer.cam.k, zoom || (n.tipo === 'item' ? 2.1 : n.tipo === 'secao' ? 1.3 : 0.95)) } };
+  pedirQuadroCerebro();
+}
+
+// --- toque, mouse e pinça ---
+function noNoPonto(sx, sy) {
+  const p = telaParaMundo(sx, sy); let melhor = null, melhorD = Infinity;
+  cer.nos.forEach(n => { const d = Math.hypot(n.x - p.x, n.y - p.y); const alcance = n.r + 10 / cer.cam.k; if (d < alcance && d < melhorD) { melhor = n; melhorD = d; } });
+  return melhor;
+}
+function prepararGestosCerebro(cv) {
+  const pos = e => { const r = cv.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+  cv.addEventListener('pointerdown', e => {
+    try { cv.setPointerCapture(e.pointerId); } catch (err) { } cer.inercia = null; cer.animCam = null;
+    const p = pos(e); cer.ptrs.set(e.pointerId, p);
+    if (cer.ptrs.size === 2) { const [a, b] = [...cer.ptrs.values()]; cer.gesto = { tipo: 'pinca', d: Math.hypot(a.x - b.x, a.y - b.y), m: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } }; return; }
+    const n = noNoPonto(p.x, p.y);
+    cer.gesto = { tipo: n ? 'no' : 'pan', n, ini: p, ult: p, t: performance.now(), mexeu: false, v: { x: 0, y: 0 } };
+  });
+  cv.addEventListener('pointermove', e => {
+    const p = pos(e);
+    if (!cer.ptrs.has(e.pointerId)) { if (e.pointerType === 'mouse') { const n = noNoPonto(p.x, p.y); if (n !== cer.hover) { cer.hover = n; cv.style.cursor = n ? 'pointer' : 'grab'; pedirQuadroCerebro(); } } return; }
+    cer.ptrs.set(e.pointerId, p); const g = cer.gesto; if (!g) return;
+    if (g.tipo === 'pinca' && cer.ptrs.size === 2) {
+      const [a, b] = [...cer.ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const antes = telaParaMundo(m.x, m.y); cer.cam.k = Math.max(0.15, Math.min(5, cer.cam.k * d / g.d));
+      const depois = telaParaMundo(m.x, m.y); cer.cam.x += antes.x - depois.x; cer.cam.y += antes.y - depois.y;
+      cer.cam.x -= (m.x - g.m.x) / cer.cam.k; cer.cam.y -= (m.y - g.m.y) / cer.cam.k; g.d = d; g.m = m; pedirQuadroCerebro(); return;
+    }
+    const dx = p.x - g.ult.x, dy = p.y - g.ult.y;
+    if (Math.hypot(p.x - g.ini.x, p.y - g.ini.y) > 6) g.mexeu = true;
+    if (!g.mexeu) return;
+    if (g.tipo === 'no') { const w = telaParaMundo(p.x, p.y); g.n.fx = w.x; g.n.fy = w.y; aquecerCerebro(0.25); }
+    else if (g.tipo === 'pan') { cer.cam.x -= dx / cer.cam.k; cer.cam.y -= dy / cer.cam.k; g.v = { x: dx, y: dy }; pedirQuadroCerebro(); }
+    g.ult = p;
+  });
+  const soltar = e => {
+    const g = cer.gesto; cer.ptrs.delete(e.pointerId);
+    if (!g) return;
+    if (g.tipo === 'pinca') { if (cer.ptrs.size === 0) cer.gesto = null; salvarCameraCerebro(); return; }
+    if (g.tipo === 'no' && g.n) { delete g.n.fx; delete g.n.fy; }
+    if (!g.mexeu) { // toque
+      const agora = performance.now();
+      if (g.n) {
+        if (cer.ultimoToque.id === g.n.id && agora - cer.ultimoToque.t < 350) { abrirNoCerebro(g.n); cer.ultimoToque = { t: 0, id: null }; }
+        else { cer.sel = g.n; mostrarCartaoCerebro(g.n); cer.ultimoToque = { t: agora, id: g.n.id }; pedirQuadroCerebro(); }
+      } else { cer.sel = null; esconderCartaoCerebro(); pedirQuadroCerebro(); }
+    } else if (g.tipo === 'pan' && (Math.abs(g.v.x) + Math.abs(g.v.y)) > 2) { cer.inercia = { ...g.v }; pedirQuadroCerebro(); }
+    else salvarCameraCerebro();
+    cer.gesto = null;
+  };
+  cv.addEventListener('pointerup', soltar); cv.addEventListener('pointercancel', soltar);
+  cv.addEventListener('pointerleave', () => { if (cer.hover) { cer.hover = null; pedirQuadroCerebro(); } });
+  cv.addEventListener('wheel', e => {
+    e.preventDefault(); const p = pos(e); const antes = telaParaMundo(p.x, p.y);
+    cer.cam.k = Math.max(0.15, Math.min(5, cer.cam.k * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015))));
+    const depois = telaParaMundo(p.x, p.y); cer.cam.x += antes.x - depois.x; cer.cam.y += antes.y - depois.y; pedirQuadroCerebro(); clearTimeout(cer.tRoda); cer.tRoda = setTimeout(salvarCameraCerebro, 400);
+  }, { passive: false });
+}
+
+// --- cartão do item escolhido ---
+function mostrarCartaoCerebro(n) {
+  const el = document.getElementById('cer-cartao'); if (!el) return;
+  const area = AREAS_CEREBRO.find(a => a.id === n.area);
+  const viz = [...vizinhosCer(n)].sort((a, b) => ({ centro: 0, area: 1, secao: 2, item: 3 }[a.tipo] - { centro: 0, area: 1, secao: 2, item: 3 }[b.tipo]));
+  const podeAbrir = !!(n.abrir && n.abrir.tab);
+  el.innerHTML = `<div class="cer-cartao-topo"><span class="cer-ponto" style="background:${esc(n.cor)}"></span><div style="min-width:0; flex:1"><strong>${esc(n.nome)}</strong><small>${TIPO_CEREBRO[n.tipo]}${area && n.tipo !== 'area' ? ' · ' + esc(area.nome) : ''} · ${viz.length} ligaç${viz.length === 1 ? 'ão' : 'ões'}</small></div><button type="button" class="close-modal" onclick="cer.sel=null; esconderCartaoCerebro(); pedirQuadroCerebro()" aria-label="Fechar">✕</button></div>
+    <div class="cer-acoes">${podeAbrir ? `<button type="button" class="btn cer-abrir" onclick="abrirNoCerebro(cer.mapa['${esc(n.id)}'])">Abrir ›</button>` : ''}${n.tipo !== 'item' && n.tipo !== 'centro' ? `<button type="button" class="btn" onclick="novaNotaDoCerebro('${esc(n.id)}')">＋ Nota aqui</button>` : ''}</div>
+    ${viz.length ? `<div class="cer-viz">${viz.slice(0, 24).map(v => `<button type="button" class="chip" onclick="focarNoCerebro(cer.mapa['${esc(v.id)}'])"><span class="cer-ponto sm" style="background:${esc(v.cor)}"></span>${esc(v.nome)}</button>`).join('')}${viz.length > 24 ? `<span class="item-date">+${viz.length - 24}</span>` : ''}</div>` : ''}
+    ${!podeAbrir && n.tipo === 'secao' ? `<p class="hint" style="margin:8px 0 0">Esta seção cresce com as suas notas: crie uma nota aqui (ou use o marcador <strong>${esc(semAcentoCer(n.nome))}</strong>) e ela vira uma bolinha ligada a esta seção.</p>` : ''}`;
+  el.hidden = false;
+}
+function esconderCartaoCerebro() { const el = document.getElementById('cer-cartao'); if (el) el.hidden = true; }
+/** "Abrir": vai para a aba (e seção) do item e, se houver, abre o formulário dele. */
+function abrirNoCerebro(n) {
+  if (!n) return; const a = n.abrir;
+  if (!a || !a.tab) { mostrarCartaoCerebro(n); return; }
+  changeTab(a.tab);
+  if (a.sec && a.tab === 'home' && typeof verSecaoAgenda === 'function') verSecaoAgenda(a.sec);
+  if (a.fn && typeof window[a.fn] === 'function' && a.id !== undefined) { try { window[a.fn](a.id); } catch (e) { console.warn('Cérebro → abrir:', e); } }
+  else if (a.rolar) setTimeout(() => { const alvo = document.getElementById(a.rolar); if (alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 120);
+}
+/** "＋ Nota aqui": abre Notas com os marcadores da área/seção — a nota nova vira bolinha ligada aqui. */
+function novaNotaDoCerebro(id) {
+  const n = cer.mapa[id]; if (!n) return; const area = AREAS_CEREBRO.find(a => a.id === n.area);
+  changeTab('notes'); if (typeof cancelarEdicaoNota === 'function') cancelarEdicaoNota();
+  const marcas = [area ? area.marcador : '', n.tipo === 'secao' ? semAcentoCer(n.nome) : ''].filter(Boolean);
+  const lab = document.getElementById('note-labels-input'); if (lab) lab.value = marcas.join(', ');
+  const tit = document.getElementById('note-title'); if (tit) { tit.value = ''; setTimeout(() => { tit.scrollIntoView({ behavior: 'smooth', block: 'center' }); tit.focus(); }, 120); }
+  toast(`📝 Nota com o marcador "${marcas.join(', ')}" — ela aparece no cérebro ligada a ${n.nome}.`, 5000);
+}
+
+// --- busca e legenda ---
+function buscarNoCerebro(v) {
+  const el = document.getElementById('cer-busca-res'); if (!el) return;
+  const q = semAcentoCer(v); if (!q) { el.hidden = true; el.innerHTML = ''; return; }
+  const achados = cer.nos.filter(n => semAcentoCer(n.nome).includes(q)).sort((a, b) => ({ centro: 0, area: 1, secao: 2, item: 3 }[a.tipo] - { centro: 0, area: 1, secao: 2, item: 3 }[b.tipo])).slice(0, 8);
+  el.innerHTML = achados.length ? achados.map(n => `<button type="button" onclick="document.getElementById('cer-busca').value=''; buscarNoCerebro(''); focarNoCerebro(cer.mapa['${esc(n.id)}'])"><span class="cer-ponto sm" style="background:${esc(n.cor)}"></span>${esc(n.nome)}<small>${TIPO_CEREBRO[n.tipo]}</small></button>`).join('') : '<div class="item-date" style="padding:8px 10px">Nada encontrado</div>';
+  el.hidden = false;
+}
+function renderLegendaCerebro() {
+  const el = document.getElementById('cer-legenda'); if (!el) return;
+  el.innerHTML = AREAS_CEREBRO.map(a => `<button type="button" class="chip" onclick="focarNoCerebro(cer.mapa['a-${a.id}'])"><span class="cer-ponto sm" style="background:${a.cor}"></span>${esc(a.nome)}</button>`).join('');
+}
+
+// --- ciclo de vida ---
+function medirCerebro() {
+  const cv = cer.canvas; if (!cv) return; const r = cv.getBoundingClientRect();
+  cer.dpr = Math.min(2, window.devicePixelRatio || 1); cer.w = r.width; cer.h = r.height;
+  cv.width = Math.round(r.width * cer.dpr); cv.height = Math.round(r.height * cer.dpr);
+}
+/** Monta (ou remonta) o cérebro com os dados atuais. Mantém a posição de quem já existia. */
+function renderCerebro() {
+  const cv = document.getElementById('cer-canvas'); if (!cv) return;
+  if (!cer.canvas) { cer.canvas = cv; cer.ctx = cv.getContext('2d'); prepararGestosCerebro(cv); window.addEventListener('resize', () => { if (document.getElementById('cerebro').classList.contains('active')) { medirCerebro(); pedirQuadroCerebro(); } }); }
+  const antigos = cer.mapa; const g = montarGrafoCerebro();
+  cer.nos = g.nos; cer.mapa = g.mapa; cer.links = g.links;
+  const novos = cer.nos.filter(n => !antigos[n.id]);
+  if (novos.length === cer.nos.length) { posicionarInicialCerebro(); for (let i = 0; i < 180; i++) { cer.alpha = Math.max(0.08, 1 - i / 180); passoCerebro(); } cer.alpha = 0.12; }
+  else { cer.nos.forEach(n => { const v = antigos[n.id]; if (v) { n.x = v.x; n.y = v.y; } else { const p = cer.links.find(l => l.a === n || l.b === n); const pai = p ? (p.a === n ? p.b : p.a) : cer.mapa.centro; n.x = (pai.x || 0) + (Math.random() - 0.5) * 30; n.y = (pai.y || 0) + (Math.random() - 0.5) * 30; } }); cer.alpha = Math.max(cer.alpha, novos.length ? 0.3 : 0.02); }
+  if (cer.sel) cer.sel = cer.mapa[cer.sel.id] || null;
+  const info = document.getElementById('cer-info'); if (info) info.innerText = `${cer.nos.length} bolinhas · ${cer.links.length} ligações`;
+  renderLegendaCerebro();
+  if (document.getElementById('cerebro').classList.contains('active')) abrirCerebro();
+}
+/** Chamado ao entrar na aba: mede a tela, recupera a câmera e começa a desenhar. */
+function abrirCerebro() {
+  if (!cer.canvas) { renderCerebro(); return; }
+  medirCerebro();
+  if (!cer.montado) { cer.montado = true; const c = prefs.cerebroCam; if (c && c.k) cer.cam = { x: c.x, y: c.y, k: c.k }; else enquadrarCerebro(false); }
+  pedirQuadroCerebro();
+}
 
 // --- Entregas × pedidos da Primos 3D ---
 // Na versão da Trinca, as compras a caminho ficavam no módulo `orders`; aqui `orders` são os pedidos da
@@ -6645,7 +7024,7 @@ function redesenharTudo() {
   assets = JSON.parse(localStorage.getItem('lifeos_assets')) || []; moves = JSON.parse(localStorage.getItem('lifeos_moves')) || []; goals = JSON.parse(localStorage.getItem('lifeos_goals')) || []; projects = JSON.parse(localStorage.getItem('lifeos_projects')) || []; wealth = JSON.parse(localStorage.getItem('lifeos_wealth')) || wealth;
   workouts = JSON.parse(localStorage.getItem('lifeos_workouts')) || []; measures = JSON.parse(localStorage.getItem('lifeos_measures')) || []; hydration = JSON.parse(localStorage.getItem('lifeos_hydration')) || hydration; meals = JSON.parse(localStorage.getItem('lifeos_meals')) || []; medical = JSON.parse(localStorage.getItem('lifeos_medical')) || [];
   profile = JSON.parse(localStorage.getItem('lifeos_profile')) || profile; aplicarPerfil();
-  renderPrimos(); renderPedidosClaude(); atualizarIndicadorClaude();
+  renderPrimos(); renderPedidosClaude(); atualizarIndicadorClaude(); if (document.getElementById('cerebro').classList.contains('active')) renderCerebro();
   renderFocusTab(); preencherLocais(); renderShifts(); renderEvents(); updateFinanceValues(); renderFinances(); renderRecorrentes(); renderOrcamento(); renderTaskLists(); renderTasks(); renderRotinas(); renderNotes(); renderEntregas(); redesenharEstudos(); redesenharNegocios(); renderSaude(); renderAvisos(); updateStudyStats(); renderJournal(); atualizarSaudacao();
 }
 
@@ -6740,4 +7119,5 @@ document.getElementById('session-date').value = hojeISO(); garantirRitual(); red
 aplicarPerfil(); carregarPrefsNaTela(); atualizarSaudacao(); atualizarBotaoDia();
 if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStorage.setItem('lifeos_perfil_avisado', '1'); setTimeout(() => toast('👤 Bem-vindo ao Genesis! Coloque seu nome em Ajustes → Perfil.', 8000), 1500); }
 carregarClaudeConfigNaTela(); atualizarIndicadorClaude(); atualizarClaude(true);
+renderCerebro(); // página inicial: o cérebro
 carregarSyncConfigNaTela(); setSyncStatus(syncConfigurado() ? (syncPendente ? "pendente" : "ok") : "naoconfig"); sincronizar();

@@ -1335,3 +1335,55 @@ html[data-tema="ios"] { background: var(--bg); color-scheme: light; }
   [data-tema="ios"] .modal { align-items: flex-end; padding: 0; }
   [data-tema="ios"] .modal > .modal-content { max-width: 100% !important; width: 100%; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
 }
+
+/* ============================================================================
+   CÉREBRO (página inicial) — palco do grafo + busca, legenda e cartão por cima
+   Usa as variáveis do tema: no iOS fica branco; nos temas escuros, escuro.
+   ============================================================================ */
+.cer-palco { position: relative; height: calc(100vh - 120px); height: calc(100dvh - 120px); min-height: 420px; border-radius: 18px; overflow: hidden; background: radial-gradient(ellipse at 50% 42%, var(--card) 0%, var(--bg) 78%); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), inset 0 0 0 0.5px var(--borda); }
+#cer-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; }
+#cer-canvas:active { cursor: grabbing; }
+.cer-topo { position: absolute; top: 14px; left: 16px; right: 16px; display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; pointer-events: none; }
+.cer-topo > * { pointer-events: auto; }
+.cer-titulo .page-title { margin: 0 !important; font-size: 2rem; line-height: 1.1; }
+.cer-titulo small { display: block; font-size: 0.75rem; color: var(--txt3); margin: 2px 0 0 2px; }
+.cer-busca-box { position: relative; width: min(300px, 50%); }
+.cer-busca-box input { width: 100%; border-radius: 12px; background: rgba(255, 255, 255, 0.72); -webkit-backdrop-filter: saturate(180%) blur(18px); backdrop-filter: saturate(180%) blur(18px); box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06); }
+.cer-busca-res { position: absolute; top: calc(100% + 6px); left: 0; right: 0; background: var(--card); border-radius: 12px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.16); padding: 4px; z-index: 5; max-height: 320px; overflow-y: auto; }
+.cer-busca-res button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; padding: 9px 10px; border-radius: 8px; font-size: 0.9rem; color: var(--txt); cursor: pointer; }
+.cer-busca-res button:hover { background: var(--bg); }
+.cer-busca-res small { margin-left: auto; color: var(--txt3); font-size: 0.72rem; }
+.cer-ferramentas { position: absolute; right: 16px; top: 74px; display: flex; flex-direction: column; gap: 6px; }
+.cer-ferramentas .mini-btn { width: 36px; height: 36px; border-radius: 10px; font-size: 1rem; background: rgba(255, 255, 255, 0.72); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); color: var(--txt); }
+.cer-legenda { position: absolute; left: 14px; bottom: 14px; display: flex; flex-wrap: wrap; gap: 6px; max-width: calc(100% - 370px); }
+.cer-legenda .chip, .cer-viz .chip { display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.72); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border: none; box-shadow: 0 1px 6px rgba(0, 0, 0, 0.06); color: var(--txt); padding: 5px 10px; border-radius: 14px; font-size: 0.78rem; cursor: pointer; }
+.cer-ponto { width: 11px; height: 11px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.cer-ponto.sm { width: 8px; height: 8px; }
+.cer-cartao { position: absolute; right: 14px; bottom: 14px; width: 340px; max-height: calc(100% - 110px); overflow-y: auto; background: rgba(255, 255, 255, 0.86); -webkit-backdrop-filter: saturate(180%) blur(22px); backdrop-filter: saturate(180%) blur(22px); border-radius: 18px; box-shadow: 0 10px 40px rgba(0, 0, 0, 0.16); padding: 14px 16px; animation: sheetUp 0.25s cubic-bezier(0.2, 0.9, 0.3, 1); }
+.cer-cartao-topo { display: flex; align-items: flex-start; gap: 10px; }
+.cer-cartao-topo .cer-ponto { margin-top: 5px; width: 14px; height: 14px; }
+.cer-cartao-topo strong { display: block; font-size: 1.05rem; color: var(--txt-forte); overflow-wrap: anywhere; }
+.cer-cartao-topo small { color: var(--txt3); font-size: 0.78rem; }
+.cer-acoes { display: flex; gap: 8px; margin-top: 12px; }
+.cer-acoes .btn { flex: 1; margin: 0; padding: 10px; font-size: 0.92rem; }
+.cer-acoes .cer-abrir { background: var(--acento) !important; color: #fff !important; }
+.cer-viz { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.cer-viz .chip { background: var(--bg); box-shadow: none; }
+@keyframes sheetUp { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* temas escuros: vidro escuro */
+[data-tema="escuro"] .cer-busca-box input, [data-tema="escuro"] .cer-ferramentas .mini-btn, [data-tema="escuro"] .cer-legenda .chip, [data-tema="escuro"] .cer-cartao,
+[data-tema="medio"] .cer-busca-box input, [data-tema="medio"] .cer-ferramentas .mini-btn, [data-tema="medio"] .cer-legenda .chip, [data-tema="medio"] .cer-cartao,
+[data-tema="profissional"] .cer-busca-box input, [data-tema="profissional"] .cer-ferramentas .mini-btn, [data-tema="profissional"] .cer-legenda .chip, [data-tema="profissional"] .cer-cartao,
+[data-tema="violeta"] .cer-busca-box input, [data-tema="violeta"] .cer-ferramentas .mini-btn, [data-tema="violeta"] .cer-legenda .chip, [data-tema="violeta"] .cer-cartao,
+[data-tema="gamer"] .cer-busca-box input, [data-tema="gamer"] .cer-ferramentas .mini-btn, [data-tema="gamer"] .cer-legenda .chip, [data-tema="gamer"] .cer-cartao { background: rgba(28, 28, 30, 0.72); color: var(--txt); }
+@media (max-width: 800px) {
+  #cerebro { margin: 0 -16px; }
+  .cer-palco { border-radius: 0; box-shadow: none; height: calc(100dvh - var(--tabbar-h, 58px) - 40px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); min-height: 360px; }
+  .cer-topo { flex-direction: column; align-items: stretch; top: 8px; }
+  .cer-busca-box { width: 100%; }
+  .cer-ferramentas { top: 124px; right: 12px; }
+  .cer-legenda .chip { white-space: nowrap; flex-shrink: 0; }
+  .cer-legenda { max-width: none; right: 14px; bottom: 12px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .cer-legenda::-webkit-scrollbar { display: none; }
+  .cer-cartao { left: 10px; right: 10px; width: auto; bottom: 10px; max-height: 55%; }
+}
