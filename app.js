@@ -5101,7 +5101,7 @@ function alertasPrimos(pc) {
   if ((pc.caixa || {}).saldo < 0) a.push(['alto', `Caixa estimado negativo (${reais(pc.caixa.saldo)}): parte dos gastos saiu do seu CPF e da conta do MEI. Registre como aporte na aba Aportes e Caixa.`]);
   const ex = pc.expositores || {};
   if (ex.inicio) {
-    const dias = diasEntre(ex.inicio, hoje), vend = (ex.itens || []).reduce((s, i) => s + (i.vendidos || 0), 0), prox = 15 - (dias % 15);
+    const dias = diasEntre(ex.inicio, hoje), vend = totaisExpositores(pc).vendidos, prox = 15 - (dias % 15);
     a.push([dias >= 15 && !vend ? 'alto' : 'medio', vend ? `${vend} chaveiros vendidos nos expositores. Repita os modelos que saíram e troque os parados.` : `Expositores ativos há ${plural(dias, 'dia', 'dias')}. Próxima visita em ${plural(prox, 'dia', 'dias')}: registre os vendidos em Expositores.`]);
   }
   (pc.contasPagar || []).filter(c => !/pago/i.test(c.status || '') && c.venc >= hoje && diasEntre(hoje, c.venc) <= 10).slice(0, 2).forEach(c => a.push(['medio', `${esc(c.fornecedor)}: ${reais(c.valor)} vence em ${isoParaBR(c.venc).slice(0, 5)}.`]));
@@ -5196,11 +5196,21 @@ function htmlAbaPrimos(aba, pc) {
   if (aba === 'central') return primosArquivos(pc);
   return primosJarvis(pc);
 }
-function totaisExpositores(pc) { const it = ((pc.expositores || {}).itens || []); return { colocados: it.reduce((s, i) => s + (i.qtd || 0), 0), vendidos: it.reduce((s, i) => s + (i.vendidos || 0), 0), potencial: ((pc.expositores || {}).resumo || []).reduce((s, r) => s + (r.potencial || 0), 0) }; }
+/** Vendas dos expositores lançadas na aba Vendas (canal Consignado): o dinheiro de verdade, mesmo sem saber os modelos. */
+function vendasExpositorPlanilha(pc) { return ((pc && pc.vendas) || []).filter(v => /consignad/i.test(v.canal || '') || /^expositor/i.test(v.cliente || '')); }
+/** Colocados, vendidos e potencial dos expositores. Vendidos = o maior entre a contagem por modelo (aba Expositores) e as
+ *  unidades lançadas na aba Vendas — o dinheiro pode entrar antes de a visita dizer quais modelos saíram (J#9, 30/09/2026). */
+function totaisExpositores(pc) {
+  const it = ((pc.expositores || {}).itens || []), porModelo = it.reduce((s, i) => s + (i.vendidos || 0), 0), naPlanilha = vendasExpositorPlanilha(pc).reduce((s, v) => s + (Number(v.qtd) || 0), 0);
+  return { colocados: it.reduce((s, i) => s + (i.qtd || 0), 0), vendidos: Math.max(porModelo, naPlanilha), potencial: ((pc.expositores || {}).resumo || []).reduce((s, r) => s + (r.potencial || 0), 0) };
+}
+/** Quanto já voltou: a aba Vendas (fonte do dinheiro) + pedidos pagos no app + o que a contagem por modelo mostrar A MAIS do
+ *  que já foi lançado como venda de expositor (sem contar duas vezes a mesma venda). */
 function vendasLiquidasPrimos(pc) {
   const plan = ((pc && pc.vendas) || []).reduce((s, v) => s + (v.liquido || v.bruto || 0), 0);
   const app = orders.filter(o => o.paid).reduce((s, o) => s + (Number(o.price) || 0), 0);
-  const expo = ((pc && pc.expositores && pc.expositores.itens) || []).reduce((s, i) => s + (i.vendidos || 0) * (i.preco || 0) * (1 - ((pc.parametros || {}).comissaoExpositor || 0.3)), 0);
+  const porModelo = ((pc && pc.expositores && pc.expositores.itens) || []).reduce((s, i) => s + (i.vendidos || 0) * (i.preco || 0) * (1 - ((pc.parametros || {}).comissaoExpositor || 0.3)), 0);
+  const expo = Math.max(0, porModelo - vendasExpositorPlanilha(pc).reduce((s, v) => s + (v.liquido || v.bruto || 0), 0));
   return { plan, app, expo, total: plan + app + expo };
 }
 
@@ -5392,10 +5402,13 @@ function contabilidadePrimos(pc) {
   const receitaPlan = vendasAno.reduce((s, v) => s + (v.bruto || 0), 0), taxas = vendasAno.reduce((s, v) => s + (v.taxa || 0), 0);
   const vl = vendasLiquidasPrimos(pc);
   const receitaApp = orders.filter(o => o.paid && String(o.date || '').startsWith(ano)).reduce((s, o) => s + (Number(o.price) || 0), 0);
-  const expoBruto = ((pc.expositores || {}).itens || []).reduce((s, i) => s + (i.vendidos || 0) * (i.preco || 0), 0);
+  // expositores: a aba Vendas já traz o que foi lançado (com a comissão em "taxa"); da contagem por modelo entra só o que passar disso
+  const itens = (pc.expositores || {}).itens || [], consig = vendasExpositorPlanilha({ vendas: vendasAno });
+  const itensBruto = itens.reduce((s, i) => s + (i.vendidos || 0) * (i.preco || 0), 0), itensQtd = itens.reduce((s, i) => s + (i.vendidos || 0), 0), itensCusto = itens.reduce((s, i) => s + (i.vendidos || 0) * (i.custo || 0), 0);
+  const expoBruto = Math.max(0, itensBruto - consig.reduce((s, v) => s + (v.bruto || 0), 0));
   const receitaBruta = receitaPlan + receitaApp + expoBruto;
   const comissoes = expoBruto * ((pc.parametros || {}).comissaoExpositor || 0.3);
-  const cmv = ((pc.expositores || {}).itens || []).reduce((s, i) => s + (i.vendidos || 0) * (i.custo || 0), 0) + vendasAno.reduce((s, v) => s + custoDaVenda(pc, v), 0);
+  const cmv = (itensQtd ? itensCusto * Math.max(0, itensQtd - consig.reduce((s, v) => s + (Number(v.qtd) || 0), 0)) / itensQtd : 0) + vendasAno.reduce((s, v) => s + custoDaVenda(pc, v), 0);
   const depreciacao = (pc.despesas || []).filter(d => d.categoria === 'Equipamento' && d.data).reduce((s, d) => s + (d.total || 0) * Math.min(1, Math.max(0, diasEntre(d.data, hoje)) / 1825), 0);
   const resultado = receitaBruta - taxas - comissoes - cmv - despesasRealizadas - depreciacao;
   const cx = pc.caixa || {}, foraDosPix = Math.max(0, -(cx.saldo || 0));
