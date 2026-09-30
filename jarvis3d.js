@@ -553,7 +553,8 @@ function aplicarOrbita() { const o = orbitaEstado(); _euler.set(o.tilt, o.spin, 
 function spinParaFrente(p) { const o = orbitaEstado(); const th = Math.atan2(p.z, p.x); let s = th - Math.PI / 2; while (s - o.spin > Math.PI) s -= Math.PI * 2; while (o.spin - s > Math.PI) s += Math.PI * 2; return s; }
 /** Gira o mundo para que o ponto p (coordenadas do mundo) fique de frente para a câmera. */
 function trazerParaFrente(p) {
-  if (J.pal.orbita) { const o = orbitaEstado(); J.raioFoco = p.length(); o.spinAlvo = spinParaFrente(p); o.tiltAlvo = 0.14; o.vel = 0; return; }
+  J.giroEntrada = 0; // tocou numa área durante a volta da abertura: o foco manda
+  if (J.pal.orbita) { const o = orbitaEstado(); J.raioFoco = p.length(); o.spinAlvo = spinParaFrente(p); o.tiltAlvo = 0.02; o.vel = 0; return; } // órbita quase reta: a área para no meio da tela, não embaixo
   const atual = p.clone().applyQuaternion(J.mundo.quaternion); if (atual.length() < 1) return;
   J.raioFoco = p.length(); // o empurrão na tela é medido na profundidade do que está em foco
   const q = new THREE.Quaternion().setFromUnitVectors(atual.normalize(), new THREE.Vector3(0, 0, 1));
@@ -752,6 +753,13 @@ window.JarvisBrain = {
   deslocar(x, y) { J.oxAlvo = x || 0; J.oyAlvo = y || 0; tocar(); },
   focarArea: (a) => focarArea(a, false), focarNo, voltar,
   selecionar(id) { J.sel = id || null; marcarSel(); tocar(); },
+  /** Termina na hora as animações de câmera (foco, zoom, deslocamento) — usado nos testes de tela. */
+  concluir() {
+    if (!J.mundo) return; J.giroEntrada = 0; J.rel = J.relAlvo; J.ox = J.oxAlvo; J.oy = J.oyAlvo;
+    if (J.qAlvo) { J.mundo.quaternion.copy(J.qAlvo); J.qAtual = J.qAlvo.clone(); J.qAlvo = null; }
+    if (J.pal.orbita) { const o = orbitaEstado(); if (o.spinAlvo !== null) o.spin = o.spinAlvo; o.tilt = o.tiltAlvo; aplicarOrbita(); }
+    const d = dist(); J.prof = J.foco ? d - J.raioFoco : d; tocar();
+  },
   retomar() { J.ativo = true; redimensionar(); tocar(); },
   pausar() { J.ativo = false; cancelAnimationFrame(J.raf); J.raf = 0; },
   get foco() { return J.foco; },

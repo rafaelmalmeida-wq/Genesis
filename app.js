@@ -4617,11 +4617,11 @@ function mostrarCartaoCerebro(n) {
     ${viz.length ? `<div class="cer-viz">${viz.slice(0, 24).map(v => `<button type="button" class="chip" onclick="focarNoCerebro(cer.mapa['${esc(v.id)}'])"><span class="cer-ponto sm" style="background:${esc(v.cor)}"></span>${esc(v.nome)}</button>`).join('')}${viz.length > 24 ? `<span class="item-date">+${viz.length - 24}</span>` : ''}</div>` : ''}
     ${!podeAbrir && n.tipo === 'secao' ? `<p class="hint" style="margin:8px 0 0">Esta seção cresce com as suas notas: crie uma nota aqui (ou use o marcador <strong>${esc(semAcentoCer(n.nome))}</strong>) e ela vira uma bolinha ligada a esta seção.</p>` : ''}`;
   el.hidden = false;
-  if (jv.modo === '3d') { document.getElementById('jv-painel').hidden = true; ajustarDeslocamentoJarvis(); } // no 3D, uma janelinha por vez
+  if (jv.modo === '3d') { document.getElementById('jv-painel').hidden = true; const bt = document.getElementById('jv-abrir-menu'); if (bt) bt.hidden = true; ajustarDeslocamentoJarvis(); } // no 3D, uma janelinha por vez
 }
 function esconderCartaoCerebro() {
   const el = document.getElementById('cer-cartao'); if (el) el.hidden = true;
-  if (jv.modo === '3d') { JarvisBrain.selecionar(null); if (jv.painel) document.getElementById('jv-painel').hidden = false; ajustarDeslocamentoJarvis(); }
+  if (jv.modo === '3d') { JarvisBrain.selecionar(null); if (jv.painel) document.getElementById('jv-painel').hidden = false; renderHeroiJarvis(); ajustarDeslocamentoJarvis(); }
 }
 /** "Abrir": vai para a aba (e seção) do item e, se houver, abre o formulário dele. */
 function abrirNoCerebro(n) {
@@ -4708,7 +4708,8 @@ function abrirCerebro() {
 const JARVIS_REPO = 'rafaelmalmeida-wq/Genesis-JARVIS'; // o COFRE (privado). Só o nome; o token fica só no aparelho.
 const jv = { modo: null, esperando: false, area: null, painel: null, assinatura: '', expandido: false, ouvindo: false, rec: null, religar: 0, enviarAoParar: false, iaPensando: false,
   anexos: [], contexto: '', areaMsg: null, aba: 'jarvis', atualizado: {}, ultimaSincCofre: 0, sincronizando: false, catalogo: null, fotos: new Map(), busca: '',
-  miniaturas: {}, controle: null, payback: 12, calc: null, subContabil: 'geral', catLanc: 'Todos', buscaLanc: '', visita: null, gerandoBriefing: false };
+  miniaturas: {}, controle: null, payback: 12, calc: null, subContabil: 'geral', catLanc: 'Todos', buscaLanc: '', visita: null, gerandoBriefing: false,
+  heroi: null, menu: null, abaMenu: 'resumo' }; // heroi = área no topo da página inicial; menu = página de menu aberta (fase 5)
 const $j = id => document.getElementById(id);
 // configuração só deste aparelho: iaChave (Gemini), iaModelo/iaModelos (escolhidos sozinhos), iaBusca (busca no Google disponível?),
 // iaDados (mandar os números da Primos sem nomes — autorizado pelo Rafael), voz (ler respostas), brapi (Mercado)
@@ -4798,6 +4799,7 @@ function renderJarvis() {
   if (cer.sel) { cer.sel = cer.mapa[cer.sel.id] || null; if (!cer.sel) esconderCartaoCerebro(); }
   renderTopoJarvis(); renderAreasJarvis(); renderFalaJarvis(); atualizarSubplano(); atualizarPensandoJarvis();
   if (jv.painel) renderPainelJarvis();
+  if (jv.heroi) renderHeroiJarvis(); if (jv.menu) renderMenuArea();
   if (abaAtual() === 'cerebro') JarvisBrain.retomar();
 }
 
@@ -4951,6 +4953,134 @@ function analiseAreaJarvis(area) {
 }
 
 // ============================================================================
+// HERÓI + MENU DAS ÁREAS (fase 5). Tocar numa área deixa a página inicial com a cara dela: no topo, o
+// "herói" (o mais importante agora, uma fala do J.A.R.V.I.S. e até 3 números); embaixo, a barra
+// "Abrir o menu de X ›". O menu é uma página por área (a Primos 3D tem a dela, com as abas próprias):
+// a aba J.A.R.V.I.S. (resumo) e um separador por setor, com os itens ligados, "＋ Nota" e o atalho para a aba do app.
+// ============================================================================
+function variacaoCurta(v) { return v === null || v === undefined || isNaN(v) ? '—' : `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(1).replace('.', ',')}%`; }
+/** O que o herói mostra de cada área: título (HTML seguro), fala (HTML seguro) e até 3 números [valor, rótulo]. */
+function heroiArea(area) {
+  const hoje = hojeISO(), notas = cer.nos.filter(n => n.nota && n.area === area).length;
+  const ligados = cer.nos.filter(n => n.tipo === 'item' && n.area === area && !n.categoria).length;
+  if (area === 'primos') {
+    const pc = primosCentral, prod = orders.filter(o => pedidoAberto(o) && o.status !== 'orcamento');
+    const atras = prod.filter(o => o.due && o.due < hoje).length, orc = orders.filter(o => o.status === 'orcamento').length;
+    const receber = prod.filter(o => !o.paid).reduce((s, o) => s + (Number(o.price) || 0), 0), al = alertasPrimos(pc), ex = pc ? totaisExpositores(pc) : null;
+    const cx = (pc && pc.caixa) || {}, vl = pc ? vendasLiquidasPrimos(pc) : null;
+    const titulo = atras ? plural(atras, 'pedido atrasado', 'pedidos atrasados') : prod.length ? plural(prod.length, 'pedido em produção', 'pedidos em produção') : orc ? plural(orc, 'orçamento esperando', 'orçamentos esperando')
+      : pc && cx.totalGasto ? `${reais(vl.total)} de ${reais(cx.totalGasto)} recuperados` : 'Sua empresa num lugar só';
+    const fala = al.length ? al[0][1] : pc && pc.analise && pc.analise.manchete ? negritoSeguro(pc.analise.manchete) : 'Conecte o computador (Ajustes do J.A.R.V.I.S.) para eu trazer a Primos 3D Central e analisar o negócio.';
+    return { titulo, fala, ind: [[prod.length, 'em produção'], [reais(receber), 'a receber'], ex ? [`${ex.vendidos}/${ex.colocados}`, 'vendidos nos expositores'] : [orc, 'orçamentos']] };
+  }
+  if (area === 'mercado') {
+    const m = cacheMercado();
+    if (!m || !m.btc) { atualizarMercado(false); return { titulo: 'Buscando as cotações…', fala: 'Bitcoin, dólar, euro e ações. Informação, não recomendação.', ind: [] }; }
+    return { titulo: `Bitcoin ${formatCurrency(m.btc.brl)}`, fala: `${m.btc.var >= 0 ? 'Alta' : 'Queda'} de ${Math.abs(m.btc.var || 0).toFixed(1).replace('.', ',')}% em 24 h.${m.usd ? ` Dólar a ${formatCurrency(m.usd.v)}.` : ''}${m.eur ? ` Euro a ${formatCurrency(m.eur.v)}.` : ''} Informação, não recomendação.`,
+      ind: [[variacaoCurta(m.btc.var), 'bitcoin 24 h'], m.usd ? [formatCurrency(m.usd.v), 'dólar'] : null, m.ibov ? [Math.round(m.ibov.v).toLocaleString('pt-BR'), 'Ibovespa'] : m.eth && m.eth.brl ? [formatCurrency(m.eth.brl), 'ethereum'] : null].filter(Boolean) };
+  }
+  if (area === 'familia') {
+    const datas = familia.filter(f => f.tipo === 'data').map(f => ({ ...f, prox: proximaOcorrencia(f.data) })).sort((a, b) => (a.prox || '9').localeCompare(b.prox || '9'));
+    const d = datas[0], dias = d && d.prox ? diasEntre(hoje, d.prox) : null;
+    return { titulo: d ? (dias === 0 ? `Hoje: ${esc(d.texto)}` : `${esc(d.texto)} em ${plural(dias, 'dia', 'dias')}`) : 'O que importa de verdade',
+      fala: d ? 'Quer que eu lembre de um presente ou de uma mensagem?' : 'Guarde fotos, aniversários e recados: eu lembro das datas por você.',
+      ind: [[familia.filter(f => f.tipo === 'foto').length, 'fotos'], [datas.length, 'datas especiais'], [familia.filter(f => f.tipo === 'recado').length, 'recados']] };
+  }
+  if (area === 'eng') {
+    const trab = shifts.filter(s => s.date >= hoje).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
+    return { titulo: trab.length ? `${esc(trab[0].desc || 'Trabalho')} · ${esc(rotuloData(trab[0].date))}` : notas ? plural(notas, 'nota de engenharia', 'notas de engenharia') : 'Pronta para seus projetos',
+      fala: trab.length ? `Próximo trabalho na agenda${trab[0].time ? ' às ' + esc(trab[0].time) : ''}.` : 'Projetos, obras, normas (NBR), cálculos e softwares. No menu você começa por qualquer setor.',
+      ind: [[notas, 'notas'], [trab.length, 'na agenda'], [ligados, 'itens ligados']] };
+  }
+  if (area === 'sst') return { titulo: notas ? plural(notas, 'nota de segurança', 'notas de segurança') : 'Pronta para as NRs', fala: 'NRs, inspeções, treinamentos, EPIs, PGR/PCMSO e laudos. No menu você começa por qualquer setor.', ind: [[notas, 'notas'], [ligados, 'itens ligados']] };
+  if (area === 'academia') {
+    const tr7 = workouts.filter(w => w.date >= somarDiasCer(hoje, -6)), min = tr7.reduce((a, w) => a + (Number(w.minutes) || 0), 0);
+    return { titulo: workouts.some(w => w.date === hoje) ? 'Treino de hoje feito ✓' : tr7.length ? 'Bora treinar hoje?' : 'Hora de voltar a treinar', fala: analiseAreaJarvis('academia').fala, ind: [[tr7.length, 'treinos (7 dias)'], [`${min} min`, 'de treino']] };
+  }
+  const abertas = tasks.filter(t => !t.done), paraHoje = abertas.filter(t => t.due && t.due <= hoje);
+  const evHoje = events.filter(e => e.date === hoje && !e.done).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+  return { titulo: paraHoje.length ? esc(paraHoje[0].text) : evHoje.length ? `${esc(evHoje[0].title)}${evHoje[0].time ? ' · ' + esc(evHoje[0].time) : ''}` : 'Dia sem prazos apertados',
+    fala: paraHoje.length ? `A primeira tarefa de hoje${paraHoje.length > 1 ? ` (e mais ${paraHoje.length - 1})` : ''}.` : evHoje.length ? 'Seu próximo compromisso de hoje.' : 'Bom momento para adiantar algo importante antes que vire urgente.',
+    ind: [[abertas.length, 'tarefas abertas'], [evHoje.length, 'compromissos hoje'], [`${habits.filter(h => h.done).length}/${habits.length}`, 'hábitos']] };
+}
+/** Desenha (ou esconde) o herói e a barra "Abrir o menu de X ›" conforme a área em foco. */
+function renderHeroiJarvis() {
+  const el = $j('jv-heroi'), bt = $j('jv-abrir-menu'); if (!el || !bt) return;
+  const a = AREAS_CEREBRO.find(x => x.id === jv.heroi);
+  const mostrar = !!(a && jv.modo === '3d' && $j('cerebro').classList.contains('jv-focado'));
+  el.hidden = !mostrar; bt.hidden = !mostrar || !$j('cer-cartao').hidden; // com o cartão de um setor/item aberto, a barra sai da frente
+  if (!mostrar) return;
+  const h = heroiArea(a.id), nv = nivelArea(a.id);
+  el.innerHTML = `<div class="jv-heroi-selo"><span class="jv-heroi-ico">${iconeAreaSVG(a.id)}</span><span>${esc(a.nome)}</span><i style="background:${COR_NIVEL[nv.n]}" title="J.A.R.V.I.S.: ${NOME_NIVEL[nv.n]}"></i></div>
+    <h2 class="jv-heroi-titulo">${h.titulo}</h2><p class="jv-heroi-fala">${h.fala}</p>
+    ${h.ind.length ? `<div class="jv-heroi-ind">${h.ind.map(([v, r]) => `<div><strong>${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</div>` : ''}`;
+  bt.innerHTML = `<span class="jv-abrir-menu-ico">${HALO}</span><span class="jv-abrir-menu-txt">Abrir o menu de <b>${esc(a.nome)}</b></span><em aria-hidden="true">›</em>`;
+}
+/** A página de menu da área (a Primos 3D abre a página própria dela). */
+function abrirMenuArea(area, aba) {
+  if (!area) return;
+  if (area === 'primos') { abrirPrimos(aba); return; }
+  if (!AREAS_CEREBRO.some(x => x.id === area)) return;
+  jv.menu = area; jv.abaMenu = aba || 'resumo'; jv.area = area;
+  const el = $j('jv-menu-area'); if (el.hidden) { empilharCamada('menu', fecharMenuArea); jv.menuEntrando = true; }
+  el.hidden = false; renderMenuArea(); renderAreasJarvis();
+}
+function fecharMenuArea(daVolta) {
+  const el = $j('jv-menu-area'); if (!el || el.hidden) return;
+  el.hidden = true; jv.menu = null; if (!daVolta) desempilharCamada('menu');
+  jv.area = jv.heroi || null; renderAreasJarvis(); // volta para o herói da área (se ele estava na tela)
+}
+function abaMenuArea(aba) {
+  jv.abaMenu = aba; renderMenuArea(); const c = $j('jv-menu-corpo'); if (c) c.scrollTop = 0;
+  const b = document.querySelector(`#jv-menu-area .jvp-abas button[data-aba="${aba}"]`); if (b) b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' });
+}
+function renderMenuArea() {
+  const el = $j('jv-menu-area'); if (!el || el.hidden || !jv.menu) return;
+  const a = AREAS_CEREBRO.find(x => x.id === jv.menu); if (!a) return;
+  const setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === a.id);
+  if (jv.abaMenu !== 'resumo' && !setores.some(s => s.id === jv.abaMenu)) jv.abaMenu = 'resumo';
+  const nv = nivelArea(a.id), y = ($j('jv-menu-corpo') || {}).scrollTop || 0, entrando = jv.menuEntrando; jv.menuEntrando = false;
+  const abas = [['resumo', 'J.A.R.V.I.S.'], ...setores.map(s => [s.id, s.nome])];
+  const alvoNota = jv.abaMenu === 'resumo' ? 'a-' + a.id : jv.abaMenu;
+  el.innerHTML = `<div class="jvp-janela jvm-janela${entrando ? ' entrando' : ''}" style="--area:${a.cor}">
+    <header class="jvp-topo jvm-topo"><span class="jvm-ico">${iconeAreaSVG(a.id, '#ffffff')}</span><div class="jvp-marca"><strong>${esc(a.nome)}</strong><small>Menu do J.A.R.V.I.S.</small></div>
+      <span class="jvp-nivel${areaAtualizando(a.id) ? ' atualizando' : ''}" style="--status:${COR_NIVEL[nv.n]}" title="J.A.R.V.I.S.: ${NOME_NIVEL[nv.n]}"></span><button type="button" class="jv-x" onclick="fecharMenuArea()" aria-label="Fechar">✕</button></header>
+    <div class="jvp-acoes">
+      <label class="jvp-acao"><span class="jvp-ico">${SVG_CLIPE}</span><span>Mandar print</span><input type="file" accept="image/*" multiple hidden onchange="anexarPrintJarvis(this, '${esc(a.nome)}', '${a.id}')"></label>
+      <button type="button" class="jvp-acao jvp-falar" onclick="abrirVozJarvis('${esc(a.nome)}', '${a.id}')"><span class="jvp-ico">${HALO}</span><span>J.A.R.V.I.S.</span></button>
+      <button type="button" class="jvp-acao" onclick="notaMenuArea('${esc(alvoNota)}')"><span class="jvp-ico jvm-mais">＋</span><span>Nova nota</span></button>
+    </div>
+    <nav class="jvp-abas">${abas.map(([k, n]) => `<button type="button" data-aba="${esc(k)}" class="${jv.abaMenu === k ? 'on' : ''}" onclick="abaMenuArea('${esc(k)}')">${esc(n)}</button>`).join('')}</nav>
+    <div class="jvp-corpo" id="jv-menu-corpo">${jv.abaMenu === 'resumo' ? htmlResumoMenu(a) : htmlSetorMenu(cer.mapa[jv.abaMenu])}</div>
+  </div>`;
+  const c = $j('jv-menu-corpo'); if (c) c.scrollTop = y;
+  if (a.id === 'mercado' && jv.abaMenu === 'resumo') atualizarMercado(false);
+}
+/** Aba J.A.R.V.I.S. do menu: a análise da área + os setores (Mercado e Família reaproveitam os painéis completos). */
+function htmlResumoMenu(a) {
+  if (a.id === 'mercado') return htmlMercado(true);
+  if (a.id === 'familia') return htmlFamilia(true);
+  const an = analiseAreaJarvis(a.id), setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === a.id);
+  return falaHTML(an.fala) + linhaNivel(a.id) + indicadoresHTML(an.ind)
+    + `<div class="jv-bloco"><h5>Setores</h5><div class="jvm-setores">${setores.map(s => { const q = [...vizinhosCer(s)].filter(v => v.tipo === 'item').length; return `<button type="button" onclick="abaMenuArea('${esc(s.id)}')"><strong>${esc(s.nome)}</strong><small>${q ? plural(q, 'item', 'itens') : 'nada ainda'}</small><em aria-hidden="true">›</em></button>`; }).join('')}</div></div>`
+    + (an.abrir ? `<button type="button" class="btn jv-abrir" onclick="fecharMenuArea(); changeTab('${an.abrir[0]}')">Abrir ${esc(an.abrir[1])} ›</button>` : '');
+}
+/** Um setor: os itens ligados a ele (tocar abre), "＋ Nota" com o marcador do setor e o atalho para a aba do app. */
+function htmlSetorMenu(s) {
+  if (!s) return '';
+  const itens = [...vizinhosCer(s)].filter(v => v.tipo === 'item').sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'));
+  const aba = s.abrir && s.abrir.tab ? nomeDaAba(s.abrir.tab) : '';
+  let h = itens.length ? `<div class="jv-bloco"><h5>${esc(s.nome)} · ${plural(itens.length, 'item', 'itens')}</h5><ul class="jvm-itens">${itens.map(n => `<li><button type="button" onclick="abrirItemMenu('${esc(n.id)}')"><span class="cer-ponto sm" style="background:${esc(n.cor)}"></span><span class="jvm-nome">${esc(n.nome)}</span><em aria-hidden="true">›</em></button></li>`).join('')}</ul></div>`
+    : falaHTML(`Ainda não há nada em <b>${esc(s.nome)}</b>. Crie a primeira nota aqui: ela entra neste setor e vira uma bolinha no cérebro.`);
+  return h + (aba ? `<button type="button" class="btn jv-abrir" onclick="fecharMenuArea(); abrirNoCerebro(cer.mapa['${esc(s.id)}'])">Abrir ${esc(aba)} ›</button>` : '')
+    + `<button type="button" class="btn jv-mais" onclick="notaMenuArea('${esc(s.id)}')">＋ Nota em ${esc(s.nome)}</button><button type="button" class="btn jv-mais" onclick="verNoCerebroMenu('${esc(s.id)}')">Ver no cérebro</button>`;
+}
+function nomeDaAba(tab) { const b = document.querySelector(`#btn-${tab} .tab-lbl`); return b ? b.textContent.trim() : tab; }
+function abrirItemMenu(id) { const n = cer.mapa[id]; if (!n) return; fecharMenuArea(); if (n.abrir && n.abrir.tab) abrirNoCerebro(n); else irParaNoJarvis(id); }
+function notaMenuArea(id) { fecharMenuArea(); novaNotaDoCerebro(id); }
+function verNoCerebroMenu(id) { fecharMenuArea(); irParaNoJarvis(id); }
+
+// ============================================================================
 // PRIMOS 3D no J.A.R.V.I.S. — uma PÁGINA própria (com a cara da marca), menu simples e FUNCIONAL:
 //   J.A.R.V.I.S. (briefing do dia, perguntas, recomendações) · Análise (payback, calculadora de preço,
 //   rentabilidade por produto e canal) · Contabilidade (origens × aplicações, resultado, fluxo de caixa,
@@ -4993,7 +5123,8 @@ function abrirPrimos(aba) {
 function fecharPrimos(daVolta) {
   if ($j('jv-primos').hidden) return;
   $j('jv-primos').hidden = true; if (!daVolta) desempilharCamada('primos');
-  if (jv.area === 'primos' && !jv.painel) { jv.area = null; if (jv.modo === '3d') JarvisBrain.voltar(); renderAreasJarvis(); }
+  if (jv.heroi) { jv.area = jv.heroi; renderHeroiJarvis(); renderAreasJarvis(); } // aberta pela barra do herói: volta para ele
+  else if (jv.area === 'primos' && !jv.painel) { jv.area = null; if (jv.modo === '3d') JarvisBrain.voltar(); renderAreasJarvis(); }
 }
 function abaPrimos(aba) { jv.aba = aba; renderPrimosPagina(); const c = $j('jv-primos-corpo'); if (c) c.scrollTop = 0; const b = document.querySelector(`.jvp-abas button[data-aba="${aba}"]`); if (b) b.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }
 function renderPrimosPagina() {
@@ -5484,6 +5615,8 @@ async function atualizarMercado(forcar) {
   try { localStorage.setItem('lifeos_mercado_cache', JSON.stringify(novo)); } catch (e) { } // cache do aparelho, não é dado do app
   mercadoBuscando = false;
   if (jv.painel === 'mercado') { const el = $j('jv-painel'); const y = el.scrollTop; el.innerHTML = htmlArea('mercado'); el.scrollTop = y; }
+  if (jv.heroi === 'mercado') renderHeroiJarvis();
+  if (jv.menu === 'mercado' && jv.abaMenu === 'resumo') { const c = $j('jv-menu-corpo'); if (c) { const y = c.scrollTop; c.innerHTML = htmlMercado(true); c.scrollTop = y; } }
   renderAreasJarvis();
 }
 function variacao(v) { if (v === null || v === undefined || isNaN(v)) return ''; const s = v >= 0 ? '▲' : '▼'; return `<span class="jv-var ${v >= 0 ? 'sobe' : 'desce'}">${s} ${Math.abs(v).toFixed(2).replace('.', ',')}%</span>`; }
@@ -5492,9 +5625,10 @@ function linhaSVG(p) {
   const pts = p.map((v, i) => `${(i / (p.length - 1) * w).toFixed(1)},${(h - 4 - (v - min) / (max - min || 1) * (h - 8)).toFixed(1)}`).join(' ');
   return `<svg class="jv-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
 }
-function htmlMercado() {
+/** noMenu = dentro da página de menu do Mercado (os setores já são as abas; o atalho fecha o menu antes). */
+function htmlMercado(noMenu) {
   const m = cacheMercado();
-  if (!m || !m.btc) return falaHTML('Buscando as cotações…') + linhaNivel('mercado') + setoresHTML('mercado');
+  if (!m || !m.btc) return falaHTML('Buscando as cotações…') + linhaNivel('mercado') + (noMenu ? '' : setoresHTML('mercado'));
   const hora = new Date(m.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const btcTxt = `Bitcoin a <b>${formatCurrency(m.btc.brl)}</b> (US$ ${Math.round(m.btc.usd).toLocaleString('pt-BR')}), ${m.btc.var >= 0 ? 'alta' : 'queda'} de ${Math.abs(m.btc.var || 0).toFixed(1).replace('.', ',')}% em 24 h.${m.usd ? ` Dólar a ${formatCurrency(m.usd.v)}.` : ''}`;
   let html = falaHTML(btcTxt) + linhaNivel('mercado');
@@ -5502,7 +5636,7 @@ function htmlMercado() {
   html += `<div class="jv-bloco"><h5>Ações Brasil${m.ibov ? ` · Ibovespa ${Math.round(m.ibov.v).toLocaleString('pt-BR')} pts ${variacao(m.ibov.var)}` : ''}</h5><ul class="jv-tabela">${(m.acoes || []).map(a => `<li><span>${esc(a.s)}</span><em>${formatCurrency(a.v)}</em><small>${variacao(a.var)}</small></li>`).join('') || '<li><span>Sem dados agora</span></li>'}</ul></div>`;
   html += `<div class="jv-bloco"><h5>Ações EUA (BDRs na B3)</h5>${(m.eua || []).length ? `<ul class="jv-tabela">${m.eua.map(a => `<li><span>${esc(a.n)} <small>${esc(a.s)}</small></span><em>${formatCurrency(a.v)}</em><small>${variacao(a.var)}</small></li>`).join('')}</ul>` : `<p class="jv-dica">Com uma chave <b>grátis</b> da brapi.dev eu mostro o Ibovespa, mais ações do Brasil e as americanas (Apple, Nvidia, Microsoft...). Crie em brapi.dev e cole em <a href="#" onclick="abrirAjustesJarvis(); return false">Ajustes do JARVIS</a>.</p>`}</div>`;
   html += `<p class="jv-dica">Atualizado às ${hora} · CoinGecko, AwesomeAPI e brapi.dev · informação, não recomendação de investimento. <a href="#" onclick="atualizarMercado(true); return false">Atualizar</a></p>`;
-  return html + setoresHTML('mercado') + `<button type="button" class="btn jv-abrir" onclick="changeTab('business')">Abrir Negócios (carteira e metas) ›</button>`;
+  return html + (noMenu ? '' : setoresHTML('mercado')) + `<button type="button" class="btn jv-abrir" onclick="${noMenu ? 'fecharMenuArea(); ' : ''}changeTab('business')">Abrir Negócios (carteira e metas) ›</button>`;
 }
 
 // ============================================================================
@@ -5510,7 +5644,7 @@ function htmlMercado() {
 // que sincroniza), datas especiais (aniversários) e recados. Módulo `familia`.
 // ============================================================================
 function proximaOcorrencia(iso) { if (!iso) return null; const hoje = hojeISO(); const [, m, d] = iso.split('-'); let y = Number(hoje.slice(0, 4)); let p = `${y}-${m}-${d}`; if (p < hoje) p = `${y + 1}-${m}-${d}`; return p; }
-function htmlFamilia() {
+function htmlFamilia(noMenu) {
   const fotos = familia.filter(f => f.tipo === 'foto'), datas = familia.filter(f => f.tipo === 'data').map(f => ({ ...f, prox: proximaOcorrencia(f.data) })).sort((a, b) => (a.prox || '9').localeCompare(b.prox || '9')), recados = familia.filter(f => f.tipo === 'recado');
   const hoje = hojeISO(); const perto = datas.find(d => d.prox && diasEntre(hoje, d.prox) <= 30);
   let html = falaHTML(perto ? `${diasEntre(hoje, perto.prox) === 0 ? 'Hoje' : 'Em ' + plural(diasEntre(hoje, perto.prox), 'dia', 'dias')}: <b>${esc(perto.texto)}</b>. Quer que eu lembre de um presente ou uma mensagem?` : 'O lugar do que importa de verdade. Guarde aqui fotos, aniversários e recados: eu lembro das datas por você.') + linhaNivel('familia');
@@ -5518,7 +5652,7 @@ function htmlFamilia() {
   html += `<div class="jv-bloco"><h5>Datas especiais</h5><ul class="jv-tabela">${datas.map(d => `<li><span>${esc(d.texto)}</span><em>${isoParaBR(d.data).slice(0, 5)}</em><small>${d.prox ? (diasEntre(hoje, d.prox) === 0 ? 'hoje!' : 'em ' + plural(diasEntre(hoje, d.prox), 'dia', 'dias')) : ''} <a href="#" onclick="removerFamilia(${d.id}); return false">tirar</a></small></li>`).join('') || '<li><span>Nenhuma ainda</span></li>'}</ul></div>`;
   if (recados.length) html += `<div class="jv-bloco"><h5>Recados</h5><ul class="jv-lista">${recados.map(r => `<li>${esc(r.texto)} <a href="#" onclick="removerFamilia(${r.id}); return false">tirar</a></li>`).join('')}</ul></div>`;
   html += `<form class="jv-form" onsubmit="addFamilia(event)"><input id="jv-fam-texto" placeholder="Nome / legenda / recado / link" autocomplete="off"><input id="jv-fam-data" type="date" title="Data (para aniversários)"><div class="jv-form-botoes"><button type="submit" class="btn" data-tipo="data" onclick="this.form.dataset.tipo='data'">＋ Data</button><button type="submit" class="btn" onclick="this.form.dataset.tipo='recado'">＋ Recado</button><button type="submit" class="btn" onclick="this.form.dataset.tipo='link'">＋ Foto por link</button></div></form>`;
-  return html + setoresHTML('familia');
+  return html + (noMenu ? '' : setoresHTML('familia'));
 }
 function addFamilia(ev) {
   ev.preventDefault(); const tipo = ev.target.dataset.tipo || 'recado';
@@ -5749,7 +5883,7 @@ ESTILO: curto e escaneável (até ~150 palavras, a menos que ele peça detalhe),
 LIMITES: você conversa pelo app. Você não envia e-mails, não posta em redes, não faz pagamentos nem compras. Quem mexe no computador — planilha "Primos 3D - Gestão Financeira.xlsx", pasta "Primos 3D Central", código do app — é o Claude, no PC do ${nome}.
 QUANDO PRECISAR DO COMPUTADOR (lançar ou corrigir algo na planilha, guardar print/nota fiscal na Central, ler um arquivo da Central, mudar o app): responda normalmente e termine com a linha exata ⟦PC: <o que o Claude deve fazer, em 1 frase objetiva>⟧. Só use quando for mesmo necessário.
 PRINTS/FOTOS de compra ou venda: leia loja, data, itens, quantidades, valores, frete e total; mostre um resumo em lista e termine com ⟦PC: lançar ... na aba Filamentos/Despesas/Vendas⟧ (filamento → Filamentos; outras compras → Despesas; venda → Vendas). Se algo estiver ilegível, pergunte antes.
-NAVEGAR: se ajudar, termine com ⟦ABRIR: destino⟧, destino entre: primos, primos/analise, primos/contabilidade, primos/vendas, primos/expositores, primos/producao, primos/marketing, primos/central, financas, agenda, tarefas, notas, saude, negocios, ajustes.
+NAVEGAR: se ajudar, termine com ⟦ABRIR: destino⟧, destino entre: primos, primos/analise, primos/contabilidade, primos/vendas, primos/expositores, primos/producao, primos/marketing, primos/central, engenharia, seguranca, mercado, academia, familia, diaadia, financas, agenda, tarefas, notas, saude, negocios, ajustes.
 BUSCA: para fatos atuais, preços, concorrentes, tendências, datas comemorativas e normas, use a busca do Google e diga de onde veio.
 DESABAFO: acolha primeiro, sem julgar; no máximo uma pergunta; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); use os códigos como estão. Nunca peça senhas ou dados bancários.
@@ -5961,9 +6095,12 @@ const DESTINOS_JARVIS = {
   'primos/vendas': ['Abrir Vendas', () => abrirPrimos('vendas')], 'primos/expositores': ['Abrir Expositores', () => abrirPrimos('expositores')], 'primos/producao': ['Abrir Produção', () => abrirPrimos('producao')],
   'primos/marketing': ['Abrir Marketing', () => abrirPrimos('marketing')], 'primos/central': ['Abrir a Central', () => abrirPrimos('central')],
   financas: ['Abrir Finanças', () => changeTab('finances')], agenda: ['Abrir Agenda', () => changeTab('home')], tarefas: ['Abrir Tarefas', () => changeTab('tasks')], notas: ['Abrir Notas', () => changeTab('notes')],
-  saude: ['Abrir Saúde', () => changeTab('health')], negocios: ['Abrir Negócios', () => changeTab('business')], ajustes: ['Ajustes do J.A.R.V.I.S.', () => abrirAjustesJarvis()]
+  saude: ['Abrir Saúde', () => changeTab('health')], negocios: ['Abrir Negócios', () => changeTab('business')], ajustes: ['Ajustes do J.A.R.V.I.S.', () => abrirAjustesJarvis()],
+  engenharia: ['Abrir Engenharia Civil', () => abrirMenuArea('eng')], seguranca: ['Abrir Segurança do Trabalho', () => abrirMenuArea('sst')], mercado: ['Abrir Mercado', () => abrirMenuArea('mercado')],
+  academia: ['Abrir Academia', () => abrirMenuArea('academia')], familia: ['Abrir Família', () => abrirMenuArea('familia')], diaadia: ['Abrir Dia a dia', () => abrirMenuArea('dia')]
 };
-function irDestinoJarvis(d) { const x = DESTINOS_JARVIS[d]; if (!x) return; if (d.startsWith('primos')) { fecharChatJarvis(); if (abaAtual() !== 'cerebro') changeTab('cerebro'); } else if (d !== 'ajustes') fecharChatJarvis(); x[1](); }
+const DESTINOS_NA_CASA = ['engenharia', 'seguranca', 'mercado', 'academia', 'familia', 'diaadia']; // menus que vivem na página inicial, como a Primos
+function irDestinoJarvis(d) { const x = DESTINOS_JARVIS[d]; if (!x) return; if (d.startsWith('primos') || DESTINOS_NA_CASA.includes(d)) { fecharChatJarvis(); if (abaAtual() !== 'cerebro') changeTab('cerebro'); } else if (d !== 'ajustes') fecharChatJarvis(); x[1](); }
 function copiarMsgJarvis(id) { const m = jarvisChat.find(x => x.id === id); if (!m) return; const t = desanonimizar(m.t || ''); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Copiado.'), () => toast('Não consegui copiar.')); }
 function escalarMsgJarvis(id) {
   const k = jarvisChat.findIndex(x => x.id === id); if (k < 0) return; const m = jarvisChat[k];
@@ -6135,25 +6272,26 @@ function htmlSubplano() {
   html += lista.length ? `<ul class="jv-memorias">${lista.map(m => `<li><div class="jv-mem-topo"><span>${(TIPOS_MEMORIA[m.tipo] || TIPOS_MEMORIA.nota)[0]} ${(TIPOS_MEMORIA[m.tipo] || TIPOS_MEMORIA.nota)[1]}</span><small>${isoParaBR(m.quando.slice(0, 10)).slice(0, 5)} ${m.quando.slice(11, 16)}</small><button type="button" class="jv-x mini" onclick="removerMemoria(${m.id})" aria-label="Apagar">✕</button></div><p class="eu">${esc(m.texto)}</p>${m.resposta ? `<p class="ele">${linkify(esc(m.resposta))}</p>` : ''}</li>`).join('')}</ul>` : '<p class="jv-dica">Nada guardado ainda.</p>';
   return html;
 }
-function abrirSubplano() { jv.area = null; cer.sel = null; $j('cer-cartao').hidden = true; $j('cerebro').classList.add('jv-focado'); abrirPainelJarvis('subplano'); }
+function abrirSubplano() { jv.area = jv.heroi = null; cer.sel = null; $j('cer-cartao').hidden = true; $j('cerebro').classList.add('jv-focado'); renderHeroiJarvis(); abrirPainelJarvis('subplano'); }
 function ditarNoSubplano() { const inp = $j('jv-sub-texto'); if (!inp) return; if (jv.ouvindo) { pararMicJarvis(); return; } iniciarMicJarvis(inp); }
 /** Tocar no núcleo (o próprio J.A.R.V.I.S.) abre a conversa. */
 function abrirNucleoJarvis() { abrirChatJarvis({}); }
 function htmlNucleo() { setTimeout(() => { voltarJarvis(); abrirChatJarvis({}); }, 0); return ''; }
 
 // --- navegação: área → setor → item, e a volta para a visão geral ---
-/** O 3D avisa que uma área foi tocada (ele mesmo já girou até ela). A Primos abre a página própria. */
+/** O 3D avisa que uma área foi tocada (ele mesmo já girou até ela): a página inicial ganha o herói da área
+ *  e a barra "Abrir o menu de X ›" (todas as áreas iguais, a Primos também — decisão do Rafael, fase 5). */
 function abrirAreaJarvis(area) {
-  jv.area = area; cer.sel = null; $j('cer-cartao').hidden = true;
-  if (area === 'primos') { abrirPrimos(); return; }
+  jv.area = jv.heroi = area; cer.sel = null; $j('cer-cartao').hidden = true;
+  jv.painel = null; $j('jv-painel').hidden = true;
   $j('cerebro').classList.add('jv-focado');
-  abrirPainelJarvis(area); renderAreasJarvis();
+  renderHeroiJarvis(); renderAreasJarvis(); ajustarDeslocamentoJarvis();
 }
 /** O 3D avisa que um setor/item foi tocado: mostra o cartão dele (Abrir, ＋ Nota, ligações). */
 function escolherNoJarvis(id) {
   const n = cer.mapa[id]; if (!n) return;
-  if (n.area && jv.area !== n.area && n.area !== 'primos') { jv.area = n.area; jv.painel = n.area; $j('cerebro').classList.add('jv-focado'); renderPainelJarvis(); renderAreasJarvis(); }
-  cer.sel = n; mostrarCartaoCerebro(n);
+  if (n.area && jv.heroi !== n.area) { jv.area = jv.heroi = n.area; jv.painel = null; $j('jv-painel').hidden = true; $j('cerebro').classList.add('jv-focado'); renderAreasJarvis(); }
+  cer.sel = n; mostrarCartaoCerebro(n); renderHeroiJarvis();
 }
 /** Da busca, dos setores, das bolinhas ou das ligações do cartão: gira até a bolinha e mostra o que ela é. */
 function irParaNoJarvis(id) {
@@ -6164,10 +6302,11 @@ function irParaNoJarvis(id) {
 }
 function toqueVazioJarvis() { if (!$j('cer-cartao').hidden) { cer.sel = null; esconderCartaoCerebro(); } }
 function voltarJarvis() {
-  jv.area = null; jv.painel = null; cer.sel = null; jv.expandido = false;
+  jv.area = jv.heroi = null; jv.painel = null; cer.sel = null; jv.expandido = false;
   $j('cer-cartao').hidden = true; $j('jv-painel').hidden = true;
   if (!$j('jv-primos').hidden) { $j('jv-primos').hidden = true; desempilharCamada('primos'); }
-  $j('cerebro').classList.remove('jv-focado');
+  fecharMenuArea();
+  $j('cerebro').classList.remove('jv-focado'); renderHeroiJarvis();
   if (jv.modo === '3d') JarvisBrain.voltar(); ajustarDeslocamentoJarvis(); renderAreasJarvis();
 }
 /** A janelinha cobre parte da tela (à direita no PC, embaixo no celular): o cérebro vai para o espaço livre. */
@@ -6175,6 +6314,10 @@ function ajustarDeslocamentoJarvis() {
   if (jv.modo !== '3d') return;
   if (!$j('jv-chat').hidden && window.innerWidth > 800) { JarvisBrain.deslocar(-220, 0); return; }
   const jan = ['jv-painel', 'cer-cartao'].map(id => $j(id)).find(el => !el.hidden);
+  if (!jan && !$j('jv-heroi').hidden) { // herói no topo + barra embaixo: a área fica no meio do espaço livre
+    const cima = document.querySelector('.jv-topo').getBoundingClientRect().bottom, baixo = document.querySelector('.jv-rodape').getBoundingClientRect().top;
+    JarvisBrain.deslocar(0, Math.max(0, (cima + baixo) / 2 - window.innerHeight / 2)); return;
+  }
   if (!jan) { JarvisBrain.deslocar(0, 0); return; }
   const r = jan.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
   if (W > 800) JarvisBrain.deslocar(r.left / 2 - W / 2, 0);
