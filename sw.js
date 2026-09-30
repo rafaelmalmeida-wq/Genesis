@@ -1,4 +1,4 @@
-const CACHE_NAME = 'genesis-cache-v11';
+const CACHE_NAME = 'genesis-cache-v12';
 const urlsToCache = [
   './',
   './index.html',
@@ -47,8 +47,11 @@ self.addEventListener('fetch', event => {
   if (req.method !== 'GET') return;
   if (!req.url.startsWith(self.location.origin)) return;
 
+  // "no-cache": sempre pergunta ao site se há versão nova (o GitHub Pages deixa o navegador guardar os
+  // arquivos por 10 min; sem isso uma atualização demorava até 10 min para aparecer). Se não mudou, volta rápido.
+  const pedido = req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : new Request(req, { cache: 'no-cache' });
   event.respondWith(
-    fetch(req)
+    fetch(pedido)
       .then(res => {
         const copia = res.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(req, copia));
