@@ -1390,6 +1390,19 @@
       </form>
     </div>
   </div>
+  <!-- Conversa por VOZ AO VIVO com o J.A.R.V.I.S. (Gemini Live): fala e ouve na hora; as legendas e a conversa vão para o chat. -->
+  <div id="jv-conversa" class="jv-conversa" hidden role="dialog" aria-label="Conversa por voz com o J.A.R.V.I.S.">
+    <div class="jvv-palco">
+      <button type="button" id="jvv-orbe" class="jvv-orbe" onclick="toqueOrbeVoz()" aria-label="Interromper o J.A.R.V.I.S."><span class="jvv-anel"></span><span class="jvv-nucleo"></span></button>
+      <p id="jvv-estado" class="jvv-estado">Conectando…</p>
+      <div id="jvv-legenda" class="jvv-legenda" aria-live="polite"></div>
+      <div class="jvv-botoes">
+        <button type="button" id="jvv-mudo" class="jvv-bt" onclick="alternarMudoVoz()" aria-label="Desligar o microfone"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/><path class="jvv-risco" d="M4 4l16 16"/></svg></button>
+        <button type="button" class="jvv-bt jvv-fim" onclick="encerrarConversaVoz()" aria-label="Encerrar a conversa">✕</button>
+        <button type="button" class="jvv-bt" onclick="encerrarConversaVoz(); abrirChatJarvis({})" aria-label="Ver a conversa escrita"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 15a2 2 0 0 1-2 2H8l-4 4V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/></svg></button>
+      </div>
+    </div>
+  </div>
   <div id="voice-sheet" class="modal-overlay">
     <div class="modal-content voice-content">
       <div class="modal-header"><h3 id="voice-title">🎤 Ditado</h3><button class="close-modal" onclick="fecharVoz()">✕</button></div>

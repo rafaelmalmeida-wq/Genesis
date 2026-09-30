@@ -4713,8 +4713,9 @@ const jv = { modo: null, esperando: false, area: null, painel: null, assinatura:
   heroi: null, menu: null, abaMenu: 'resumo' }; // heroi = área no topo da página inicial; menu = página de menu aberta (fase 5)
 const $j = id => document.getElementById(id);
 // configuração só deste aparelho: iaChave (Gemini), iaModelo/iaModelos (escolhidos sozinhos), iaBusca (busca no Google disponível?),
-// iaDados (mandar os números da Primos sem nomes — autorizado pelo Rafael), voz (ler respostas), brapi (Mercado)
-let jvConfig = Object.assign({ iaProvedor: 'gemini', iaChave: '', iaModelo: '', iaModelos: [], iaBusca: null, iaDados: true, voz: false, brapi: '' }, JSON.parse(localStorage.getItem('lifeos_jarvis_config')) || {});
+// iaDados (mandar os números da Primos sem nomes — autorizado pelo Rafael), iaTudo (o resto do app, com títulos — autorizado
+// em 30/09/2026), voz (ler as respostas do chat), vozNome/vozInterromper/vozModo (conversa por voz ao vivo), brapi (Mercado)
+let jvConfig = Object.assign({ iaProvedor: 'gemini', iaChave: '', iaModelo: '', iaModelos: [], iaBusca: null, iaDados: true, iaTudo: true, voz: false, vozNome: 'Charon', vozInterromper: false, vozModo: 'aovivo', brapi: '' }, JSON.parse(localStorage.getItem('lifeos_jarvis_config')) || {});
 if (jvConfig.iaProvedor !== 'gemini') { jvConfig.iaProvedor = 'gemini'; if (!/^(AIza|AQ\.)/.test(jvConfig.iaChave || '')) jvConfig.iaChave = ''; jvConfig.iaModelo = ''; } // desde a fase 4 o cérebro é só o Gemini
 // desde 01/10/2026 o canal com o computador é o cofre privado (antes era o repositório público do app)
 if (claudeConfig.repo !== JARVIS_REPO) { claudeConfig.repo = JARVIS_REPO; localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); } // configuração do aparelho
@@ -5952,12 +5953,50 @@ function agendaIA() {
   return `Tarefas para hoje/atrasadas: ${tarHoje} (abertas no total: ${tarAbertas}). Compromissos hoje: ${evHoje}; nos próximos 7 dias: ${evSemana}. Hábitos feitos hoje: ${hab}. Treinos nos últimos 7 dias: ${workouts.filter(w => w.date >= somarDiasCer(hoje, -6)).length}.`;
 }
 /** A persona e as regras do J.A.R.V.I.S. (vai em toda conversa). */
+/** TUDO DO APP para o cérebro (decisão do Rafael, 30/09/2026): agenda e tarefas com títulos, finanças do mês, saúde,
+ *  notas, negócios, família, estudos, viagens e entregas. Nunca telefones, e-mails ou senhas; nomes de clientes trocados
+ *  por códigos (anonimizar). Liga/desliga em Ajustes → Privacidade (jvConfig.iaTudo). */
+function dadosAppIA() {
+  const hoje = hojeISO(), R$ = v => formatCurrency(Number(v) || 0), dm = d => d ? isoParaBR(d).slice(0, 5) : '', L = [], soma = a => a.reduce((s, t) => s + (Number(t.amount) || 0), 0);
+  const ev = events.filter(e => !e.done && e.date >= hoje && e.date <= somarDiasCer(hoje, 14)).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || ''))).slice(0, 25);
+  L.push(`AGENDA (próximos 14 dias): ${ev.map(e => `${rotuloData(e.date)}${e.time ? ' ' + e.time : ''} ${e.title}`).join('; ') || 'nada marcado'}.`);
+  const trab = shifts.filter(s => s.date >= hoje).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 10);
+  if (trab.length) L.push(`TRABALHOS DE ENGENHARIA NA AGENDA: ${trab.map(s => `${rotuloData(s.date)} ${s.desc || 'trabalho'}`).join('; ')}.`);
+  const abertas = tasks.filter(t => !t.done), ta = abertas.slice().sort((a, b) => (a.due || '9').localeCompare(b.due || '9')).slice(0, 30);
+  L.push(`TAREFAS ABERTAS (${abertas.length}): ${ta.map(t => `${t.text}${t.due ? ` (prazo ${dm(t.due)}${t.due < hoje ? ', atrasada' : ''})` : ''}${t.starred ? ' ★' : ''}`).join('; ') || 'nenhuma'}.`);
+  if (habits.length) L.push(`HÁBITOS DE HOJE: ${habits.map(h => `${h.text}${h.done ? ' (feito)' : ''}`).join(', ')}.`);
+  const mes = hoje.slice(0, 7), doMes = transactions.filter(t => dataTransacao(t).startsWith(mes)), ent = doMes.filter(t => t.type === 'income'), sai = doMes.filter(t => t.type !== 'income');
+  const porCat = {}; sai.forEach(t => { const c = t.category || 'Outros'; porCat[c] = (porCat[c] || 0) + (Number(t.amount) || 0); });
+  const pend = transactions.filter(t => t.pending);
+  L.push(`FINANÇAS PESSOAIS DE ${mes}: entradas ${R$(soma(ent))}, saídas ${R$(soma(sai))}, saldo do mês ${R$(soma(ent) - soma(sai))}. Maiores gastos: ${Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([c, v]) => `${c} ${R$(v)}`).join('; ') || '—'}. Pendentes: a receber ${R$(soma(pend.filter(t => t.type === 'income')))}, a pagar ${R$(soma(pend.filter(t => t.type !== 'income')))}. Últimos lançamentos: ${transactions.slice(-10).reverse().map(t => `${dm(dataTransacao(t))} ${t.type === 'income' ? '+' : '−'}${R$(t.amount)} ${t.desc || ''}${t.pending ? ' (pendente)' : ''}`).join('; ') || '—'}.`);
+  const tr14 = workouts.filter(w => w.date >= somarDiasCer(hoje, -13)).sort((a, b) => b.date.localeCompare(a.date));
+  const med = measures.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''))[0];
+  const cons = medical.filter(m => m.date && m.date >= hoje).sort((a, b) => a.date.localeCompare(b.date)).slice(0, 5);
+  L.push(`SAÚDE: ${tr14.length} treinos em 14 dias (${tr14.slice(0, 8).map(w => `${dm(w.date)} ${(TIPOS_TREINO[w.type] || ['', w.type || 'treino'])[1]} ${w.minutes || '?'} min`).join('; ') || 'nenhum'}).${med ? ` Última medida (${dm(med.date)}): ${[med.weight ? med.weight + ' kg' : '', med.waist ? 'cintura ' + med.waist + ' cm' : '', med.bodyfat ? 'gordura ' + med.bodyfat + '%' : ''].filter(Boolean).join(', ')}.` : ''}${cons.length ? ` Próximas consultas/exames: ${cons.map(m => `${dm(m.date)} ${m.title || m.kind || ''}`).join('; ')}.` : ''}`);
+  const nt = notes.filter(n => !n.archived).sort((a, b) => (b.updatedAt || b.id || 0) - (a.updatedAt || a.id || 0)).slice(0, 20);
+  if (nt.length) L.push(`NOTAS (as ${nt.length} mais recentes): ${nt.map(n => `"${n.title || 'sem título'}"${(n.labels || []).length ? ' [' + n.labels.join(', ') + ']' : ''}: ${String(n.content || (n.checklist || []).map(i => (i.done ? '✓ ' : '') + i.text).join(', ')).replace(/\s+/g, ' ').slice(0, 140)}`).join(' | ')}.`);
+  if (assets.length || goals.length || projects.length) L.push(`NEGÓCIOS E INVESTIMENTOS: carteira ${assets.map(a => `${a.name} (${a.klass || ''}) ${R$(a.current)}`).join('; ') || '—'}. Metas: ${goals.map(g => `${g.name} ${R$(g.target)}${g.deadline ? ' até ' + dm(g.deadline) : ''}`).join('; ') || '—'}. Projetos: ${projects.map(p => `${p.name} (${p.stage || ''})`).join('; ') || '—'}.`);
+  const mc = cacheMercado(); if (mc && mc.btc) L.push(`MERCADO (cotação no aparelho): bitcoin ${R$(mc.btc.brl)} (${variacaoCurta(mc.btc.var)} em 24 h)${mc.usd ? `, dólar ${R$(mc.usd.v)}` : ''}${mc.ibov ? `, Ibovespa ${Math.round(mc.ibov.v)} pts` : ''}.`);
+  const datas = familia.filter(f => f.tipo === 'data').map(f => ({ ...f, prox: proximaOcorrencia(f.data) })).filter(f => f.prox && diasEntre(hoje, f.prox) <= 60).sort((a, b) => a.prox.localeCompare(b.prox));
+  if (datas.length) L.push(`FAMÍLIA — DATAS ESPECIAIS (60 dias): ${datas.map(f => `${f.texto} em ${dm(f.prox)}`).join('; ')}.`);
+  const temas = topics.filter(t => !t.archived); if (temas.length) L.push(`ESTUDOS: ${temas.map(t => t.name).join(', ')}.`);
+  const vg = trips.filter(t => (t.fim || t.inicio || '') >= hoje); if (vg.length) L.push(`VIAGENS: ${vg.map(t => `${t.destino} ${dm(t.inicio)}${t.fim ? '–' + dm(t.fim) : ''}`).join('; ')}.`);
+  const ch = entregas.filter(e => e.status !== 'entregue'); if (ch.length) L.push(`COMPRAS A CAMINHO: ${ch.slice(0, 10).map(rotuloDoItem).join('; ')}.`);
+  const txt = L.join('\n');
+  return anonimizar(txt.length > 12000 ? txt.slice(0, 12000) + '…' : txt);
+}
+/** O bloco DADOS do cérebro (chat e voz): a Primos (se ligado) + o resto do app (se ligado) ou só as contagens da agenda. */
+function dadosCompletosIA() {
+  return `--- PRIMOS 3D (${jvConfig.iaDados === false ? 'o Rafael desligou o envio dos números' : 'números reais, sem nomes'}) ---\n`
+    + (jvConfig.iaDados === false ? '(não enviados — responda sem números da empresa e sugira ligar em Ajustes → Privacidade se precisar)' : dadosPrimosIA())
+    + (jvConfig.iaTudo === false ? `\n--- AGENDA (só contagens) ---\n${agendaIA()}` : `\n--- O RESTO DO APP ---\n${dadosAppIA()}`);
+}
 function sistemaJarvis(ctx) {
   const nome = String(profile.name || 'Rafael').trim().split(/\s+/)[0] || 'Rafael';
   const agora = new Date(), dia = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }), hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   return `Você é o J.A.R.V.I.S., o assistente pessoal do ${nome} Martins — engenheiro civil (29 anos, Viçosa-MG; AutoCAD, BIM, cálculo estrutural) e dono da Primos 3D, empresa de impressão 3D (MEI, aberta em ago/2026; 2× Bambu Lab A1 Combo com AMS Lite e 1× Anycubic Kobra X; fatiadores Bambu Studio e Creality Print; vende chaveiros em expositores consignados, brindes corporativos, peças sob encomenda e está montando a loja na Shopee; marca "Ideias que ganham forma").
-PERSONALIDADE: o J.A.R.V.I.S. do Homem de Ferro com o Alfred do Batman — brilhante, elegante, leal, calmo, direto e levemente espirituoso (sem exagero, sem bajulação). Chame-o de "${nome}" (às vezes "senhor", com leveza). Português do Brasil.
-PAPEL: sócio-analista da Primos 3D — analista financeiro, contador de MEI, estrategista de vendas e de marketing. Seja proativo: aponte riscos, oportunidades e o próximo passo. Use os números do bloco DADOS; ao fazer contas, mostre a conta em uma linha. Nunca invente números: se faltar dado, diga qual e como conseguir.
+PERSONALIDADE: o J.A.R.V.I.S. do Homem de Ferro com a inteligência e a perspicácia do Alfred, mas bem menos formal — fale de igual para igual, direto, com humor seco e leve (sem exagero, sem bajulação). Adapte-se ao jeito dele: o ${nome} é direto e informal e costuma ditar por voz (palavras podem vir trocadas: "Primus"/"Print 3D" = Primos 3D, "Java"/"Jet" = J.A.R.V.I.S., "Cloud" = Claude). Chame-o de "${nome}" (quase nunca "senhor"). Português do Brasil.
+PAPEL: sócio-analista dele em tudo — a Primos 3D (analista financeiro, contador de MEI, estrategista de vendas e de marketing), a engenharia, as finanças pessoais, a agenda, as tarefas, a saúde e a rotina. Seja proativo: aponte riscos, oportunidades e o próximo passo. Use os números do bloco DADOS; ao fazer contas, mostre a conta em uma linha. Nunca invente números: se faltar dado, diga qual e como conseguir.
 ESTILO: curto e escaneável (até ~150 palavras, a menos que ele peça detalhe), **negrito** nos números-chave, listas quando ajudar. Sem introduções longas.
 LIMITES: você conversa pelo app. Você não envia e-mails, não posta em redes, não faz pagamentos nem compras. Quem mexe no computador — planilha "Primos 3D - Gestão Financeira.xlsx", pasta "Primos 3D Central", código do app — é o Claude, no PC do ${nome}.
 QUANDO PRECISAR DO COMPUTADOR (lançar ou corrigir algo na planilha, guardar print/nota fiscal na Central, ler um arquivo da Central, mudar o app): responda normalmente e termine com a linha exata ⟦PC: <o que o Claude deve fazer, em 1 frase objetiva>⟧. Só use quando for mesmo necessário.
@@ -5966,12 +6005,12 @@ NAVEGAR: se ajudar, termine com ⟦ABRIR: destino⟧, destino entre: primos, pri
 BUSCA: para fatos atuais, preços, concorrentes, tendências, datas comemorativas e normas, use a busca do Google e diga de onde veio.
 DESABAFO: acolha primeiro, sem julgar; no máximo uma pergunta; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); use os códigos como estão. Nunca peça senhas ou dados bancários.
-AGORA: ${dia}, ${hora}. Tela do app: ${ctx || 'página inicial'}.
-=== DADOS DA PRIMOS 3D (${jvConfig.iaDados === false ? 'o Rafael desligou o envio dos números' : 'números reais, sem nomes'}) ===
-${jvConfig.iaDados === false ? '(não enviados — responda sem números da empresa e sugira ligar em Ajustes → Privacidade se precisar)' : dadosPrimosIA()}
-=== AGENDA (só contagens) ===
-${agendaIA()}`;
+${perfilIA(nome)}AGORA: ${dia}, ${hora}. Tela do app: ${ctx || 'página inicial'}.
+=== DADOS ===
+${dadosCompletosIA()}`;
 }
+/** O que o J.A.R.V.I.S. aprendeu sobre o Rafael (memórias "Sobre você", guardadas pela conversa por voz). */
+function perfilIA(nome) { const p = memorias.filter(m => m.tipo === 'perfil').slice(0, 25).map(m => '- ' + m.texto).join('\n'); return p ? `O QUE VOCÊ JÁ SABE SOBRE O ${String(nome).toUpperCase()}:\n${p}\n` : ''; }
 
 // ============================================================================
 // O CHAT DO J.A.R.V.I.S. — em qualquer tela. Abre pelo ícone do J.A.R.V.I.S. (barra, botão flutuante, Primos),
@@ -6226,7 +6265,7 @@ function atualizarPensandoJarvis() {
   document.body.classList.toggle('jv-pensando', p); const c = $j('cerebro'); if (c) c.classList.toggle('pensando', p);
   const ped = $j('jv-pensando'); if (ped) ped.hidden = !p;
   if (jv.modo === '3d') JarvisBrain.pensar(p);
-  renderFalaJarvis(); renderAreasJarvis();
+  renderFalaJarvis(); renderAreasJarvis(); aplicarStatusJarvis();
   const st = $j('jvc-status'); if (st && !$j('jv-chat').hidden) st.innerText = statusChat();
 }
 /** A última resposta do computador aparece embaixo da saudação (até você fechar) — e entra no chat. */
@@ -6280,8 +6319,8 @@ function ouvirJarvis() {
 function pararMicJarvis() { jv.ouvindo = false; if (jv.rec) { try { jv.rec.stop(); } catch (e) { fimMicJarvis(); } } else fimMicJarvis(); }
 function fimMicJarvis() { document.body.classList.remove('jv-ouvindo'); const c = $j('jv-chat'); if (c) c.classList.remove('ouvindo'); const cb = jv.aoParar; jv.aoParar = null; if (cb) setTimeout(cb, 350); else renderChatJarvis(); } // espera a última frase chegar
 
-/** Botão do J.A.R.V.I.S. (barra, botão flutuante, Primos): abre o chat já ouvindo. */
-function abrirVozJarvis(contexto, area) { abrirChatJarvis({ contexto, area, ouvir: true }); }
+/** Botão do J.A.R.V.I.S. (barra, botão flutuante, Primos, menus): conversa por VOZ AO VIVO; sem cérebro/internet, o chat já ouvindo. */
+function abrirVozJarvis(contexto, area) { iniciarConversaVoz(contexto, area); }
 /** Prints (📎): reduzidos no aparelho; entram na próxima mensagem do chat. */
 function reduzirImagem(arquivo, lado = 1600, qualidade = 0.78) {
   return new Promise((ok, erro) => {
@@ -6304,10 +6343,250 @@ function renderAnexosJarvis() {
 }
 
 // ============================================================================
+// VOZ AO VIVO — conversa falada de verdade com o J.A.R.V.I.S. (Gemini Live, plano grátis, pela chave do Rafael).
+// Toque no ícone do J.A.R.V.I.S. → ele ouve e responde com voz (português com leve sotaque britânico, decisão do
+// Rafael); tocar na esfera interrompe. Microfone → PCM 16 kHz → WebSocket do Google; resposta → PCM 24 kHz → alto-falante.
+// Enquanto ele fala, o microfone não manda nada (ele não se ouve pelo alto-falante), a menos que "Interromper
+// falando" esteja ligado (com fone). As legendas viram mensagens no chat (`jarvischat`). O núcleo do 3D pulsa com a
+// voz dele. Sem chave, sem internet, sem suporte ou no "modo clássico" → o jeito antigo (ditado do iPhone + chat).
+// ============================================================================
+const VOZES_JARVIS = [['Charon', 'grave e calma'], ['Sadaltager', 'culta e serena'], ['Gacrux', 'madura'], ['Orus', 'firme'], ['Iapetus', 'clara'], ['Algieba', 'suave']];
+const LIVE_URL = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
+const vz = { ws: null, ctx: null, stream: null, proc: null, saida: null, analisador: null, analisadorMic: null, tocando: new Set(), proxT: 0, ativo: false, pronto: false, jaConectou: false,
+  mudo: false, falando: false, descartar: false, fimFala: 0, ouviuEm: 0, eu: '', ele: '', legEu: '', legEle: '', estado: '', raf: 0, nivelSetup: 0, tentativas: 0, reconexoes: 0, contexto: '', area: null, mapa: null, saudar: false };
+
+/** Qual modelo da chave faz conversa ao vivo (o Google troca os nomes; guarda por 1 dia). O áudio nativo soa mais humano. */
+async function modeloVozGemini(forcar) {
+  const c = jvConfig.iaModeloVoz;
+  if (!forcar && c && c.nome && Date.now() - (c.quando || 0) < 86400000) return c.nome;
+  let r; try { r = await fetch(`${IA_BASE}/models?pageSize=200`, { headers: cabecalhoIA(jvConfig.iaChave) }); } catch (e) { return (c && c.nome) || null; }
+  if (!r.ok) return (c && c.nome) || null;
+  const j = await r.json();
+  const nomes = (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('bidiGenerateContent')).map(m => m.name.replace(/^models\//, ''));
+  const versao = n => { const v = n.match(/(\d+(?:\.\d+)?)/); return v ? parseFloat(v[1]) : 0; };
+  const nota = n => (/native.?audio/.test(n) ? 40 : /live/.test(n) ? 20 : 0) + (/flash/.test(n) ? 10 : 0) - (/thinking|pro/.test(n) ? 15 : 0) - (/exp|preview/.test(n) ? 1 : 0) + versao(n);
+  const melhor = nomes.slice().sort((a, b) => nota(b) - nota(a))[0] || null;
+  jvConfig.iaModeloVoz = { nome: melhor, quando: Date.now(), todos: nomes.slice(0, 10) }; salvarJvConfig();
+  return melhor;
+}
+function suportaVozAoVivo() { return !!(window.WebSocket && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && (window.AudioContext || window.webkitAudioContext)); }
+
+/** Toque no ícone do J.A.R.V.I.S.: abre a conversa por voz (ou o chat ouvindo, quando a voz ao vivo não dá). */
+function iniciarConversaVoz(contexto, area, op = {}) {
+  if (vz.ativo) { encerrarConversaVoz(); return; }
+  if (!iaLigada() || !navigator.onLine || !suportaVozAoVivo() || jvConfig.vozModo === 'classica') { abrirChatJarvis({ contexto, area, ouvir: true }); return; }
+  vz.contexto = contexto || nomePaginaJarvis(); vz.area = area !== undefined ? area : (jv.area || null); vz.saudar = !!op.saudar;
+  if ($j('jv-conversa').hidden) { $j('jv-conversa').hidden = false; document.body.classList.add('jv-em-voz'); empilharCamada('voz', encerrarConversaVoz); }
+  if (!$j('jv-chat').hidden) fecharChatJarvis();
+  vz.legEu = ''; vz.legEle = ''; vz.dica = 'Fale normalmente. Toque na esfera para interromper o J.A.R.V.I.S.';
+  iniciarSessaoVoz();
+}
+/** Abre microfone, alto-falante e a conexão. O áudio nasce dentro do toque (regra do iPhone). */
+function iniciarSessaoVoz() {
+  try { vz.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (vz.ctx.state === 'suspended') vz.ctx.resume(); }
+  catch (e) { falhaVoz({ amigavel: 'Este aparelho não liberou o áudio.', classico: true }); return; }
+  Object.assign(vz, { ativo: true, pronto: false, jaConectou: false, mudo: false, falando: false, descartar: false, eu: '', ele: '', nivelSetup: 0, tentativas: 0, reconexoes: 0, mapa: mapaAnonimo(), erro: false });
+  $j('jv-conversa').classList.remove('mudo'); estadoVoz('Conectando…', 'conectando'); renderLegendaVoz(); somJarvis();
+  prepararMicVoz().then(ok => { if (ok && vz.ativo) conectarVoz(); }).catch(e => falhaVoz(e));
+}
+async function prepararMicVoz() {
+  try { vz.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 } }); }
+  catch (e) { falhaVoz({ amigavel: e && e.name === 'NotAllowedError' ? 'O microfone está bloqueado para o app. Libere em Ajustes do iPhone → Safari → Microfone e toque na esfera.' : 'Não consegui abrir o microfone.' }); return false; }
+  if (!vz.ativo) { vz.stream.getTracks().forEach(t => t.stop()); return false; }
+  const ctx = vz.ctx;
+  vz.saida = ctx.createGain(); vz.analisador = ctx.createAnalyser(); vz.analisador.fftSize = 512; vz.saida.connect(vz.analisador); vz.analisador.connect(ctx.destination);
+  const fonte = ctx.createMediaStreamSource(vz.stream);
+  vz.analisadorMic = ctx.createAnalyser(); vz.analisadorMic.fftSize = 512; fonte.connect(vz.analisadorMic);
+  const proc = ctx.createScriptProcessor(4096, 1, 1), silencio = ctx.createGain(); silencio.gain.value = 0; // o processador só "anda" ligado à saída: ligo no volume zero
+  fonte.connect(proc); proc.connect(silencio); silencio.connect(ctx.destination);
+  proc.onaudioprocess = e => enviarMicVoz(e.inputBuffer.getChannelData(0), ctx.sampleRate);
+  vz.proc = proc; animarVoz();
+  return true;
+}
+/** Microfone → 16 kHz, 16 bits → base64 → Google. Calado enquanto o J.A.R.V.I.S. fala (a não ser com "interromper falando"). */
+function enviarMicVoz(x, taxa) {
+  if (!vz.pronto || vz.mudo || !vz.ws || vz.ws.readyState !== 1) return;
+  if ((vz.falando || performance.now() < vz.fimFala + 350) && !jvConfig.vozInterromper) return;
+  const k = Math.max(1, taxa / 16000), n = Math.floor(x.length / k), pcm = new Int16Array(n);
+  for (let i = 0; i < n; i++) { const a = Math.floor(i * k), b = Math.max(a + 1, Math.floor((i + 1) * k)); let s = 0; for (let j = a; j < b; j++) s += x[j]; const v = Math.max(-1, Math.min(1, s / (b - a))); pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff; }
+  try { vz.ws.send(JSON.stringify({ realtimeInput: { audio: { mimeType: 'audio/pcm;rate=16000', data: paraBase64(pcm.buffer) } } })); } catch (e) { }
+}
+function paraBase64(buf) { const u = new Uint8Array(buf); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); }
+
+/** A conexão. Se o Google recusar a 1ª configuração, tenta de novo mais simples (sem busca → sem ferramentas → sem legendas). */
+async function conectarVoz() {
+  const modelo = await modeloVozGemini(vz.tentativas > 1);
+  if (!vz.ativo) return;
+  if (!modelo) { falhaVoz({ amigavel: 'Sua chave do Gemini ainda não tem a conversa ao vivo. Abri a conversa escrita, que ouve pelo ditado.', classico: true }); return; }
+  const auth = jvConfig.vozAuth || (/^AQ\./.test(jvConfig.iaChave) && jvConfig.iaAuth === 'bearer' ? 'access_token' : 'key');
+  let ws; try { ws = new WebSocket(`${LIVE_URL}?${auth}=${encodeURIComponent(jvConfig.iaChave)}`); } catch (e) { falhaVoz({ amigavel: 'Não consegui abrir a conexão de voz.' }); return; }
+  vz.ws = ws; vz.pronto = false; vz.auth = auth; vz.modelo = modelo;
+  ws.onopen = () => { try { ws.send(JSON.stringify({ setup: setupVoz(modelo) })); } catch (e) { } };
+  ws.onmessage = ev => { if (vz.ws !== ws) return; if (typeof ev.data === 'string') tratarMsgVoz(ev.data); else if (ev.data && typeof ev.data.text === 'function') ev.data.text().then(tratarMsgVoz); else { try { tratarMsgVoz(new TextDecoder().decode(ev.data)); } catch (e) { } } };
+  ws.onclose = ev => {
+    if (vz.ws !== ws) return; vz.ws = null; vz.pronto = false;
+    if (!vz.ativo) return;
+    const motivo = String(ev.reason || ''), antesDeComecar = !vz.jaConectou;
+    if (antesDeComecar && /key|auth|credential|permission|denied|unauthenticated/i.test(motivo) && /^AQ\./.test(jvConfig.iaChave) && vz.auth === 'key' && vz.tentativas < 3) { vz.tentativas++; jvConfig.vozAuth = 'access_token'; conectarVoz(); return; }
+    if (antesDeComecar && !/quota|exhaust|rate|limit|key|auth|credential|permission|denied/i.test(motivo) && vz.nivelSetup < 3) { vz.nivelSetup++; vz.tentativas++; conectarVoz(); return; }
+    if (!antesDeComecar && vz.reconexoes < 3 && !/quota|exhaust|rate|limit/i.test(motivo)) { vz.reconexoes++; pararFalaVoz(); estadoVoz('Reconectando…', 'conectando'); setTimeout(() => { if (vz.ativo) conectarVoz(); }, 700); return; }
+    falhaVoz({ amigavel: traduzirFechamentoVoz(ev.code, motivo) });
+  };
+}
+function traduzirFechamentoVoz(codigo, motivo) {
+  if (/quota|exhaust|rate|limit/i.test(motivo)) return 'O limite grátis da conversa por voz acabou por agora. Tente daqui a pouco, ou use a conversa escrita.';
+  if (/key|auth|credential|permission|denied|unauthenticated/i.test(motivo)) return 'O Google recusou a sua chave para a conversa por voz. Confira em Ajustes do J.A.R.V.I.S. → 1 Cérebro.';
+  if (!navigator.onLine) return 'Sem internet agora.';
+  return `A conversa caiu (${codigo}${motivo ? ': ' + motivo.slice(0, 90) : ''}). Toque na esfera para tentar de novo.`;
+}
+/** Configuração da sessão: modelo, voz, personalidade + dados, legendas e ferramentas (cada nível tira um pedaço). */
+function setupVoz(modelo) {
+  const s = { model: 'models/' + modelo, generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: jvConfig.vozNome || VOZES_JARVIS[0][0] } } } }, systemInstruction: { parts: [{ text: sistemaVoz() }] } };
+  if (vz.nivelSetup < 3) { s.inputAudioTranscription = {}; s.outputAudioTranscription = {}; }
+  if (vz.nivelSetup < 2) s.tools = [{ functionDeclarations: ferramentasVoz() }];
+  if (vz.nivelSetup < 1) s.tools.push({ googleSearch: {} });
+  return s;
+}
+function ferramentasVoz() {
+  const f = [
+    { name: 'abrir_tela', description: 'Abre uma tela do app para o Rafael ver algo enquanto vocês conversam (use quando ajudar ou ele pedir).', parameters: { type: 'OBJECT', properties: { destino: { type: 'STRING', enum: Object.keys(DESTINOS_JARVIS) } }, required: ['destino'] } },
+    { name: 'lembrar_sobre_rafael', description: 'Guarda um fato duradouro sobre o Rafael (um gosto, o jeito dele, uma preferência, um objetivo) para você se adaptar a ele nas próximas conversas. Use com moderação.', parameters: { type: 'OBJECT', properties: { fato: { type: 'STRING' } }, required: ['fato'] } }
+  ];
+  if (claudeConfigurado()) f.push({ name: 'pedir_ao_computador', description: 'Manda uma tarefa para o Claude, no computador do Rafael: lançar ou corrigir algo na planilha da Primos 3D, guardar ou ler algo na Primos 3D Central, ou mudar o app. Confirme com ele em uma frase antes de mandar.', parameters: { type: 'OBJECT', properties: { tarefa: { type: 'STRING', description: 'O que o Claude deve fazer, em 1 frase objetiva' } }, required: ['tarefa'] } });
+  return f;
+}
+/** A personalidade falada + o que ele já aprendeu sobre o Rafael + as últimas mensagens + os dados do app. */
+function sistemaVoz() {
+  const nome = String(profile.name || 'Rafael').trim().split(/\s+/)[0] || 'Rafael';
+  const agora = new Date(), dia = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }), hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const recentes = jarvisChat.filter(m => (m.de === 'eu' || m.de === 'jv' || m.de === 'pc') && m.t).slice(-8).map(m => `${m.de === 'eu' ? nome : m.de === 'pc' ? 'Claude (no computador)' : 'J.A.R.V.I.S.'}: ${anonimizar(String(m.t).replace(/[*_#`]/g, ''), vz.mapa).slice(0, 300)}`).join('\n');
+  return `Você é o J.A.R.V.I.S., o assistente pessoal do ${nome}, numa CONVERSA POR VOZ ao vivo pelo celular dele.
+VOZ E JEITO: fale português do Brasil fluente, com um leve sotaque britânico — como um inglês culto que mora no Brasil há anos: voz grave e calma, dicção clara e elegante. Tem a inteligência e a perspicácia do Alfred, mas é bem menos formal: chame-o de "${nome}" (quase nunca "senhor"), fale de igual para igual, com humor seco e leve na medida. Adapte-se a ele: o ${nome} é direto, informal, fala rápido e às vezes pensa alto enquanto dita — acompanhe o ritmo, sem sermão e sem enrolação.
+COMO FALAR: frases curtas e naturais, feitas para ouvir (de 1 a 4 frases; mais só se ele pedir). Nada de listas, símbolos, markdown ou links. Números arredondados e ditos com naturalidade ("uns trezentos e cinquenta reais", "quase vinte e dois mil"). Uma pergunta por vez. Se faltar dado, diga qual falta e como conseguir.
+PAPEL: sócio-analista dele em tudo — a Primos 3D (vendas, caixa, custos, estratégia, marketing), a engenharia, as finanças pessoais, a agenda, as tarefas, a saúde e a rotina. Seja proativo: o que importa agora, riscos, oportunidades e o próximo passo. Nunca invente números: use o bloco DADOS.
+FERRAMENTAS: abrir_tela para mostrar algo no app; ${claudeConfigurado() ? 'pedir_ao_computador para o que precisa do PC (planilha, Central, mudar o app), confirmando antes; ' : ''}lembrar_sobre_rafael quando ele revelar um gosto, um jeito ou um objetivo duradouro. Para fatos atuais, preços e notícias, use a busca do Google.
+LIMITES: você não envia e-mails, não posta, não compra e não paga nada. Nunca peça senhas nem dados bancários. Em desabafo, acolha primeiro; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
+PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); diga "um cliente" ou o código, sem inventar nomes.
+${perfilIA(nome)}AGORA: ${dia}, ${hora}. Tela aberta no app: ${vz.contexto || 'página inicial'}.${vz.saudar ? '\nCOMECE você: cumprimente em uma frase curta, com a sua voz, e pergunte por onde ele quer começar.' : ''}
+${recentes ? `=== ÚLTIMAS MENSAGENS (para continuar o assunto) ===\n${recentes}\n` : ''}=== DADOS ===
+${dadosCompletosIA()}`;
+}
+
+function tratarMsgVoz(txt) {
+  let m; try { m = JSON.parse(txt); } catch (e) { return; }
+  if (m.setupComplete) {
+    vz.pronto = true; vz.jaConectou = true; estadoVoz(vz.mudo ? 'Microfone desligado' : 'Pode falar', 'ouvindo');
+    if (vz.saudar && vz.ws) { vz.saudar = false; try { vz.ws.send(JSON.stringify({ realtimeInput: { text: 'Oi, J.A.R.V.I.S.' } })); } catch (e) { } }
+    return;
+  }
+  if (m.toolCall) { executarFerramentasVoz(m.toolCall.functionCalls || []); return; }
+  if (m.goAway) { vz.dica = 'A sessão de voz vai se renovar em instantes.'; renderLegendaVoz(); return; }
+  const sc = m.serverContent; if (!sc) return;
+  if (sc.interrupted) { pararFalaVoz(); vz.descartar = false; }
+  if (sc.inputTranscription && sc.inputTranscription.text) { if (!vz.eu) vz.legEle = ''; vz.eu += sc.inputTranscription.text; renderLegendaVoz(); }
+  if (sc.outputTranscription && sc.outputTranscription.text) { vz.ele += sc.outputTranscription.text; renderLegendaVoz(); }
+  ((sc.modelTurn && sc.modelTurn.parts) || []).forEach(p => {
+    if (p.inlineData && /audio/.test(p.inlineData.mimeType || '')) { if (!vz.descartar) tocarAudioVoz(p.inlineData.data, Number(((p.inlineData.mimeType || '').match(/rate=(\d+)/) || [])[1]) || 24000); }
+    else if (p.text && !p.thought && vz.nivelSetup >= 3) { vz.ele += p.text; renderLegendaVoz(); }
+  });
+  if (sc.turnComplete) { fecharTurnoVoz(); vz.descartar = false; }
+}
+/** Voz dele: PCM 16 bits → fila tocando em sequência (sem buracos). */
+function tocarAudioVoz(b64, taxa) {
+  const ctx = vz.ctx; if (!ctx || !b64) return;
+  const bin = atob(b64), n = bin.length >> 1; if (!n) return;
+  const buf = ctx.createBuffer(1, n, taxa), d = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) { let v = bin.charCodeAt(2 * i) | (bin.charCodeAt(2 * i + 1) << 8); if (v & 0x8000) v -= 0x10000; d[i] = v / 32768; }
+  const s = ctx.createBufferSource(); s.buffer = buf; s.connect(vz.saida);
+  const t0 = Math.max(ctx.currentTime + 0.05, vz.proxT); s.start(t0); vz.proxT = t0 + buf.duration;
+  vz.tocando.add(s);
+  if (!vz.falando) { vz.falando = true; estadoVoz('Toque na esfera para interromper', 'falando'); }
+  s.onended = () => { vz.tocando.delete(s); if (!vz.tocando.size && vz.falando) { vz.falando = false; vz.fimFala = performance.now(); if (vz.ativo) estadoVoz(vz.mudo ? 'Microfone desligado' : 'Pode falar', 'ouvindo'); } };
+}
+function pararFalaVoz() { vz.tocando.forEach(s => { try { s.onended = null; s.stop(); } catch (e) { } }); vz.tocando.clear(); vz.proxT = 0; if (vz.falando) { vz.falando = false; vz.fimFala = performance.now(); } }
+/** Fim de um turno: o que ele disse e o que o J.A.R.V.I.S. respondeu viram mensagens no chat. */
+function fecharTurnoVoz() {
+  const eu = vz.eu.trim(), ele = vz.ele.trim();
+  if (eu) msgChat({ de: 'eu', t: eu, ctx: vz.contexto, voz: true });
+  if (ele) msgChat({ de: 'jv', t: ele, voz: true });
+  if (eu || ele) { gravarChat(); renderChatJarvis(); }
+  if (eu) vz.legEu = eu; if (ele) vz.legEle = ele;
+  vz.eu = ''; vz.ele = ''; renderLegendaVoz();
+}
+function executarFerramentasVoz(chamadas) {
+  const respostas = chamadas.map(c => {
+    const a = c.args || {}; let r;
+    try {
+      if (c.name === 'abrir_tela' && DESTINOS_JARVIS[a.destino]) { const d = a.destino; setTimeout(() => irDestinoJarvis(d), 0); r = { ok: true, aberto: DESTINOS_JARVIS[d][0] }; }
+      else if (c.name === 'lembrar_sobre_rafael' && a.fato) { guardarMemoria({ tipo: 'perfil', texto: String(a.fato).slice(0, 240) }); r = { ok: true }; }
+      else if (c.name === 'pedir_ao_computador' && a.tarefa && claudeConfigurado()) { enviarAoComputador(desanonimizar(vz.legEu || a.tarefa, vz.mapa), [], vz.contexto, vz.area, desanonimizar(String(a.tarefa), vz.mapa)); r = { ok: true, aviso: 'Pedido enviado ao Claude no computador; a resposta aparece no chat do app.' }; }
+      else r = { ok: false, erro: 'não consegui fazer isso' };
+    } catch (e) { r = { ok: false, erro: String(e.message || e) }; }
+    return { id: c.id, name: c.name, response: r };
+  });
+  if (vz.ws && vz.ws.readyState === 1) { try { vz.ws.send(JSON.stringify({ toolResponse: { functionResponses: respostas } })); } catch (e) { } }
+}
+
+// --- a telinha da conversa ---
+function estadoVoz(texto, classe) { vz.estado = classe; const el = $j('jvv-estado'); if (el) el.innerText = texto; const c = $j('jv-conversa'); if (c) c.dataset.estado = classe; }
+function renderLegendaVoz() {
+  const el = $j('jvv-legenda'); if (!el) return; const d = t => desanonimizar(t, vz.mapa), fim = s => s.length > 240 ? '…' + s.slice(-240) : s;
+  const eu = vz.eu.trim() || vz.legEu, ele = vz.ele.trim() || vz.legEle;
+  el.innerHTML = (eu ? `<p class="eu${vz.eu.trim() ? '' : ' antigo'}">${esc(fim(d(eu)))}</p>` : '') + (ele ? `<p class="ele${vz.ele.trim() ? '' : ' antigo'}">${esc(fim(d(ele)))}</p>` : '') || (vz.dica ? `<p class="dica">${esc(vz.dica)}</p>` : '');
+}
+/** Esfera e núcleo do 3D acompanham a voz dele; o estado "ouvindo você / pensando" vem do nível do microfone. */
+function animarVoz() {
+  cancelAnimationFrame(vz.raf);
+  const buf = new Uint8Array(512);
+  const nivel = an => { if (!an) return 0; an.getByteTimeDomainData(buf); let s = 0; for (let i = 0; i < buf.length; i++) { const v = (buf[i] - 128) / 128; s += v * v; } return Math.min(1, Math.sqrt(s / buf.length) * 4); };
+  const passo = () => {
+    if (!vz.ativo) return;
+    const o = nivel(vz.analisador), m = vz.mudo || vz.falando ? 0 : nivel(vz.analisadorMic), agora = performance.now(), el = $j('jvv-orbe');
+    if (el) { el.style.setProperty('--voz', o.toFixed(3)); el.style.setProperty('--mic', m.toFixed(3)); }
+    if (jv.modo === '3d') JarvisBrain.voz(o);
+    if (vz.pronto && !vz.falando && !vz.mudo) {
+      if (m > 0.12) { vz.ouviuEm = agora; if (vz.estado !== 'escutando') estadoVoz('Ouvindo você…', 'escutando'); }
+      else if (vz.estado === 'escutando' && agora - vz.ouviuEm > 900) estadoVoz('Pensando…', 'pensando');
+      else if (vz.estado === 'pensando' && agora - vz.ouviuEm > 9000) estadoVoz('Pode falar', 'ouvindo');
+    }
+    vz.raf = requestAnimationFrame(passo);
+  };
+  vz.raf = requestAnimationFrame(passo);
+}
+/** Tocar na esfera: interrompe a fala dele; depois de um erro, tenta de novo. */
+function toqueOrbeVoz() {
+  if (vz.falando) { pararFalaVoz(); vz.descartar = true; estadoVoz('Pode falar', 'ouvindo'); return; }
+  if (!vz.ativo) iniciarSessaoVoz();
+}
+function alternarMudoVoz() { vz.mudo = !vz.mudo; $j('jv-conversa').classList.toggle('mudo', vz.mudo); if (vz.pronto && !vz.falando) estadoVoz(vz.mudo ? 'Microfone desligado' : 'Pode falar', 'ouvindo'); }
+/** Solta microfone, alto-falante e conexão (sem fechar a telinha). */
+function pararSessaoVoz() {
+  vz.ativo = false; vz.pronto = false; cancelAnimationFrame(vz.raf); vz.raf = 0;
+  if (vz.eu.trim() || vz.ele.trim()) fecharTurnoVoz();
+  const ws = vz.ws; vz.ws = null; if (ws) { try { ws.close(1000); } catch (e) { } }
+  pararFalaVoz();
+  if (vz.proc) { vz.proc.onaudioprocess = null; try { vz.proc.disconnect(); } catch (e) { } vz.proc = null; }
+  if (vz.stream) { vz.stream.getTracks().forEach(t => t.stop()); vz.stream = null; }
+  if (vz.ctx) { try { vz.ctx.close(); } catch (e) { } vz.ctx = null; }
+  if (jv.modo === '3d') JarvisBrain.voz(0);
+}
+function falhaVoz(e) {
+  pararSessaoVoz(); vz.erro = true;
+  if (e && e.classico) { encerrarConversaVoz(); toast(e.amigavel || 'Abri a conversa escrita.', 6000); abrirChatJarvis({ contexto: vz.contexto, area: vz.area, ouvir: true }); return; }
+  estadoVoz((e && e.amigavel) || 'A conversa por voz não abriu. Toque na esfera para tentar de novo.', 'erro'); vz.legEu = ''; vz.legEle = ''; vz.dica = ''; renderLegendaVoz();
+}
+function encerrarConversaVoz(daVolta) {
+  pararSessaoVoz();
+  const el = $j('jv-conversa'); if (!el || el.hidden) return;
+  el.hidden = true; document.body.classList.remove('jv-em-voz');
+  if (daVolta !== true) desempilharCamada('voz');
+}
+
+// ============================================================================
 // SUBPLANO — curiosidades, desabafos e conversas soltas, guardados em `memorias` e desenhados como uma
 // nuvenzinha discreta, afastada do cérebro. Responde pelo mesmo cérebro (Gemini), SEM os dados da Primos.
 // ============================================================================
-const TIPOS_MEMORIA = { curiosidade: ['◇', 'Curiosidade'], desabafo: ['◯', 'Desabafo'], ideia: ['△', 'Ideia'], pedido: ['□', 'Pedido ao J.A.R.V.I.S.'], nota: ['·', 'Nota'] };
+const TIPOS_MEMORIA = { curiosidade: ['◇', 'Curiosidade'], desabafo: ['◯', 'Desabafo'], ideia: ['△', 'Ideia'], pedido: ['□', 'Pedido ao J.A.R.V.I.S.'], nota: ['·', 'Nota'], perfil: ['◆', 'Sobre você'] }; // perfil = o que o J.A.R.V.I.S. aprendeu sobre o Rafael (pela conversa por voz)
 function classificarMemoria(t) {
   const s = semAcentoCer(t);
   if (/triste|cansa|ansios|desabaf|sozinh|preocupad|estress|medo|raiva|chatead|desanim|angust|sobrecarreg|frustrad|magoad|dificil|cabeca cheia|muita coisa na cabeca|nao aguento/.test(s)) return 'desabafo';
@@ -6495,14 +6774,20 @@ function renderAjustesJarvis() {
     <div class="jva-temas">${Object.entries(TEMAS_JARVIS).map(([k, t]) => `<button type="button" class="jva-tema${k === tema ? ' on' : ''}${t.escuro ? ' esc' : ''}" onclick="escolherTemaJarvis('${k}')" style="--fundo:${t.fundo}; --luz:${t.luz}"><span class="jva-bola" style="background:${t.bola}"></span><b>${t.nome}</b><small>${t.desc}</small></button>`).join('')}</div>
     <label class="jva-linha"><input type="checkbox" ${prefs.jvSemAbertura ? '' : 'checked'} onchange="prefs.jvSemAbertura = !this.checked; salvarPrefsJarvis()"> <span>Vinheta de abertura (o feixe de luz ao abrir o app)</span></label></section>`;
   // voz
+  const mv = jvConfig.iaModeloVoz;
   h += `<section class="jva-sec" id="jva-voz"><h4>4 · Voz</h4>
-    <label class="jva-linha"><input type="checkbox" ${jvConfig.voz ? 'checked' : ''} onchange="jvConfig.voz = this.checked; salvarJvConfig()"> <span>O J.A.R.V.I.S. lê as respostas em voz alta</span></label>
-    <div class="jva-botoes"><button type="button" class="jva-bt2" onclick="falarTexto('Às ordens, ${esc(String(profile.name || 'Rafael').split(' ')[0])}. Sistemas online.')">Ouvir um teste</button></div>
-    <p class="jva-mini">Usa a voz em português do próprio aparelho. Em cada resposta também há o botão 🔊.</p></section>`;
+    <p class="jva-txt">Toque no ícone do J.A.R.V.I.S. e <b>converse falando</b>: ele ouve, responde com voz na hora (português com leve sotaque britânico) e você pode interromper tocando na esfera. Usa o mesmo cérebro grátis (Gemini).</p>
+    <div class="jva-vozes">${VOZES_JARVIS.map(([v, d]) => `<button type="button" class="${(jvConfig.vozNome || VOZES_JARVIS[0][0]) === v ? 'on' : ''}" onclick="jvConfig.vozNome='${v}'; salvarJvConfig(); renderAjustesJarvis()"><strong>${v}</strong><small>${d}</small></button>`).join('')}</div>
+    <div class="jva-botoes"><button type="button" class="jva-bt2" onclick="fecharAjustesJarvis(); iniciarConversaVoz('Ajustes → Voz', null, { saudar: true })">▶ Testar esta voz (ele cumprimenta)</button></div>
+    <label class="jva-linha"><input type="checkbox" ${jvConfig.vozInterromper ? 'checked' : ''} onchange="jvConfig.vozInterromper = this.checked; salvarJvConfig()"> <span>Interromper falando (use com fone de ouvido — sem fone, ele pode se ouvir pelo alto-falante)</span></label>
+    <label class="jva-linha"><input type="checkbox" ${jvConfig.vozModo === 'classica' ? 'checked' : ''} onchange="jvConfig.vozModo = this.checked ? 'classica' : 'aovivo'; salvarJvConfig()"> <span>Modo clássico: o ícone abre o chat escrito com o ditado do iPhone (sem conversa ao vivo)</span></label>
+    <label class="jva-linha"><input type="checkbox" ${jvConfig.voz ? 'checked' : ''} onchange="jvConfig.voz = this.checked; salvarJvConfig()"> <span>No chat escrito, ler as respostas em voz alta (voz do aparelho)</span></label>
+    <p class="jva-mini">${mv && mv.nome ? `Conversa ao vivo pelo modelo <b>${esc(mv.nome)}</b>.` : 'O modelo da conversa ao vivo é escolhido sozinho na primeira vez.'} O plano grátis do Google permite conversas de até 15 minutos seguidos (ele reconecta sozinho). Sem internet ou sem o cérebro ligado, o ícone abre o chat com o ditado.</p></section>`;
   // privacidade
   h += `<section class="jva-sec" id="jva-priv"><h4>5 · Privacidade</h4>
     <label class="jva-linha"><input type="checkbox" ${jvConfig.iaDados === false ? '' : 'checked'} onchange="jvConfig.iaDados = this.checked; salvarJvConfig()"> <span>Mandar os números da Primos 3D para o Gemini analisar (vendas, custos, estoque, margens) — <b>sem nomes de clientes</b></span></label>
-    <p class="jva-mini">Vão só números e códigos ("Cliente 1", "Expositor A"). Da sua agenda, só quantidades. Senhas, e-mails e telefones nunca saem do aparelho. O que precisa do computador vai para o seu cofre privado no GitHub.</p></section>`;
+    <label class="jva-linha"><input type="checkbox" ${jvConfig.iaTudo === false ? '' : 'checked'} onchange="jvConfig.iaTudo = this.checked; salvarJvConfig()"> <span>Mandar também o <b>resto do app</b> para ele analisar: agenda e tarefas com os títulos, finanças pessoais, treinos e consultas, notas, negócios e datas da família</span></label>
+    <p class="jva-mini">Os clientes da Primos vão como códigos ("Cliente 1", "Expositor A"). Senhas, e-mails e telefones nunca saem do aparelho. Com o segundo item desligado, da agenda vão só quantidades. O que precisa do computador vai para o seu cofre privado no GitHub.</p></section>`;
   // mercado
   h += `<section class="jva-sec" id="jva-mercado"><h4>6 · Mercado <span class="jva-tag">opcional</span></h4>
     <p class="jva-txt">Bitcoin, dólar e 4 ações já funcionam sem nada. Para Ibovespa, mais ações do Brasil e as americanas (BDRs), crie a chave grátis em <a href="https://brapi.dev" target="_blank" rel="noopener">brapi.dev</a> (Entrar → Dashboard → copiar o token).</p>
@@ -6607,14 +6892,32 @@ $j('jv-chat').addEventListener('click', e => { if (e.target.id === 'jv-chat') fe
 window.addEventListener('resize', () => { if (jv.modo === '3d') ajustarDeslocamentoJarvis(); ajustarTecladoChat(); });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
+  if (!$j('jv-conversa').hidden) { encerrarConversaVoz(); return; }
   if ($j('jv-ajustes').style.display === 'flex') { fecharAjustesJarvis(); return; }
   if (!$j('jv-chat').hidden) { if (jv.ouvindo) { jv.aoParar = null; pararMicJarvis(); } else fecharChatJarvis(); return; }
   if (jv.modo !== '3d' || abaAtual() !== 'cerebro') return;
   if ($j('jv-base').style.display === 'flex') fecharBaseJarvis();
   else if (!$j('jv-primos').hidden) fecharPrimos();
+  else if (!$j('jv-menu-area').hidden) fecharMenuArea();
   else if (!$j('cer-cartao').hidden) { cer.sel = null; esconderCartaoCerebro(); }
-  else if (jv.painel) voltarJarvis();
+  else if (jv.painel || jv.heroi) voltarJarvis();
 });
+// A bolinha ao lado do nome J.A.R.V.I.S.: VERDE quando nada está sendo construído nem atualizado; enquanto o Claude
+// trabalha no app (status.json do site: "construindo": true) ou há pedido em andamento no computador, ela fica como
+// sempre e dá uma piscada lenta de vez em quando. (Pensando/IA respondendo = pisca rápido, como antes.)
+function aplicarStatusJarvis() {
+  const c = $j('cerebro'); if (!c) return;
+  const ocupado = !!(jv.statusSite && jv.statusSite.construindo) || emAndamentoJarvis();
+  c.classList.toggle('jv-construindo', ocupado); c.classList.toggle('jv-pronto', !ocupado && !!jv.statusSite);
+  const m = document.querySelector('#cerebro .jv-marca'); if (m) m.title = ocupado ? (jv.statusSite && jv.statusSite.nota) || 'Atualizando o J.A.R.V.I.S.…' : 'Tudo pronto — nada sendo atualizado';
+}
+async function verificarStatusJarvis() {
+  try { const r = await fetch('status.json?t=' + Date.now(), { cache: 'no-store' }); if (r.ok) jv.statusSite = await r.json(); } catch (e) { } // sem internet: fica como estava
+  aplicarStatusJarvis();
+}
+setInterval(() => { if (document.visibilityState === 'visible') verificarStatusJarvis(); }, 10 * 60000);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') verificarStatusJarvis(); });
+setTimeout(verificarStatusJarvis, 800);
 // cotações a cada 5 min e o cofre (dados da Primos) a cada 10 min, enquanto o app estiver aberto; e ao voltar para ele
 setInterval(() => { if (document.visibilityState === 'visible' && jv.modo === '3d' && abaAtual() === 'cerebro') atualizarMercado(false); }, 5 * 60000);
 setInterval(() => { if (document.visibilityState === 'visible') sincronizarCofre(false); }, 10 * 60000);

@@ -2175,3 +2175,66 @@ body.jv-pensando .jvp-orbe { animation: jvPensa 0.9s ease-in-out infinite; }
   .jvp-cartao strong { font-size: 0.92rem; }
   .jvp-cartao small { font-size: 0.74rem; }
 }
+
+/* ============================================================================
+   J.A.R.V.I.S. — conversa por VOZ AO VIVO (painel de vidro escuro embaixo; a esfera pulsa com a voz dele)
+   ============================================================================ */
+.jv-conversa { position: fixed; left: 0; right: 0; bottom: 0; z-index: 1200; display: flex; justify-content: center; padding: 0 12px calc(env(safe-area-inset-bottom) + 12px); pointer-events: none; animation: sheetUp 0.3s cubic-bezier(0.2, 0.9, 0.3, 1); }
+.jv-conversa[hidden] { display: none; }
+.jvv-palco { pointer-events: auto; width: min(560px, 100%); display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 18px 18px 14px; border-radius: 30px; color: #f5f5f7;
+  background: linear-gradient(180deg, rgba(22, 25, 31, 0.86), rgba(8, 9, 12, 0.92)); -webkit-backdrop-filter: blur(26px) saturate(1.4); backdrop-filter: blur(26px) saturate(1.4); box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5), inset 0 0 0 0.5px rgba(255, 255, 255, 0.14); }
+.jvv-orbe { --voz: 0; --mic: 0; position: relative; width: 96px; height: 96px; margin: 0; padding: 0; border: none; border-radius: 50%; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.jvv-nucleo { position: absolute; inset: 24px; border-radius: 50%; background: radial-gradient(circle at 44% 38%, #ffffff 0 16%, #eaf4ff 30%, rgba(170, 205, 255, 0.4) 58%, rgba(170, 205, 255, 0) 72%);
+  transform: scale(calc(1 + var(--voz) * 0.6)); box-shadow: 0 0 calc(16px + var(--voz) * 46px) rgba(205, 228, 255, 0.85); transition: transform 0.07s linear, box-shadow 0.07s linear; }
+.jvv-anel { position: absolute; inset: 4px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, 0.16); transform: scale(calc(1 + var(--mic) * 0.3)); transition: transform 0.07s linear, border-color 0.3s; }
+.jv-conversa[data-estado="conectando"] .jvv-anel { border-top-color: rgba(255, 255, 255, 0.85); animation: jvvGira 0.9s linear infinite; }
+.jv-conversa[data-estado="escutando"] .jvv-anel { border-color: rgba(48, 209, 88, 0.75); }
+.jv-conversa[data-estado="pensando"] .jvv-nucleo { animation: jvPensa 0.9s ease-in-out infinite; }
+.jv-conversa[data-estado="erro"] .jvv-nucleo { background: radial-gradient(circle, #ffd08a 0 16%, rgba(255, 159, 10, 0.35) 55%, rgba(255, 159, 10, 0) 72%); box-shadow: 0 0 18px rgba(255, 159, 10, 0.55); }
+@keyframes jvvGira { to { transform: rotate(360deg); } }
+.jvv-estado { margin: 0; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; text-align: center; color: rgba(235, 235, 245, 0.6); }
+.jv-conversa[data-estado="erro"] .jvv-estado { text-transform: none; letter-spacing: 0; font-size: 0.9rem; font-weight: 500; color: #ffd08a; line-height: 1.4; }
+.jvv-legenda { width: 100%; min-height: 40px; max-height: 28vh; overflow-y: auto; text-align: center; overscroll-behavior: contain; }
+.jvv-legenda p { margin: 5px 0; font-size: 1.02rem; line-height: 1.42; color: #fff; }
+.jvv-legenda .eu { font-size: 0.9rem; color: rgba(235, 235, 245, 0.62); }
+.jvv-legenda .antigo { opacity: 0.5; }
+.jvv-legenda .dica { font-size: 0.86rem; color: rgba(235, 235, 245, 0.5); }
+.jvv-botoes { display: flex; gap: 24px; margin-top: 2px; }
+.jvv-bt { width: 48px; height: 48px; margin: 0; padding: 0; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.05rem; color: #fff; background: rgba(255, 255, 255, 0.1); }
+.jvv-bt svg { width: 21px; height: 21px; }
+.jvv-bt:active { transform: scale(0.93); }
+.jvv-fim { background: #ff453a; }
+.jvv-risco { display: none; }
+.jv-conversa.mudo .jvv-risco { display: inline; }
+.jv-conversa.mudo #jvv-mudo { background: rgba(255, 255, 255, 0.9); color: #1d1d1f; }
+body.jv-em-voz .fab-stack { display: none !important; }
+body.jv-em-voz #cerebro .jv-rodape, body.jv-em-voz #cerebro .jv-menu { opacity: 0; pointer-events: none; }
+.jva-vozes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin: 10px 0 4px; }
+.jva-vozes button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; margin: 0; padding: 8px 10px; border: none; border-radius: 12px; text-align: left; cursor: pointer; color: inherit; background: rgba(120, 120, 128, 0.14); }
+.jva-vozes button strong { font-size: 0.86rem; }
+.jva-vozes button small { font-size: 0.72rem; opacity: 0.7; }
+.jva-vozes button.on { background: #007aff; color: #fff; }
+
+/* a bolinha do nome: verde = tudo pronto; construindo = como sempre, com uma piscada lenta de vez em quando */
+#cerebro.jv-pronto .jv-marca::before { background: #30d158; box-shadow: 0 0 10px rgba(48, 209, 88, 0.85); animation: none; }
+#cerebro.jv-construindo .jv-marca::before { animation: jvPiscadaLenta 7s ease-in-out infinite; }
+@keyframes jvPiscadaLenta { 0%, 86%, 100% { opacity: 1; transform: scale(1); } 90% { opacity: 0.12; transform: scale(0.7); } 94% { opacity: 1; transform: scale(1.25); } }
+body.jv-pensando #cerebro .jv-marca::before, #cerebro.pensando .jv-marca::before { animation: jvPisca 0.5s ease-in-out infinite; }
+
+/* "Visão geral" na linha de baixo (as bolinhas das áreas não cobrem mais o botão) */
+#cerebro .jv-topo .jv-marca { display: flex; width: max-content; }
+#cerebro.jv-focado .jv-voltar { display: inline-flex; margin-top: 10px; }
+
+/* a BASE (9 pontinhos, as abas antigas) vai para o canto de baixo à esquerda, pequena e apagada; as áreas sobem para o canto */
+#cerebro.modo-3d .jv-menu { top: auto; right: auto; left: 22px; bottom: calc(env(safe-area-inset-bottom) + 26px); width: 36px; height: 36px; opacity: 0.42; box-shadow: none; transition: opacity 0.2s; }
+#cerebro.modo-3d .jv-menu:hover, #cerebro.modo-3d .jv-menu:active { opacity: 0.9; }
+#cerebro.modo-3d .jv-menu svg { width: 15px; height: 15px; }
+#cerebro.modo-3d .jv-areas { right: 22px; }
+@media (max-width: 800px) {
+  #cerebro.modo-3d .jv-menu { left: 14px; bottom: calc(env(safe-area-inset-bottom) + 84px); width: 32px; height: 32px; }
+  #cerebro.modo-3d.jv-focado .jv-menu { bottom: calc(env(safe-area-inset-bottom) + 142px); }
+  #cerebro.modo-3d.com-texto .jv-menu { opacity: 0; pointer-events: none; }
+  #cerebro.modo-3d .jv-areas { right: 14px; }
+  .jvv-palco { padding: 16px 14px 12px; border-radius: 26px; }
+  .jvv-legenda { max-height: 24vh; }
+}

@@ -666,12 +666,13 @@ function quadro() {
   if (J.aneis) { J.aneis.rotation.y = t * 0.05; J.aneis.rotation.x = Math.sin(t * 0.1) * 0.08; }
   // o núcleo respira (devagar parado; rápido e mais forte quando está pensando)
   J.energia += ((J.pensando ? 1 : 0) - J.energia) * 0.05;
-  const ritmo = 1.6 + J.energia * 5, onda = 0.5 + 0.5 * Math.sin(t * ritmo);
+  J.vozSuave = (J.vozSuave || 0) + ((J.vozNivel || 0) - (J.vozSuave || 0)) * 0.35; // conversa por voz: o núcleo pulsa com a fala dele
+  const ritmo = 1.6 + J.energia * 5, onda = 0.5 + 0.5 * Math.sin(t * ritmo), fala = J.vozSuave;
   if (J.nucleo) {
     const { halo, miolo } = J.nucleo.userData, orbe = !!J.pal.orbe;
-    halo.scale.setScalar((orbe ? 46 : J.pal.aditivo ? 34 : 26) * (1 + onda * (0.12 + J.energia * 0.25)));
-    halo.material.opacity = (orbe ? 0.22 + onda * 0.22 + J.energia * 0.25 : 0.45 + onda * 0.35) * (J.foco ? 0.5 : 1); if (orbe) miolo.material.opacity = (0.55 + onda * 0.35) * (J.foco ? 0.5 : 1);
-    miolo.scale.setScalar((orbe ? 13 : 8) + onda * (orbe ? 4 : 2.5) + J.energia * 3);
+    halo.scale.setScalar((orbe ? 46 : J.pal.aditivo ? 34 : 26) * (1 + onda * (0.12 + J.energia * 0.25) + fala * 0.55));
+    halo.material.opacity = Math.min(1, (orbe ? 0.22 + onda * 0.22 + J.energia * 0.25 : 0.45 + onda * 0.35) * (J.foco ? 0.5 : 1) + fala * 0.35); if (orbe) miolo.material.opacity = Math.min(1, (0.55 + onda * 0.35) * (J.foco ? 0.5 : 1) + fala * 0.3);
+    miolo.scale.setScalar((orbe ? 13 : 8) + onda * (orbe ? 4 : 2.5) + J.energia * 3 + fala * 9);
   }
   if (J.orbe) { const [of, od] = J.pal.cascaOp || [0.5, 0.35]; J.orbe.userData.fora.material.opacity = (J.foco ? of * 0.6 : of) + onda * 0.04; J.orbe.userData.dentro.material.opacity = J.foco ? od * 0.5 : od; }
   if (J.orbe && J.orbe.userData.grade) { // holograma: a grade gira devagar e a borda de luz respira (mais forte quando ele pensa)
@@ -749,6 +750,8 @@ window.JarvisBrain = {
   definirSubplano(tipos) { const novo = (tipos || []).join(','); if (novo === (J.subTipos || []).join(',') && J.sub) return; J.subTipos = tipos || []; if (J.renderer) { construirSubplano(); if (J.subPontos) J.subPontos.material.uniforms.uEscala.value = J.escala; tocar(); } },
   /** O JARVIS está pensando (pedido enviado ao computador): o núcleo pisca mais rápido. */
   pensar(sim) { J.pensando = !!sim; tocar(); },
+  /** Nível da voz do J.A.R.V.I.S. (0–1) na conversa falada: o núcleo cresce e brilha junto com a fala. */
+  voz(nivel) { J.vozNivel = Math.max(0, Math.min(1, nivel || 0)); if (J.vozNivel) tocar(); },
   /** Empurra o cérebro na tela (em pixels: x → direita, y → baixo) para não ficar atrás da janelinha do JARVIS. */
   deslocar(x, y) { J.oxAlvo = x || 0; J.oyAlvo = y || 0; tocar(); },
   focarArea: (a) => focarArea(a, false), focarNo, voltar,
