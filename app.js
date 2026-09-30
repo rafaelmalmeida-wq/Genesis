@@ -4,6 +4,7 @@ function changeTab(tabId) {
   document.getElementById(tabId).classList.add('active');
   document.getElementById('btn-' + tabId).classList.add('active');
   if (typeof atualizarBotaoConfigAba === 'function') atualizarBotaoConfigAba();
+  window.scrollTo(0, 0); // como no iOS: trocar de aba volta ao topo
 }
 
 // --- UTILITÁRIOS ---
@@ -35,7 +36,10 @@ let recurring = JSON.parse(localStorage.getItem('lifeos_recurring')) || []; // l
 let budget = JSON.parse(localStorage.getItem('lifeos_budget')) || { items: [], aberto: true }; // orçamento mensal por rubrica
 let tasklists = JSON.parse(localStorage.getItem('lifeos_tasklists')) || [{ id: 'padrao', name: 'Minhas tarefas' }]; // listas de tarefas
 let routines = JSON.parse(localStorage.getItem('lifeos_routines')) || []; // rotinas: tarefas que voltam sozinhas
-let orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; // compras a caminho (entregas)
+let entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || []; // compras a caminho (entregas)
+let orders = JSON.parse(localStorage.getItem('lifeos_orders')) || [];   // Primos 3D: pedidos (atenção: "entregas" é outro módulo)
+let clients = JSON.parse(localStorage.getItem('lifeos_clients')) || []; // Primos 3D: clientes
+let claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || []; // ✳ pedidos de mudança no app ditados para o Claude
 let media = JSON.parse(localStorage.getItem('lifeos_media')) || [];         // filmes, séries, docs
 let playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || []; // atalhos de música
 let trips = JSON.parse(localStorage.getItem('lifeos_trips')) || [];         // viagens
@@ -475,7 +479,7 @@ const FRASES_PERIODO = {
     'Termine o que começou antes de começar o próximo.',
     'Não é sobre ter tempo. É sobre fazer tempo.',
     'Cuide do processo; o resultado cuida de si.',
-    'Um plantão de cada vez, um paciente de cada vez.',
+    'Uma camada de cada vez, uma peça de cada vez.',
     'Menos pressa, mais direção.',
     'Simplifique. Depois simplifique de novo.',
     'O que é medido, melhora.',
@@ -530,7 +534,12 @@ function atualizarSaudacao() {
   const pendentes = tasks.filter(t => !t.done).length;
   const habPend = habits.filter(h => !h.done).length;
   const partes = [];
-  partes.push(plantoesHoje.length ? `${vt().ic} ${plantoesHoje.map(s => `${s.desc} ${s.time || ''}`.trim()).join(', ')}` : `${vt().ic} sem ${vt().um} hoje`);
+  if (plantoesHoje.length || shifts.length) partes.push(plantoesHoje.length ? `${vt().ic} ${plantoesHoje.map(s => `${s.desc} ${s.time || ''}`.trim()).join(', ')}` : `${vt().ic} sem ${vt().um} hoje`);
+  // Primos 3D: entregas do dia (e atrasadas) e o que está imprimindo
+  const entregasHoje = orders.filter(o => pedidoAberto(o) && o.due && o.due <= hoje);
+  const imprimindo = orders.filter(o => o.status === 'imprimindo').length;
+  if (entregasHoje.length || orders.length) partes.push(entregasHoje.length ? `📦 entregar: ${entregasHoje.map(o => o.title).join(', ')}` : '📦 nenhuma entrega hoje');
+  if (imprimindo) partes.push(`🖨️ ${imprimindo} imprimindo`);
   const evHoje = events.filter(e => e.date === hoje && !e.done).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
   if (evHoje.length) partes.push(`📅 ${evHoje.map(e => `${e.time ? e.time + ' ' : ''}${e.title}`).join(', ')}`);
   partes.push(`✅ ${pendentes} tarefa${pendentes === 1 ? '' : 's'} pendente${pendentes === 1 ? '' : 's'}`);
@@ -546,7 +555,7 @@ function aplicarPerfil() {
   const bs = document.getElementById('modal-add-shift');
   if (bs && typeof vt === 'function') bs.innerText = `${vt().ic} + ${vt().um.charAt(0).toUpperCase()}${vt().um.slice(1)}`;
   const h = document.getElementById('header-title');
-  if (h) h.innerHTML = (profile.initials ? `${esc(profile.initials)} <span style="color:#22c55e">·</span> ` : '') + esc(profile.subtitle || 'Life OS');
+  if (h) h.innerHTML = (profile.initials ? `${esc(profile.initials)} <span style="color:#34c759">·</span> ` : '') + esc(profile.subtitle || 'Life OS');
   const n = document.getElementById('profile-name'); const i = document.getElementById('profile-initials'); const s = document.getElementById('profile-subtitle');
   if (n && document.activeElement !== n) n.value = profile.name || '';
   if (i && document.activeElement !== i) i.value = profile.initials || '';
@@ -569,7 +578,8 @@ function iniciarDia() {
   changeJournalTab('day', document.querySelector('#journal-tabs span'));
   const hoje = hojeISO();
   const pl = shifts.filter(s => s.date === hoje).length; const pend = tasks.filter(t => !t.done).length;
-  toast(`☀️ Bom trabalho hoje! ${qt(pl)} · ${plural(pend, 'tarefa pendente', 'tarefas pendentes')} · ${habits.length} hábitos pra cumprir.`, 6000);
+  const ent = orders.filter(o => pedidoAberto(o) && o.due && o.due <= hoje).length;
+  toast(`☀️ Bom trabalho hoje! ${pl || !orders.length ? qt(pl) + ' · ' : ''}${orders.length ? plural(ent, 'entrega', 'entregas') + ' · ' : ''}${plural(pend, 'tarefa pendente', 'tarefas pendentes')} · ${habits.length} hábitos pra cumprir.`, 6000);
   if ('Notification' in window && Notification.permission === 'default') Notification.requestPermission().catch(() => {});
 }
 
@@ -628,12 +638,12 @@ function renderFocusTab() {
   }
 
   if (filteredHabits.length === 0) {
-    mainHabits.innerHTML = '<li style="color:#64748b; font-size:0.85rem;">Nenhum hábito nesta categoria.</li>';
+    mainHabits.innerHTML = '<li style="color:#8e8e93; font-size:0.85rem;">Nenhum hábito nesta categoria.</li>';
   } else {
     filteredHabits.forEach(h => {
       const streak = streakHabito(h);
-      mainHabits.innerHTML += `<li style="color: ${h.done ? '#64748b' : '#e2e8f0'};">
-        <input type="checkbox" ${h.done ? 'checked' : ''} onclick="toggleHabit(${h.originalIndex})" style="accent-color: #22c55e;">
+      mainHabits.innerHTML += `<li style="color: ${h.done ? '#8e8e93' : 'var(--txt)'};">
+        <input type="checkbox" ${h.done ? 'checked' : ''} onclick="toggleHabit(${h.originalIndex})" style="accent-color: #34c759;">
         <span style="opacity: ${h.done ? 0.5 : 1}; cursor: pointer;" onclick="toggleHabit(${h.originalIndex})">${esc(h.icon)}</span>
         <span style="${h.done ? 'text-decoration: line-through; opacity: 0.5' : ''}; cursor: pointer; flex:1;" onclick="toggleHabit(${h.originalIndex})">${esc(h.text)}</span>
         ${streak > 0 ? `<span class="streak" title="${streak} dia(s) seguidos">🔥 ${streak}</span>` : ''}
@@ -697,7 +707,7 @@ function periodoIntervalo(p) {
 
 function dataTransacao(t) { return t.date || (t.id ? isoDe(new Date(t.id)) : hojeISO()); }
 
-const CORES_DIA = ['#f472b6', '#fbbf24', '#fb923c', '#22c55e', '#38bdf8', '#a78bfa', '#0ea5e9'];
+const CORES_DIA = ['#ff2d55', '#e0a800', '#a2845e', '#34c759', '#007aff', '#af52de', '#32ade6'];
 const DIAS_LONGO = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
 /** Os 7 dias como cartões: progresso dos hábitos + o que tem no dia. */
 function cardsDaSemana(ini, fim) {
@@ -723,7 +733,7 @@ function cardsDaSemana(ini, fim) {
     return `<div class="dia-card ${d === hoje ? 'hoje' : ''} ${futuro ? 'futuro' : ''}" onclick="openDayModal(${d.split('-')[0]}, ${Number(d.split('-')[1])}, ${Number(d.split('-')[2])})" title="Ver o dia">
       <div class="dia-faixa" style="background: linear-gradient(135deg, ${cor}, ${cor}55)"></div>
       <div class="dia-topo"><strong>${DIAS_LONGO[idx]}</strong><small>${isoParaBR(d).slice(0, 5)}${d === hoje ? ' · hoje' : ''}</small></div>
-      <div class="dia-prog"><div class="cat-bar"><div style="width:${pct}%; background:${pct >= 100 ? '#22c55e' : cor}"></div></div><small>${feitos}/${total} hábitos</small></div>
+      <div class="dia-prog"><div class="cat-bar"><div style="width:${pct}%; background:${pct >= 100 ? '#34c759' : cor}"></div></div><small>${feitos}/${total} hábitos</small></div>
       <div class="dia-itens">${linhas.join('') || '<div class="dia-item vazio">livre</div>'}${extras > 0 ? `<div class="dia-item vazio">+${extras}</div>` : ''}</div>
     </div>`;
   }).join('') + '</div>';
@@ -751,22 +761,27 @@ function renderJournal() {
   const nomes = { day: 'Hoje', week: 'Esta semana', month: 'Este mês', quarter: 'Este trimestre', year: 'Este ano' };
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = `<div class="stat-period">${nomes[currentJournal]} · ${isoParaBR(ini)}${ini !== fim ? ' a ' + isoParaBR(fim) : ''}</div><div class="stat-grid">`;
-  html += tile('🎮', `${habPct}%`, currentJournal === 'day' ? 'hábitos hoje' : 'média de hábitos', '#22c55e');
-  html += tile(vt().ic, `${pl.length}`, `${pl.length === 1 ? vt().um : vt().muitos} · ${formatCurrency(plR)}`, '#f59e0b');
-  html += tile('✅', `${tarefasFeitas}`, `concluída${tarefasFeitas === 1 ? '' : 's'} · ${tarefasPend} pendente${tarefasPend === 1 ? '' : 's'}`, '#38bdf8');
-  html += tile('📚', `${Math.floor(estudo / 60)}h ${estudo % 60}m`, 'de estudo', '#a78bfa');
-  html += tile('💰', formatCurrency(inc - exp), `↑ ${formatCurrency(inc)} · ↓ ${formatCurrency(exp)}`, inc - exp >= 0 ? '#22c55e' : '#ef4444');
+  html += tile('🎮', `${habPct}%`, currentJournal === 'day' ? 'hábitos hoje' : 'média de hábitos', '#34c759');
+  if (pl.length || shifts.length) html += tile(vt().ic, `${pl.length}`, `${pl.length === 1 ? vt().um : vt().muitos} · ${formatCurrency(plR)}`, '#bf8700');
+  const ped = orders.filter(o => o.status !== 'cancelado' && dentro(o.date));
+  const pedR = orders.filter(o => o.paid && dentro(o.paidAt || o.date)).reduce((a, o) => a + (Number(o.price) || 0), 0);
+  html += tile('🖨️', `${ped.length}`, `pedido${ped.length === 1 ? '' : 's'} Primos 3D · ${formatCurrency(pedR)} recebido`, COR_PEDIDO);
+  html += tile('✅', `${tarefasFeitas}`, `concluída${tarefasFeitas === 1 ? '' : 's'} · ${tarefasPend} pendente${tarefasPend === 1 ? '' : 's'}`, '#007aff');
+  html += tile('📚', `${Math.floor(estudo / 60)}h ${estudo % 60}m`, 'de estudo', '#af52de');
+  html += tile('💰', formatCurrency(inc - exp), `↑ ${formatCurrency(inc)} · ↓ ${formatCurrency(exp)}`, inc - exp >= 0 ? '#34c759' : '#ff3b30');
   const aportado = moves.filter(m => m.type === 'aporte' && !m.initial && dentro(m.date)).reduce((a, m) => a + m.amount, 0);
-  html += tile('🏦', formatCurrency(patrimonioTotal()), `patrimônio · ${formatCurrency(aportado)} aportados`, '#38bdf8');
+  html += tile('🏦', formatCurrency(patrimonioTotal()), `patrimônio · ${formatCurrency(aportado)} aportados`, '#007aff');
   const tr_ = workouts.filter(w => dentro(w.date)); const trMin = tr_.reduce((a, w) => a + (w.minutes || 0), 0);
-  html += tile('🏋️', `${tr_.length}`, `treino${tr_.length === 1 ? '' : 's'} · ${trMin} min · 💧 ${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L hoje`, '#22c55e');
+  html += tile('🏋️', `${tr_.length}`, `treino${tr_.length === 1 ? '' : 's'} · ${trMin} min · 💧 ${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L hoje`, '#34c759');
   html += '</div>';
 
   if (currentJournal === 'day') {
     const plHoje = pl.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
     const pend = tarefasPrioritarias(5);
     html += '<div class="stat-lists">';
-    html += `<div><h5>${vt().ic} ${vt().listaTitulo} de hoje</h5>${plHoje.length ? plHoje.map(s => `<div class="stat-line"><strong>${esc(s.time || '')}</strong> ${esc(s.desc)} <span style="color:#f59e0b">${formatCurrency(s.amount)}</span></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div>`;
+    html += `<div><h5>${vt().ic} ${vt().listaTitulo} de hoje</h5>${plHoje.length ? plHoje.map(s => `<div class="stat-line"><strong>${esc(s.time || '')}</strong> ${esc(s.desc)} <span style="color:#bf8700">${formatCurrency(s.amount)}</span></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div>`;
+    const entHoje = orders.filter(o => pedidoAberto(o) && o.due && o.due <= hoje).sort((a, b) => a.due.localeCompare(b.due));
+    html += `<div><h5>📦 Entregas de hoje</h5>${entHoje.length ? entHoje.map(o => `<div class="stat-line">${o.due < hoje ? '<span class="badge-topay">atrasado</span> ' : ''}${esc(o.title)}${o.clientId ? ` <span class="item-date">· ${esc(clienteNome(o.clientId))}</span>` : ''}</div>`).join('') : '<div class="stat-line muted">nenhuma</div>'}</div>`;
     const evHoje = events.filter(e => e.date === hoje).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
     html += `<div><h5>📅 Compromissos de hoje</h5>${evHoje.length ? evHoje.map(e => `<div class="stat-line" style="${e.done ? 'opacity:0.5;text-decoration:line-through' : ''}">${tipoEvento(e.type).icone} <strong>${esc(e.time || '')}</strong> ${esc(e.title)}</div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div>`;
     html += `<div><h5>✅ Próximas tarefas</h5>${pend.length ? pend.map(t => `<div class="stat-line">${t.starred ? '★' : '•'} ${esc(t.text)}${t.due ? ` <span class="due ${prazoInfo(t).classe}">${esc(prazoInfo(t).rotulo)}</span>` : ''}</div>`).join('') : '<div class="stat-line muted">tudo em dia</div>'}</div>`;
@@ -777,7 +792,9 @@ function renderJournal() {
     const lista = [...pl].sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
     const evs = events.filter(e => dentro(e.date) && !e.done).sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
     html += '<div class="stat-lists">';
-    html += `<div><h5>${vt().ic} ${vt().listaTitulo} ${currentJournal === 'week' ? 'da semana' : 'do mês'}</h5>${lista.length ? lista.map(s => `<div class="stat-line ${s.date < hoje ? 'muted' : ''}"><strong>${diaSemanaCurto(s.date)} ${isoParaBR(s.date).slice(0, 5)}</strong> · ${esc(s.time || '')} ${esc(s.desc)} <span style="color:#f59e0b">${formatCurrency(s.amount)}</span>${s.paid ? ' <span class="badge-paid">pago</span>' : ''}</div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div>`;
+    html += `<div><h5>${vt().ic} ${vt().listaTitulo} ${currentJournal === 'week' ? 'da semana' : 'do mês'}</h5>${lista.length ? lista.map(s => `<div class="stat-line ${s.date < hoje ? 'muted' : ''}"><strong>${diaSemanaCurto(s.date)} ${isoParaBR(s.date).slice(0, 5)}</strong> · ${esc(s.time || '')} ${esc(s.desc)} <span style="color:#bf8700">${formatCurrency(s.amount)}</span>${s.paid ? ' <span class="badge-paid">pago</span>' : ''}</div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div>`;
+    const entPer = orders.filter(o => pedidoAberto(o) && o.due && dentro(o.due)).sort((a, b) => a.due.localeCompare(b.due));
+    html += `<div><h5>📦 Entregas ${currentJournal === 'week' ? 'da semana' : 'do mês'}</h5>${entPer.length ? entPer.map(o => `<div class="stat-line"><strong>${diaSemanaCurto(o.due)} ${isoParaBR(o.due).slice(0, 5)}</strong> · ${esc(o.title)}${o.due < hoje ? ' <span class="badge-topay">atrasado</span>' : ''}${o.price ? ` <span style="color:${COR_PEDIDO}">${formatCurrency(o.price)}</span>` : ''}</div>`).join('') : '<div class="stat-line muted">nenhuma</div>'}</div>`;
     html += `<div><h5>📅 Compromissos ${currentJournal === 'week' ? 'da semana' : 'do mês'}</h5>${evs.length ? evs.slice(0, 12).map(e => `<div class="stat-line ${e.date < hoje ? 'muted' : ''}">${tipoEvento(e.type).icone} <strong>${diaSemanaCurto(e.date)} ${isoParaBR(e.date).slice(0, 5)}</strong> · ${esc(e.time || '')} ${esc(e.title)}</div>`).join('') + (evs.length > 12 ? `<div class="stat-line muted">+${evs.length - 12} mais</div>` : '') : '<div class="stat-line muted">nenhum</div>'}</div>`;
     const tw = tasks.filter(t => !t.done && t.due && dentro(t.due)).sort((a, b) => a.due.localeCompare(b.due));
     const semPrazo = tarefasPrioritarias(20).filter(t => !t.due).slice(0, 4);
@@ -789,23 +806,28 @@ function renderJournal() {
     const porMes = {};
     pl.forEach(s => { const m = s.date.slice(0, 7); porMes[m] = porMes[m] || { n: 0, valor: 0, pagos: 0 }; porMes[m].n++; porMes[m].valor += Number(s.amount) || 0; if (s.paid) porMes[m].pagos += Number(s.amount) || 0; });
     const meses = Object.keys(porMes).sort();
-    html += `<div class="stat-lists"><div><h5>${vt().ic} ${vt().listaTitulo} por mês</h5>${meses.length ? meses.map(m => `<div class="stat-line"><strong>${nomeMes(m).slice(0, 3)}</strong> · ${porMes[m].n} plant${porMes[m].n === 1 ? 'ão' : 'ões'} · <span style="color:#f59e0b">${formatCurrency(porMes[m].valor)}</span> <small style="color:#22c55e">(${formatCurrency(porMes[m].pagos)} pago)</small></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div></div>`;
+    html += `<div class="stat-lists"><div><h5>${vt().ic} ${vt().listaTitulo} por mês</h5>${meses.length ? meses.map(m => `<div class="stat-line"><strong>${nomeMes(m).slice(0, 3)}</strong> · ${qt(porMes[m].n)} · <span style="color:#bf8700">${formatCurrency(porMes[m].valor)}</span> <small style="color:#34c759">(${formatCurrency(porMes[m].pagos)} pago)</small></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div></div>`;
+    const pm = {};
+    ped.forEach(o => { const m = o.date.slice(0, 7); pm[m] = pm[m] || { n: 0, valor: 0, pagos: 0 }; pm[m].n++; if (pedidoGeraLancamento(o)) pm[m].valor += Number(o.price) || 0; if (o.paid) pm[m].pagos += Number(o.price) || 0; });
+    const mesesP = Object.keys(pm).sort();
+    html += `<div class="stat-lists"><div><h5>🖨️ Pedidos Primos 3D por mês</h5>${mesesP.length ? mesesP.map(m => `<div class="stat-line"><strong>${nomeMes(m).slice(0, 3)}</strong> · ${pm[m].n} pedido${pm[m].n === 1 ? '' : 's'} · <span style="color:${COR_PEDIDO}">${formatCurrency(pm[m].valor)}</span> <small style="color:#34c759">(${formatCurrency(pm[m].pagos)} recebido)</small></div>`).join('') : '<div class="stat-line muted">nenhum</div>'}</div></div>`;
   }
   content.innerHTML = html;
 }
 
 // --- AGENDA: TIPOS DE COMPROMISSO ---
 const TIPOS_EVENTO = {
-  trabalho: { nome: 'Trabalho', cor: '#38bdf8', icone: '💼' },
-  pessoal:  { nome: 'Pessoal',  cor: '#a78bfa', icone: '🏠' },
-  saude:    { nome: 'Saúde',    cor: '#22c55e', icone: '🩺' },
-  estudo:   { nome: 'Estudo',   cor: '#f472b6', icone: '📚' },
-  negocios: { nome: 'Negócios', cor: '#fbbf24', icone: '📈' },
-  reuniao:  { nome: 'Reunião',  cor: '#0ea5e9', icone: '🤝' },
-  social:   { nome: 'Social',   cor: '#fb923c', icone: '🎉' },
-  outro:    { nome: 'Outro',    cor: '#94a3b8', icone: '📌' }
+  trabalho: { nome: 'Trabalho', cor: '#007aff', icone: '💼' },
+  pessoal:  { nome: 'Pessoal',  cor: '#af52de', icone: '🏠' },
+  saude:    { nome: 'Saúde',    cor: '#34c759', icone: '🩺' },
+  estudo:   { nome: 'Estudo',   cor: '#ff2d55', icone: '📚' },
+  negocios: { nome: 'Negócios', cor: '#e0a800', icone: '📈' },
+  reuniao:  { nome: 'Reunião',  cor: '#32ade6', icone: '🤝' },
+  social:   { nome: 'Social',   cor: '#a2845e', icone: '🎉' },
+  outro:    { nome: 'Outro',    cor: '#8e8e93', icone: '📌' }
 };
-const COR_PLANTAO = '#f59e0b';
+const COR_PLANTAO = '#bf8700';
+const COR_PEDIDO = '#ff9500'; // entregas da Primos 3D no calendário
 function tipoEvento(t) { return TIPOS_EVENTO[t] || TIPOS_EVENTO.outro; }
 function diaSemanaCurto(iso) { const [y, m, d] = iso.split('-'); return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', ''); }
 function rotuloData(iso) {
@@ -819,6 +841,7 @@ function rotuloDataLonga(iso) { const r = rotuloData(iso); return (r === 'Hoje' 
 function itensDoDia(iso) {
   const itens = [];
   shifts.filter(s => s.date === iso).forEach(s => itens.push({ kind: 'shift', time: s.time || '', obj: s }));
+  orders.filter(o => o.due === iso && pedidoAberto(o)).forEach(o => itens.push({ kind: 'order', time: '', obj: o }));
   events.filter(e => e.date === iso).forEach(e => itens.push({ kind: 'event', time: e.time || '', obj: e }));
   tasks.filter(t => t.due === iso && !t.done).forEach(t => itens.push({ kind: 'task', time: '', obj: t }));
   return itens.sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
@@ -842,7 +865,7 @@ function renderCalendar() {
   for (let i = 1; i <= lastDay; i++) {
     const iso = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
     const itens = itensDoDia(iso);
-    const cores = itens.map(it => it.kind === 'shift' ? COR_PLANTAO : it.kind === 'task' ? COR_TAREFA : tipoEvento(it.obj.type).cor);
+    const cores = itens.map(it => it.kind === 'shift' ? COR_PLANTAO : it.kind === 'order' ? COR_PEDIDO : it.kind === 'task' ? COR_TAREFA : tipoEvento(it.obj.type).cor);
     const dots = cores.slice(0, 4).map(c => `<span class="day-dot" style="background:${c}"></span>`).join('') + (cores.length > 4 ? '<span class="day-more">+</span>' : '');
     daysHTML += `<div class="calendar-day ${iso === hoje ? 'today' : ''} ${itens.length ? 'has-items' : ''}" onclick="openDayModal(${year}, ${month + 1}, ${i})" title="${itens.length ? itens.length + ' item(ns)' : ''}">${i}<div class="day-dots">${dots}</div></div>`;
   }
@@ -861,10 +884,13 @@ function openDayModal(year, month, day) {
   const modalList = document.getElementById('modal-shift-list'); modalList.innerHTML = '';
 
   if (itens.length === 0) {
-    modalList.innerHTML = '<li style="justify-content:center; color:#64748b; background: transparent; border:none;">Nada marcado neste dia.</li>';
+    modalList.innerHTML = '<li style="justify-content:center; color:#8e8e93; background: transparent; border:none;">Nada marcado neste dia.</li>';
   } else {
     itens.forEach(it => {
-      if (it.kind === 'shift') {
+      if (it.kind === 'order') {
+        const o = it.obj; const st = statusPedido(o.status); const cli = clienteNome(o.clientId);
+        modalList.innerHTML += `<li class="shift-item" style="border-left-color:${COR_PEDIDO}; cursor:pointer" onclick="closeModal(); editarPedido(${o.id})"><span style="display:flex; flex-direction:column;"><strong>📦 Entrega${o.due < hojeISO() ? ' (atrasada)' : ''}</strong><span style="font-size:0.85rem;">${esc(o.title)}${cli ? ' — ' + esc(cli) : ''}</span></span><small class="category-badge" style="color:${st.cor}; background:${st.cor}22">${st.icone} ${st.nome}</small></li>`;
+      } else if (it.kind === 'shift') {
         const s = it.obj;
         modalList.innerHTML += `<li class="shift-item" style="border-left-color:${COR_PLANTAO}"><span style="display:flex; flex-direction:column;"><strong>🚑 ${esc(s.time || '')}${s.hours ? ' · ' + s.hours + 'h' : ''}</strong><span style="font-size:0.85rem;">${esc(s.desc)} ${s.paid ? '<span class="badge-paid">pago</span>' : '<span class="badge-unpaid">a receber</span>'}${s.swap ? ' <span class="badge-swap">🔁 troca</span>' : ''}</span></span><strong style="color:${COR_PLANTAO}">${formatCurrency(s.amount)}</strong></li>`;
       } else if (it.kind === 'task') {
@@ -880,6 +906,7 @@ function openDayModal(year, month, day) {
 }
 function closeModal() { document.getElementById('day-modal').style.display = 'none'; }
 function goToAddShift() { closeModal(); changeTab('home'); verSecaoAgenda('plantoes'); cancelarEdicaoPlantao(); document.getElementById('shift-date').value = selectedModalDate; setTimeout(() => document.getElementById('shift-desc').focus(), 100); }
+function goToAddOrder() { closeModal(); changeTab('primos'); cancelarEdicaoPedido(); document.getElementById('order-due').value = selectedModalDate; setTimeout(() => { document.getElementById('order-title').scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('order-title').focus(); }, 100); }
 function goToAddEvent() { closeModal(); changeTab('home'); verSecaoAgenda('compromissos'); cancelarEdicaoEvento(); document.getElementById('event-date').value = selectedModalDate; setTimeout(() => { document.getElementById('event-title').scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('event-title').focus(); }, 100); }
 document.getElementById('day-modal').addEventListener('click', (e) => { if (e.target.id === 'day-modal') closeModal(); });
 
@@ -985,7 +1012,7 @@ function renderEvents() {
   else if (eventFilter === 'concluidos') lista = lista.filter(e => e.done);
   lista.sort((a, b) => (a.date + (a.time || '99')).localeCompare(b.date + (b.time || '99')));
   if (eventFilter === 'passados') lista.reverse();
-  if (!lista.length) { list.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum compromisso aqui.</li>'; return; }
+  if (!lista.length) { list.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum compromisso aqui.</li>'; return; }
   let ultimaData = '';
   lista.forEach(e => {
     if (e.date !== ultimaData) { ultimaData = e.date; list.innerHTML += `<li class="date-sep">${rotuloData(e.date)} <small>${isoParaBR(e.date)}</small></li>`; }
@@ -1009,8 +1036,8 @@ function redesenharAgenda() { renderCalendar(); renderEvents(); renderShifts(); 
 
 // --- FINANÇAS ---
 const CATEGORIAS = {
-  income:  ['Plantão', 'Salário CLT', 'Consulta / Particular', 'Clínica', 'Produção / Vendas', 'Faturamento CNPJ', 'Investimentos', 'Reembolso', 'Outros'],
-  expense: ['Custos Fixos', 'Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Assinaturas', 'Educação', 'Lazer', 'Investimentos', 'Impostos', 'Empresa', 'Repasses / Comissões', 'Insumos de produção', 'Outros']
+  income:  ['Primos 3D', 'Engenharia / Projetos', 'Plantão', 'Salário CLT', 'Consulta / Particular', 'Clínica', 'Produção / Vendas', 'Faturamento CNPJ', 'Investimentos', 'Reembolso', 'Outros'],
+  expense: ['Filamento / Insumos', 'Primos 3D (outros)', 'Custos Fixos', 'Moradia', 'Alimentação', 'Transporte', 'Saúde', 'Assinaturas', 'Educação', 'Lazer', 'Investimentos', 'Impostos', 'Empresa', 'Repasses / Comissões', 'Insumos de produção', 'Outros']
 };
 let finMonth = hojeISO().slice(0, 7); // 'aaaa-mm' do mês em exibição
 let finModo = 'mes';                  // 'mes' | 'tudo'
@@ -1059,11 +1086,11 @@ function updateFinanceValues() {
   document.getElementById('total-income').innerText = formatCurrency(income);
   document.getElementById('total-expense').innerText = formatCurrency(expense);
   document.getElementById('net-balance').innerText = formatCurrency(total);
-  document.getElementById('net-balance').style.color = total >= 0 ? '#22c55e' : '#ef4444';
+  document.getElementById('net-balance').style.color = total >= 0 ? '#34c759' : '#ff3b30';
   const pend = document.getElementById('total-pending'); if (pend) pend.innerText = formatCurrency(aReceber);
   const lbl = document.getElementById('fin-month-label'); if (lbl) lbl.innerText = finModo === 'mes' ? nomeMes(finMonth) : 'Todo o período';
   const extra = document.getElementById('fin-extra');
-  if (extra) extra.innerHTML = `<span>💸 A pagar: <strong style="color:#ef4444">${formatCurrency(aPagar)}</strong></span><span>📈 Previsto (saldo + a receber − a pagar): <strong style="color:${total + aReceber - aPagar >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(total + aReceber - aPagar)}</strong></span><span>🏦 Saldo acumulado (tudo): <strong style="color:${acumulado >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(acumulado)}</strong></span>`;
+  if (extra) extra.innerHTML = `<span>💸 A pagar: <strong style="color:#ff3b30">${formatCurrency(aPagar)}</strong></span><span>📈 Previsto (saldo + a receber − a pagar): <strong style="color:${total + aReceber - aPagar >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(total + aReceber - aPagar)}</strong></span><span>🏦 Saldo acumulado (tudo): <strong style="color:${acumulado >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(acumulado)}</strong></span>`;
 }
 
 function renderFinances() {
@@ -1074,13 +1101,13 @@ function renderFinances() {
   else if (finFilter === 'pendentes') lista = lista.filter(transacaoPendente);
   if (finSearch) lista = lista.filter(t => `${t.desc} ${t.category || ''} ${t.notes || ''}`.toLowerCase().includes(finSearch));
   lista.sort((a, b) => dataTransacao(b).localeCompare(dataTransacao(a)) || (b.id || 0) - (a.id || 0));
-  if (!lista.length) { tList.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum lançamento aqui.</li>'; }
+  if (!lista.length) { tList.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum lançamento aqui.</li>'; }
   lista.forEach(t => {
-    const i = transactions.indexOf(t); const pend = transacaoPendente(t); const dePlantao = transacaoDePlantao(t);
+    const i = transactions.indexOf(t); const pend = transacaoPendente(t); const dePlantao = transacaoDePlantao(t); const dePedido = transacaoDePedido(t);
     const li = document.createElement('li'); li.classList.add(t.type === 'income' ? 'income-item' : 'expense-item'); if (pend) li.classList.add('pending-item');
-    li.innerHTML = `<div class="transaction-info" style="flex:1"><span>${dePlantao ? '🚑 ' : ''}${t.recurringId ? '🔁 ' : ''}${esc(t.desc)}${pend ? (t.type === 'income' ? ' <span class="badge-unpaid">a receber</span>' : ' <span class="badge-topay">a pagar</span>') : ''}</span>
+    li.innerHTML = `<div class="transaction-info" style="flex:1"><span>${dePedido ? '📦 ' : ''}${dePlantao ? '🚑 ' : ''}${t.recurringId ? '🔁 ' : ''}${esc(t.desc)}${pend ? (t.type === 'income' ? ' <span class="badge-unpaid">a receber</span>' : ' <span class="badge-topay">a pagar</span>') : ''}</span>
         <small class="category-badge">${esc(t.category || 'Sem categoria')}</small> <small class="item-date">${isoParaBR(dataTransacao(t))}</small>${t.paidAt && t.paidAt !== dataTransacao(t) ? `<small class="item-date">· 💵 ${t.type === 'income' ? 'recebido' : 'pago'} em ${isoParaBR(t.paidAt)}</small>` : ''}${t.notes ? `<small class="item-notes">${esc(t.notes)}</small>` : ''}</div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${t.type === 'income' ? '#22c55e' : '#ef4444'}">${t.type === 'income' ? '+' : '−'}${formatCurrency(t.amount)}</strong><button class="mini-btn ${pend ? '' : 'on'}" title="${pend ? 'Marcar como efetivado' : 'Voltar para pendente'}" onclick="alternarEfetivado(${i})">💵</button><button class="mini-btn" title="Editar" onclick="editarTransacao(${i})">✎</button><button class="mini-btn" title="Apagar" onclick="removeFinance(${i})">✕</button></div>`;
+      <div class="item-actions"><strong style="margin-right:6px; color:${t.type === 'income' ? '#34c759' : '#ff3b30'}">${t.type === 'income' ? '+' : '−'}${formatCurrency(t.amount)}</strong><button class="mini-btn ${pend ? '' : 'on'}" title="${pend ? 'Marcar como efetivado' : 'Voltar para pendente'}" onclick="alternarEfetivado(${i})">💵</button><button class="mini-btn" title="Editar" onclick="editarTransacao(${i})">✎</button><button class="mini-btn" title="Apagar" onclick="removeFinance(${i})">✕</button></div>`;
     tList.appendChild(li);
   });
   renderCategoriasFin(); renderMesesFin();
@@ -1095,7 +1122,7 @@ function renderCategoriasFin() {
     if (!itens.length) return `<div class="cat-block"><h5>${titulo}</h5><div class="stat-line muted">nada ainda</div></div>`;
     return `<div class="cat-block"><h5>${titulo} · ${formatCurrency(total)}</h5>` + itens.map(([c, v]) => `<div class="cat-row"><span class="cat-name">${esc(c)}</span><div class="cat-bar"><div style="width:${Math.round(v / total * 100)}%; background:${cor}"></div></div><span class="cat-val">${formatCurrency(v)} <small>${Math.round(v / total * 100)}%</small></span></div>`).join('') + '</div>';
   };
-  el.innerHTML = bloco('expense', '#ef4444', '💸 Despesas') + bloco('income', '#22c55e', '💰 Receitas');
+  el.innerHTML = bloco('expense', '#ff3b30', '💸 Despesas') + bloco('income', '#34c759', '💰 Receitas');
 }
 
 function renderMesesFin() {
@@ -1106,7 +1133,7 @@ function renderMesesFin() {
   const max = Math.max(1, ...dados.map(d => Math.max(d.inc, d.exp)));
   el.innerHTML = dados.map(d => `<div class="mes-col ${d.m === finMonth && finModo === 'mes' ? 'atual' : ''}" onclick="finMonth='${d.m}'; finModo='mes'; redesenharFinancas();" title="Receitas ${formatCurrency(d.inc)} · Despesas ${formatCurrency(d.exp)}">
       <div class="mes-bars"><div class="mes-bar inc" style="height:${Math.round(d.inc / max * 100)}%"></div><div class="mes-bar exp" style="height:${Math.round(d.exp / max * 100)}%"></div></div>
-      <small>${nomeMes(d.m).slice(0, 3)}</small><small class="mes-saldo" style="color:${d.inc - d.exp >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(d.inc - d.exp).replace('R$', '').trim()}</small></div>`).join('');
+      <small>${nomeMes(d.m).slice(0, 3)}</small><small class="mes-saldo" style="color:${d.inc - d.exp >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(d.inc - d.exp).replace('R$', '').trim()}</small></div>`).join('');
 }
 
 document.getElementById('type').addEventListener('change', () => preencherCategorias(false));
@@ -1138,6 +1165,7 @@ function cancelarEdicaoFin() {
 }
 function editarTransacao(index) {
   const t = transactions[index]; if (!t) return;
+  if (transacaoDePedido(t)) { editarPedido(t.id); toast('📦 Este lançamento vem de um pedido da Primos 3D — edite o pedido.'); return; }
   if (transacaoDePlantao(t)) { editarPlantao(t.id); toast(`${vt().ic} Este lançamento vem de um ${vt().um} — edite ${vt().esse}.`); return; }
   changeTab('finances');
   document.getElementById('finance-id').value = t.id; document.getElementById('desc').value = t.desc; document.getElementById('amount').value = t.amount;
@@ -1150,6 +1178,7 @@ function editarTransacao(index) {
 }
 function alternarEfetivado(index) {
   const t = transactions[index]; if (!t) return;
+  if (transacaoDePedido(t)) { alternarPagoPedido(t.id); return; }
   if (transacaoDePlantao(t)) { alternarPago(t.id); return; }
   t.pending = !transacaoPendente(t);
   // A data continua sendo a do fato (vencimento / dia do serviço); a baixa é um
@@ -1160,6 +1189,7 @@ function alternarEfetivado(index) {
 }
 function removeFinance(index) {
   const t = transactions[index];
+  if (transacaoDePedido(t)) { toast('📦 Este lançamento vem de um pedido — para tirar de Finanças, cancele ou apague o pedido na aba Primos 3D.', 6000); return; }
   if (transacaoDePlantao(t) && !confirm(`Este lançamento veio de um ${vt().um}. Apagar mesmo assim? (${vt().esse} continua na agenda)`)) return;
   if (!transacaoDePlantao(t) && !confirm(`Apagar "${t.desc}"?`)) return;
   transactions.splice(index, 1); salvar('finances', transactions); redesenharFinancas();
@@ -1177,7 +1207,7 @@ const MODELO_PRIMO_POBRE = {
   essencial: ['Moradia / Aluguel', 'Condomínio', 'Supermercado', 'Água', 'Luz', 'Gás', 'IPTU', 'Plano de saúde', 'Investimentos', 'Outras essenciais'],
   nao: ['Academia / Esportes', 'Aplicativos e assinaturas', 'Cartão de crédito', 'Celular / Telefonia', 'Combustível', 'Empréstimos', 'Escola / Faculdade / Cursos', 'Farmácia', 'Financiamento de veículo', 'Gastos com animais', 'Gastos imprevistos', 'Transporte', 'Internet residencial', 'Lazer', 'Streaming', 'Padaria / Feira', 'Restaurantes / iFood', 'Salão / Manicure', 'Tarifas bancárias', 'Outras não essenciais']
 };
-const GRUPOS_ORC = { receita: ['💰', 'Receitas (entradas)', '#22c55e'], essencial: ['🏠', 'Despesas essenciais', '#38bdf8'], nao: ['🎉', 'Despesas não essenciais', '#f59e0b'] };
+const GRUPOS_ORC = { receita: ['💰', 'Receitas (entradas)', '#34c759'], essencial: ['🏠', 'Despesas essenciais', '#007aff'], nao: ['🎉', 'Despesas não essenciais', '#bf8700'] };
 
 function itensOrc(kind) { return (budget.items || []).filter(i => i.kind === kind); }
 function previstoOrc(kind) { return itensOrc(kind).reduce((a, i) => a + (Number(i.amount) || 0), 0); }
@@ -1231,10 +1261,10 @@ function renderOrcamento() {
   const reserva = custoVidaBasico() * 6;
   const resumo = document.getElementById('orc-resumo');
   if (resumo) resumo.innerHTML = `
-    <div class="orc-tile"><small>Entradas</small><strong style="color:#22c55e">${formatCurrency(receitaR)}</strong><small>previsto ${formatCurrency(receitaP)}</small></div>
-    <div class="orc-tile"><small>Essenciais</small><strong style="color:#38bdf8">${formatCurrency(essR)}</strong><small>previsto ${formatCurrency(essP)}</small></div>
-    <div class="orc-tile"><small>Não essenciais</small><strong style="color:#f59e0b">${formatCurrency(naoR)}</strong><small>previsto ${formatCurrency(naoP)}</small></div>
-    <div class="orc-tile"><small>Sobra do mês</small><strong style="color:${sobraR >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(sobraR)}</strong><small>previsto ${formatCurrency(sobraP)}</small></div>`;
+    <div class="orc-tile"><small>Entradas</small><strong style="color:#34c759">${formatCurrency(receitaR)}</strong><small>previsto ${formatCurrency(receitaP)}</small></div>
+    <div class="orc-tile"><small>Essenciais</small><strong style="color:#007aff">${formatCurrency(essR)}</strong><small>previsto ${formatCurrency(essP)}</small></div>
+    <div class="orc-tile"><small>Não essenciais</small><strong style="color:#bf8700">${formatCurrency(naoR)}</strong><small>previsto ${formatCurrency(naoP)}</small></div>
+    <div class="orc-tile"><small>Sobra do mês</small><strong style="color:${sobraR >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(sobraR)}</strong><small>previsto ${formatCurrency(sobraP)}</small></div>`;
   const rodape = document.getElementById('orc-reserva');
   if (rodape) {
     const jaTem = (typeof totalClasse === 'function') ? totalClasse('reserva') : 0;
@@ -1254,8 +1284,8 @@ function renderOrcamento() {
         const faltou = kind === 'receita' && prev > 0 && real < prev;
         return `<div class="orc-linha"><span class="orc-nome" title="${esc(i.name)}">${esc(i.name)}</span>
           <input type="number" step="0.01" min="0" class="orc-valor" value="${prev || ''}" placeholder="0" onchange="mudarValorOrc(${i.id}, this.value)">
-          <div class="cat-bar" title="${formatCurrency(real)} de ${formatCurrency(prev)}"><div style="width:${prev ? pct : 0}%; background:${estourou ? '#ef4444' : faltou ? '#f59e0b' : g[2]}"></div></div>
-          <span class="orc-real" style="color:${estourou ? '#ef4444' : '#cbd5e1'}">${formatCurrency(real)}${prev ? ` <small>${pct}%</small>` : ''}</span>
+          <div class="cat-bar" title="${formatCurrency(real)} de ${formatCurrency(prev)}"><div style="width:${prev ? pct : 0}%; background:${estourou ? '#ff3b30' : faltou ? '#bf8700' : g[2]}"></div></div>
+          <span class="orc-real" style="color:${estourou ? '#ff3b30' : 'var(--txt2)'}">${formatCurrency(real)}${prev ? ` <small>${pct}%</small>` : ''}</span>
           <span class="item-actions"><button class="mini-btn xs" title="Renomear" onclick="renomearItemOrc(${i.id})">✎</button><button class="mini-btn xs" title="Tirar do orçamento" onclick="removerItemOrc(${i.id})">✕</button></span></div>`;
       }).join('')}
       <button type="button" class="mini-btn xs" onclick="addItemOrc('${kind}')">＋ rubrica</button></div>`;
@@ -1356,7 +1386,7 @@ function renderRecorrentes() {
   const ul = document.getElementById('rec-list'); if (!ul) return; ul.innerHTML = '';
   const ym = mesRecorrentes();
   const rot = document.getElementById('rec-mes'); if (rot) rot.innerText = nomeMes(ym);
-  if (!recurring.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma recorrente. Ex: aluguel, internet, salário CLT, assinatura.</li>'; return; }
+  if (!recurring.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma recorrente. Ex: aluguel, internet, salário CLT, assinatura.</li>'; return; }
   [...recurring].sort((a, b) => (a.day || 0) - (b.day || 0)).forEach(r => {
     const off = r.active === false;
     const t = lancRecorrente(r, ym);
@@ -1373,9 +1403,265 @@ function renderRecorrentes() {
       botao = `<button class="mini-btn on" title="Voltar para pendente" onclick="baixarRecorrente(${r.id})">💵</button>`;
     }
     ul.innerHTML += `<li class="${r.type === 'income' ? 'income-item' : 'expense-item'}" style="${off ? 'opacity:0.45' : ''}"><div class="transaction-info" style="flex:1"><span>🔁 ${esc(r.desc)}${off ? ' <small class="item-date">(pausada)</small>' : ''} ${chip}</span><small class="category-badge">${esc(r.category)}</small> <small class="item-date">todo dia ${r.day}</small></div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${r.type === 'income' ? '#22c55e' : '#ef4444'}">${formatCurrency(r.amount)}</strong>${off ? '' : botao}<button class="mini-btn ${off ? '' : 'on'}" title="${off ? 'Reativar' : 'Pausar'}" onclick="alternarRecorrente(${r.id})">${off ? '▶' : '⏸'}</button><button class="mini-btn" title="Editar" onclick="editarRecorrente(${r.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerRecorrente(${r.id})">✕</button></div></li>`;
+      <div class="item-actions"><strong style="margin-right:6px; color:${r.type === 'income' ? '#34c759' : '#ff3b30'}">${formatCurrency(r.amount)}</strong>${off ? '' : botao}<button class="mini-btn ${off ? '' : 'on'}" title="${off ? 'Reativar' : 'Pausar'}" onclick="alternarRecorrente(${r.id})">${off ? '▶' : '⏸'}</button><button class="mini-btn" title="Editar" onclick="editarRecorrente(${r.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerRecorrente(${r.id})">✕</button></div></li>`;
   });
 }
+
+// ============================================================================
+// PRIMOS 3D — pedidos e clientes da empresa de impressão 3D
+// Pedido:  { id, date (criado), clientId, title, qty, material, color, printer, price, due (prazo), status, paid, paidAt, notes }
+// Cliente: { id, name, phone, email, city, notes, date }
+// Pedido com valor que já saiu do orçamento vira receita em Finanças com o MESMO id
+// (categoria "Primos 3D"), "a receber" até marcar 💵. Orçamento/cancelado não entram em Finanças.
+// ============================================================================
+const STATUS_PEDIDO = {
+  orcamento:  { nome: 'Orçamento',  icone: '📝', cor: '#8e8e93' },
+  aprovado:   { nome: 'Aprovado',   icone: '👍', cor: '#007aff' },
+  imprimindo: { nome: 'Imprimindo', icone: '🖨️', cor: '#ff9500' },
+  pronto:     { nome: 'Pronto',     icone: '✅', cor: '#34c759' },
+  entregue:   { nome: 'Entregue',   icone: '📦', cor: '#32ade6' },
+  cancelado:  { nome: 'Cancelado',  icone: '✕',  cor: '#ff3b30' }
+};
+const FLUXO_PEDIDO = ['orcamento', 'aprovado', 'imprimindo', 'pronto', 'entregue'];
+const MATERIAIS_3D = ['PLA', 'PLA Silk', 'PLA Matte', 'PETG', 'ABS', 'ASA', 'TPU', 'Outro'];
+const IMPRESSORAS_3D = ['Bambu A1 #1 (AMS Lite)', 'Bambu A1 #2 (AMS Lite)', 'Anycubic Kobra X'];
+let orderFilter = 'abertos';
+let orderSearch = '';
+
+function statusPedido(s) { return STATUS_PEDIDO[s] || STATUS_PEDIDO.orcamento; }
+function pedidoAberto(o) { return o.status !== 'entregue' && o.status !== 'cancelado'; }
+function pedidoGeraLancamento(o) { return (Number(o.price) || 0) > 0 && o.status !== 'orcamento' && o.status !== 'cancelado'; }
+function clienteNome(id) { const c = clients.find(x => x.id === id); return c ? c.name : ''; }
+function transacaoDePedido(t) { return orders.some(o => o.id === t.id); }
+
+/** Mantém o lançamento em Finanças igual ao pedido (valor, data, pago/a receber) — ou tira de lá se o pedido não gera receita. */
+function sincronizarLancamentoPedido(o) {
+  const i = transactions.findIndex(t => t.id === o.id);
+  if (!pedidoGeraLancamento(o)) { if (i >= 0) transactions.splice(i, 1); return; }
+  let t = transactions[i];
+  if (!t) { t = { id: o.id, type: 'income', category: 'Primos 3D' }; transactions.push(t); }
+  const cli = clienteNome(o.clientId);
+  t.desc = `Primos 3D: ${o.title}${cli ? ' — ' + cli : ''}`; t.amount = Number(o.price) || 0; t.pending = !o.paid;
+  t.date = o.paid ? (o.paidAt || o.date) : (o.due || o.date);
+}
+
+function preencherSelectsPrimos() {
+  const cli = document.getElementById('order-client');
+  if (cli) {
+    const atual = cli.value;
+    cli.innerHTML = '<option value="">— sem cliente —</option>' + [...clients].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('') + '<option value="__novo">＋ Novo cliente (digitar)</option>';
+    if ([...cli.options].some(o => o.value === atual)) cli.value = atual;
+    document.getElementById('order-client-new').hidden = cli.value !== '__novo';
+  }
+  const f = (id, lista, vazio) => { const s = document.getElementById(id); if (s && !s.options.length) s.innerHTML = (vazio ? `<option value="">${vazio}</option>` : '') + lista.map(x => `<option value="${esc(x)}">${esc(x)}</option>`).join(''); };
+  f('order-material', MATERIAIS_3D); f('order-printer', IMPRESSORAS_3D, '— a definir —');
+  const st = document.getElementById('order-status');
+  if (st && !st.options.length) st.innerHTML = Object.entries(STATUS_PEDIDO).map(([k, s]) => `<option value="${k}">${s.icone} ${s.nome}</option>`).join('');
+}
+document.getElementById('order-client').addEventListener('change', () => {
+  const novo = document.getElementById('order-client').value === '__novo';
+  document.getElementById('order-client-new').hidden = !novo; if (novo) document.getElementById('order-client-new').focus();
+});
+
+// --- Pedidos ---
+document.getElementById('order-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const id = document.getElementById('order-id').value;
+  const title = document.getElementById('order-title').value.trim(); if (!title) return;
+  let clientId = document.getElementById('order-client').value;
+  if (clientId === '__novo') {
+    const nome = document.getElementById('order-client-new').value.trim();
+    if (!nome) { toast('Digite o nome do novo cliente.'); document.getElementById('order-client-new').focus(); return; }
+    const c = { id: novoId(), name: nome, phone: '', email: '', city: '', notes: '', date: hojeISO() };
+    clients.push(c); salvar('clients', clients); clientId = c.id;
+  } else clientId = clientId ? Number(clientId) : null;
+  const dados = {
+    clientId, title,
+    qty: parseInt(document.getElementById('order-qty').value) || 1,
+    material: document.getElementById('order-material').value,
+    color: document.getElementById('order-color').value.trim(),
+    printer: document.getElementById('order-printer').value,
+    price: parseFloat(document.getElementById('order-price').value) || 0,
+    due: document.getElementById('order-due').value,
+    status: document.getElementById('order-status').value || 'orcamento',
+    notes: document.getElementById('order-notes').value.trim()
+  };
+  let o;
+  if (id) { o = orders.find(x => String(x.id) === id); if (!o) return; Object.assign(o, dados); }
+  else { o = { id: novoId(), date: hojeISO(), paid: false, paidAt: null, ...dados }; orders.push(o); }
+  sincronizarLancamentoPedido(o);
+  salvar('orders', orders); salvar('finances', transactions);
+  cancelarEdicaoPedido(); redesenharPrimos();
+  toast(id ? '📦 Pedido atualizado.' : `📦 Pedido registrado (${statusPedido(o.status).nome.toLowerCase()}).`);
+});
+function cancelarEdicaoPedido() {
+  document.getElementById('order-form').reset(); document.getElementById('order-id').value = '';
+  preencherSelectsPrimos(); document.getElementById('order-client-new').hidden = true;
+  document.getElementById('order-form-title').innerText = 'Novo pedido';
+  document.getElementById('order-submit').innerText = 'Registrar pedido';
+  document.getElementById('order-cancel').hidden = true;
+}
+function editarPedido(id) {
+  const o = orders.find(x => x.id === id); if (!o) return;
+  changeTab('primos'); preencherSelectsPrimos();
+  document.getElementById('order-id').value = o.id;
+  document.getElementById('order-client').value = o.clientId && clients.some(c => c.id === o.clientId) ? String(o.clientId) : '';
+  document.getElementById('order-client-new').hidden = true;
+  document.getElementById('order-title').value = o.title; document.getElementById('order-qty').value = o.qty || 1;
+  document.getElementById('order-material').value = o.material || 'PLA'; document.getElementById('order-color').value = o.color || '';
+  document.getElementById('order-printer').value = o.printer || ''; document.getElementById('order-price').value = o.price || '';
+  document.getElementById('order-due').value = o.due || ''; document.getElementById('order-status').value = o.status || 'orcamento';
+  document.getElementById('order-notes').value = o.notes || '';
+  document.getElementById('order-form-title').innerText = 'Editar pedido';
+  document.getElementById('order-submit').innerText = 'Salvar alterações';
+  document.getElementById('order-cancel').hidden = false;
+  document.getElementById('order-title').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+/** ▶ leva o pedido para a próxima etapa: orçamento → aprovado → imprimindo → pronto → entregue. */
+function avancarPedido(id) {
+  const o = orders.find(x => x.id === id); if (!o) return;
+  const i = FLUXO_PEDIDO.indexOf(o.status); if (i < 0 || i >= FLUXO_PEDIDO.length - 1) return;
+  o.status = FLUXO_PEDIDO[i + 1];
+  sincronizarLancamentoPedido(o); salvar('orders', orders); salvar('finances', transactions); redesenharPrimos();
+  const st = statusPedido(o.status); toast(`${st.icone} ${o.title}: ${st.nome.toLowerCase()}.`);
+}
+function alternarPagoPedido(id) {
+  const o = orders.find(x => x.id === id); if (!o) return;
+  if (!pedidoGeraLancamento(o)) { toast('💵 Para marcar como pago, o pedido precisa ter valor e sair do orçamento (▶ aprovar).', 5000); return; }
+  o.paid = !o.paid; o.paidAt = o.paid ? hojeISO() : null;
+  sincronizarLancamentoPedido(o); salvar('orders', orders); salvar('finances', transactions); redesenharPrimos();
+  toast(o.paid ? `💵 ${o.title}: pago.` : `⏳ ${o.title} voltou para "a receber".`);
+}
+function removerPedido(id) {
+  const o = orders.find(x => x.id === id); if (!o || !confirm(`Apagar o pedido "${o.title}"? (o lançamento em Finanças também sai)`)) return;
+  orders = orders.filter(x => x.id !== id); transactions = transactions.filter(t => t.id !== id);
+  salvar('orders', orders); salvar('finances', transactions); redesenharPrimos();
+}
+function filtrarPedidos(f, el) { orderFilter = f; document.querySelectorAll('#order-filters span').forEach(s => s.classList.remove('active')); if (el) el.classList.add('active'); renderPedidos(); }
+function buscarPedidos(v) { orderSearch = (v || '').trim().toLowerCase(); renderPedidos(); }
+
+function renderPedidos() {
+  const ul = document.getElementById('order-list'); if (!ul) return;
+  const hoje = hojeISO();
+  let lista = [...orders];
+  if (orderFilter === 'abertos') lista = lista.filter(o => pedidoAberto(o) && o.status !== 'orcamento');
+  else if (orderFilter === 'orcamentos') lista = lista.filter(o => o.status === 'orcamento');
+  else if (orderFilter === 'receber') lista = lista.filter(o => pedidoGeraLancamento(o) && !o.paid);
+  else if (orderFilter === 'entregues') lista = lista.filter(o => o.status === 'entregue' || o.status === 'cancelado');
+  if (orderSearch) lista = lista.filter(o => `${o.title} ${clienteNome(o.clientId)} ${o.material || ''} ${o.color || ''} ${o.printer || ''} ${o.notes || ''}`.toLowerCase().includes(orderSearch));
+  // abertos: prazo mais próximo primeiro (sem prazo no fim); demais: mais recentes primeiro
+  if (orderFilter === 'abertos' || orderFilter === 'receber') lista.sort((a, b) => (a.due || '9999').localeCompare(b.due || '9999') || a.id - b.id);
+  else lista.sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.id - a.id);
+  if (!lista.length) { ul.innerHTML = '<li class="empty-row">Nenhum pedido aqui.</li>'; return; }
+  ul.innerHTML = lista.map(o => {
+    const st = statusPedido(o.status); const cli = clienteNome(o.clientId); const aberto = pedidoAberto(o);
+    const i = FLUXO_PEDIDO.indexOf(o.status); const prox = aberto && i >= 0 && i < FLUXO_PEDIDO.length - 1 ? statusPedido(FLUXO_PEDIDO[i + 1]) : null;
+    const prazo = !o.due ? '' : aberto && o.due < hoje ? `<span class="badge-topay">atrasado · ${isoParaBR(o.due).slice(0, 5)}</span>` : aberto && o.due === hoje ? '<span class="badge-unpaid">entregar hoje</span>' : `<span class="item-date">📅 ${rotuloData(o.due)}</span>`;
+    const pago = pedidoGeraLancamento(o) ? (o.paid ? '<span class="badge-paid">pago</span>' : '<span class="badge-unpaid">a receber</span>') : '';
+    const detalhes = [cli ? '👤 ' + esc(cli) : '', [o.material, o.color].filter(Boolean).map(esc).join(' · '), o.printer ? '🖨️ ' + esc(o.printer) : ''].filter(Boolean).join('  ·  ');
+    return `<li class="order-item" style="border-left-color:${st.cor}; ${o.status === 'cancelado' ? 'opacity:0.5' : ''}">
+      <div class="transaction-info" style="flex:1; min-width:0">
+        <span><strong>${esc(o.title)}</strong>${o.qty > 1 ? ` <span class="item-date">×${o.qty}</span>` : ''}</span>
+        <span class="order-tags"><span class="status-badge" style="color:${st.cor}; background:${st.cor}22">${st.icone} ${st.nome}</span>${pago}${prazo}</span>
+        ${detalhes ? `<small class="item-notes">${detalhes}</small>` : ''}${o.notes ? `<small class="item-notes">${linkify(esc(o.notes))}</small>` : ''}
+      </div>
+      <div class="item-actions">${o.price ? `<strong style="margin-right:6px">${formatCurrency(o.price)}</strong>` : ''}${prox ? `<button class="mini-btn" title="Avançar para: ${prox.nome}" onclick="avancarPedido(${o.id})">▶</button>` : ''}<button class="mini-btn ${o.paid ? 'on' : ''}" title="${o.paid ? 'Marcar como não pago' : 'Marcar como pago'}" onclick="alternarPagoPedido(${o.id})">💵</button><button class="mini-btn" title="Editar" onclick="editarPedido(${o.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerPedido(${o.id})">✕</button></div>
+    </li>`;
+  }).join('');
+}
+
+// --- Clientes ---
+document.getElementById('client-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const id = document.getElementById('client-id').value;
+  const dados = {
+    name: document.getElementById('client-name').value.trim(),
+    phone: document.getElementById('client-phone').value.trim(),
+    email: document.getElementById('client-email').value.trim(),
+    city: document.getElementById('client-city').value.trim(),
+    notes: document.getElementById('client-notes').value.trim()
+  };
+  if (!dados.name) return;
+  if (id) {
+    const c = clients.find(x => String(x.id) === id); if (!c) return; Object.assign(c, dados);
+    orders.filter(o => o.clientId === c.id).forEach(sincronizarLancamentoPedido); // nome novo na descrição do lançamento
+    salvar('finances', transactions);
+  } else clients.push({ id: novoId(), date: hojeISO(), ...dados });
+  salvar('clients', clients); cancelarEdicaoCliente(); redesenharPrimos();
+  toast(id ? '👤 Cliente atualizado.' : '👤 Cliente cadastrado.');
+});
+function cancelarEdicaoCliente() {
+  document.getElementById('client-form').reset(); document.getElementById('client-id').value = '';
+  document.getElementById('client-form-title').innerText = 'Novo cliente';
+  document.getElementById('client-submit').innerText = 'Cadastrar cliente';
+  document.getElementById('client-cancel').hidden = true;
+}
+function editarCliente(id) {
+  const c = clients.find(x => x.id === id); if (!c) return;
+  document.getElementById('client-id').value = c.id; document.getElementById('client-name').value = c.name;
+  document.getElementById('client-phone').value = c.phone || ''; document.getElementById('client-email').value = c.email || '';
+  document.getElementById('client-city').value = c.city || ''; document.getElementById('client-notes').value = c.notes || '';
+  document.getElementById('client-form-title').innerText = 'Editar cliente';
+  document.getElementById('client-submit').innerText = 'Salvar alterações';
+  document.getElementById('client-cancel').hidden = false;
+  document.getElementById('client-name').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+function removerCliente(id) {
+  const c = clients.find(x => x.id === id); if (!c) return;
+  const n = orders.filter(o => o.clientId === id).length;
+  if (!confirm(`Apagar o cliente "${c.name}"?${n ? ` Os ${n} pedido(s) dele continuam, sem cliente.` : ''}`)) return;
+  clients = clients.filter(x => x.id !== id);
+  orders.filter(o => o.clientId === id).forEach(o => { o.clientId = null; sincronizarLancamentoPedido(o); });
+  salvar('clients', clients); if (n) { salvar('orders', orders); salvar('finances', transactions); }
+  redesenharPrimos();
+}
+function novoPedidoParaCliente(id) {
+  cancelarEdicaoPedido(); document.getElementById('order-client').value = String(id);
+  document.getElementById('order-title').scrollIntoView({ behavior: 'smooth', block: 'center' }); document.getElementById('order-title').focus();
+}
+/** Link de WhatsApp a partir do telefone (só números; DDD sem o 55 ganha o 55). */
+function linkWhatsApp(tel) { let d = String(tel || '').replace(/\D/g, ''); if (d.length === 10 || d.length === 11) d = '55' + d; return d.length >= 12 ? `https://wa.me/${d}` : ''; }
+
+function renderClientes() {
+  const ul = document.getElementById('client-list'); if (!ul) return;
+  if (!clients.length) { ul.innerHTML = '<li class="empty-row">Nenhum cliente ainda. Cadastre aqui ou direto no pedido (＋ Novo cliente).</li>'; return; }
+  ul.innerHTML = [...clients].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(c => {
+    const ped = orders.filter(o => o.clientId === c.id && o.status !== 'cancelado');
+    const total = ped.filter(pedidoGeraLancamento).reduce((a, o) => a + (Number(o.price) || 0), 0);
+    const wa = linkWhatsApp(c.phone);
+    const contato = [c.phone ? (wa ? `<a href="${wa}" target="_blank" rel="noopener">📱 ${esc(c.phone)}</a>` : '📱 ' + esc(c.phone)) : '', c.email ? '✉️ ' + esc(c.email) : '', c.city ? '📍 ' + esc(c.city) : ''].filter(Boolean).join('  ·  ');
+    return `<li class="client-item">
+      <div class="transaction-info" style="flex:1; min-width:0">
+        <span><strong>${esc(c.name)}</strong> <span class="item-date">${ped.length} pedido${ped.length === 1 ? '' : 's'}${total ? ' · ' + formatCurrency(total) : ''}</span></span>
+        ${contato ? `<small class="item-notes client-contact">${contato}</small>` : ''}${c.notes ? `<small class="item-notes">${esc(c.notes)}</small>` : ''}
+      </div>
+      <div class="item-actions"><button class="mini-btn" title="Novo pedido para este cliente" onclick="novoPedidoParaCliente(${c.id})">＋📦</button><button class="mini-btn" title="Editar" onclick="editarCliente(${c.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerCliente(${c.id})">✕</button></div>
+    </li>`;
+  }).join('');
+}
+
+// --- Painel do módulo ---
+function renderPainelPrimos() {
+  const el = document.getElementById('primos-dash'); if (!el) return;
+  const mes = hojeISO().slice(0, 7); const hoje = hojeISO();
+  const producao = orders.filter(o => pedidoAberto(o) && o.status !== 'orcamento');
+  const imprimindo = orders.filter(o => o.status === 'imprimindo').length;
+  const atrasados = producao.filter(o => o.due && o.due < hoje).length;
+  const orc = orders.filter(o => o.status === 'orcamento').length;
+  const aReceber = orders.filter(o => pedidoGeraLancamento(o) && !o.paid); const totalReceber = aReceber.reduce((a, o) => a + (Number(o.price) || 0), 0);
+  const recebidoMes = orders.filter(o => o.paid && (o.paidAt || '').startsWith(mes)).reduce((a, o) => a + (Number(o.price) || 0), 0);
+  const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
+  el.innerHTML = '<div class="stat-grid">'
+    + tile('📦', `${producao.length}`, `em produção · ${imprimindo} imprimindo${atrasados ? ` · <span style="color:#ff3b30">${atrasados} atrasado${atrasados === 1 ? '' : 's'}</span>` : ''}`, '#007aff')
+    + tile('📝', `${orc}`, `orçamento${orc === 1 ? '' : 's'} aguardando`, '#8e8e93')
+    + tile('⏳', formatCurrency(totalReceber), `a receber (${aReceber.length})`, '#ff9500')
+    + tile('💵', formatCurrency(recebidoMes), 'recebido este mês', '#34c759')
+    + tile('👤', `${clients.length}`, `cliente${clients.length === 1 ? '' : 's'}`, '#af52de')
+    + '</div>';
+}
+function renderPrimos() { preencherSelectsPrimos(); renderPainelPrimos(); renderPedidos(); renderClientes(); }
+function redesenharPrimos() { renderPrimos(); updateFinanceValues(); renderFinances(); renderCalendar(); renderJournal(); atualizarSaudacao(); }
+
 
 // --- PLANTÕES ---
 let shiftFilter = 'proximos';
@@ -1399,9 +1685,9 @@ function aplicarLocalPlantao() {
 function renderPlaces() {
   renderSugestaoTurnos();
   const ul = document.getElementById('place-list'); if (!ul) return; ul.innerHTML = '';
-  if (!places.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum turno cadastrado. Ex: "Hospital X 12h" (07:00, 12h, R$ 1.500).</li>'; return; }
+  if (!places.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum turno cadastrado. Ex: "Hospital X 12h" (07:00, 12h, R$ 1.500).</li>'; return; }
   places.forEach((p, i) => {
-    ul.innerHTML += `<li><div class="transaction-info"><span>🏥 ${esc(p.name)}${p.local && p.local !== p.name ? ` <small class="item-date">· ${esc(p.local)}</small>` : ''}</span><small class="item-date">${p.time ? 'às ' + esc(p.time) : ''}${p.hours ? ' · ' + p.hours + 'h' : ''}${p.amount ? ' · ' + formatCurrency(p.amount) : ''}${p.amount && p.hours ? ` · <strong style="color:#22c55e">${fmtHora(valorHora(p.amount, p.hours))}</strong>` : ''}</small>${turnoTemEscala(p) ? `<small class="item-notes" style="color:#38bdf8">${rotuloEscala(p)}${(p.skips || []).length ? ` · ${p.skips.length} dia(s) fora` : ''}</small>` : ''}</div>
+    ul.innerHTML += `<li><div class="transaction-info"><span>🏥 ${esc(p.name)}${p.local && p.local !== p.name ? ` <small class="item-date">· ${esc(p.local)}</small>` : ''}</span><small class="item-date">${p.time ? 'às ' + esc(p.time) : ''}${p.hours ? ' · ' + p.hours + 'h' : ''}${p.amount ? ' · ' + formatCurrency(p.amount) : ''}${p.amount && p.hours ? ` · <strong style="color:#34c759">${fmtHora(valorHora(p.amount, p.hours))}</strong>` : ''}</small>${turnoTemEscala(p) ? `<small class="item-notes" style="color:#007aff">${rotuloEscala(p)}${(p.skips || []).length ? ` · ${p.skips.length} dia(s) fora` : ''}</small>` : ''}</div>
       <div class="item-actions">${(p.skips || []).length ? `<button class="mini-btn" title="Devolver os dias pulados para a escala" onclick="limparPuladas(${i})">↺</button>` : ''}<button class="mini-btn" title="Editar" onclick="editarLocal(${i})">✎</button><button class="mini-btn" title="Apagar" onclick="removerLocal(${i})">✕</button></div></li>`;
   });
 }
@@ -1594,14 +1880,14 @@ function renderShifts() {
   const aReceber = shifts.filter(s => !s.paid); const totalReceber = aReceber.reduce((a, s) => a + (Number(s.amount) || 0), 0);
   const mes = hoje.slice(0, 7); const doMes = shifts.filter(s => s.date.startsWith(mes)); const recebidoMes = doMes.filter(s => s.paid).reduce((a, s) => a + (Number(s.amount) || 0), 0);
   const resumo = document.getElementById('shift-summary');
-  if (resumo) resumo.innerHTML = `<span>⏳ A receber: <strong style="color:${COR_PLANTAO}">${formatCurrency(totalReceber)}</strong> (${aReceber.length})</span><span>💵 Recebido no mês: <strong style="color:#22c55e">${formatCurrency(recebidoMes)}</strong></span><span>📆 ${vt().listaTitulo} no mês: <strong>${doMes.length}</strong> · ${doMes.reduce((a, s) => a + (Number(s.hours) || 0), 0)}h</span><span>⏱ Média no mês: <strong style="color:#22c55e">${fmtHora(valorHora(doMes.reduce((a, s) => a + (Number(s.amount) || 0), 0), doMes.reduce((a, s) => a + (Number(s.hours) || 0), 0)))}</strong></span>`;
+  if (resumo) resumo.innerHTML = `<span>⏳ A receber: <strong style="color:${COR_PLANTAO}">${formatCurrency(totalReceber)}</strong> (${aReceber.length})</span><span>💵 Recebido no mês: <strong style="color:#34c759">${formatCurrency(recebidoMes)}</strong></span><span>📆 ${vt().listaTitulo} no mês: <strong>${doMes.length}</strong> · ${doMes.reduce((a, s) => a + (Number(s.hours) || 0), 0)}h</span><span>⏱ Média no mês: <strong style="color:#34c759">${fmtHora(valorHora(doMes.reduce((a, s) => a + (Number(s.amount) || 0), 0), doMes.reduce((a, s) => a + (Number(s.hours) || 0), 0)))}</strong></span>`;
 
   renderBaixaLote();
-  if (!lista.length) { sList.innerHTML = `<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum ${esc(vt().um)} neste filtro.</li>`; return; }
+  if (!lista.length) { sList.innerHTML = `<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum ${esc(vt().um)} neste filtro.</li>`; return; }
   lista.forEach(s => {
     const li = document.createElement('li'); li.classList.add('shift-item'); if (s.paid) li.classList.add('paid');
     li.innerHTML = `${s.paid ? '' : `<input type="checkbox" class="mk-plantao" id="mk-${s.id}"${plantoesMarcados.has(s.id) ? ' checked' : ''} onchange="alternarMarcaPlantao(${s.id})" title="Marcar para dar baixa junto">`}<div class="transaction-info" style="flex:1"><span>🚑 ${esc(s.desc)} ${s.paid ? '<span class="badge-paid">pago' + (s.paidAt ? ' ' + isoParaBR(s.paidAt).slice(0, 5) : '') + '</span>' : '<span class="badge-unpaid">a receber</span>'}</span>
-        <small class="category-badge" style="color:${COR_PLANTAO}; background: rgba(245,158,11,0.1)">${rotuloDataLonga(s.date)} às ${esc(s.time || '')}${s.hours ? ' · ' + s.hours + 'h' : ''}${s.hours && s.amount ? ' · ' + fmtHora(valorHora(s.amount, s.hours)) : ''}</small>${(s.parts || []).length ? `<small class="item-notes">🧮 ${s.parts.map(p => `${p.hours}h × ${fmtHora(p.rate)}${p.label ? ' (' + esc(p.label) + ')' : ''}`).join(' + ')}</small>` : ''}${s.placeId ? '<small class="item-notes" style="color:#38bdf8">🗓️ da escala fixa</small>' : ''}${s.swap ? `<small class="item-notes" style="color:#a78bfa">🔁 Troca: ${esc(s.swap)}</small>` : ''}${s.notes ? `<small class="item-notes">${esc(s.notes)}</small>` : ''}</div>
+        <small class="category-badge" style="color:${COR_PLANTAO}; background: rgba(245,158,11,0.1)">${rotuloDataLonga(s.date)} às ${esc(s.time || '')}${s.hours ? ' · ' + s.hours + 'h' : ''}${s.hours && s.amount ? ' · ' + fmtHora(valorHora(s.amount, s.hours)) : ''}</small>${(s.parts || []).length ? `<small class="item-notes">🧮 ${s.parts.map(p => `${p.hours}h × ${fmtHora(p.rate)}${p.label ? ' (' + esc(p.label) + ')' : ''}`).join(' + ')}</small>` : ''}${s.placeId ? '<small class="item-notes" style="color:#007aff">🗓️ da escala fixa</small>' : ''}${s.swap ? `<small class="item-notes" style="color:#af52de">🔁 Troca: ${esc(s.swap)}</small>` : ''}${s.notes ? `<small class="item-notes">${esc(s.notes)}</small>` : ''}</div>
       <div class="item-actions"><strong style="margin-right:6px">${formatCurrency(s.amount)}</strong><button class="mini-btn ${s.paid ? 'on' : ''}" title="${s.paid ? 'Marcar como não pago' : 'Marcar como pago'}" onclick="alternarPago(${s.id})">💵</button><button class="mini-btn" title="Editar" onclick="editarPlantao(${s.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removeShift(${s.id})">✕</button></div>`;
     sList.appendChild(li);
   }); renderCalendar();
@@ -1673,7 +1959,7 @@ function removeShift(id) {
 // --- TAREFAS (estilo Google Tasks) ---
 // Modelo: { id, text, done, doneAt, list, due: 'aaaa-mm-dd' | '', notes, starred, subtasks: [{ text, done }], createdAt }
 // Listas: tasklists = [{ id, name }]  (a lista 'padrao' sempre existe)
-const COR_TAREFA = '#38bdf8';
+const COR_TAREFA = '#007aff';
 let taskView = 'padrao';      // id da lista em exibição, ou '__star' (com estrela) ou '__all' (todas)
 let taskShowDone = false;
 let taskExpanded = {};        // id -> subtarefas abertas?
@@ -1794,7 +2080,7 @@ function renderTasks() {
     ['📅 Próximas', abertas.filter(t => t.due && t.due > hoje)],
     ['📝 Sem prazo', abertas.filter(t => !t.due)]
   ];
-  if (!abertas.length && !feitas.length) { list.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nada por aqui. Adicione uma tarefa acima.</li>'; return; }
+  if (!abertas.length && !feitas.length) { list.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nada por aqui. Adicione uma tarefa acima.</li>'; return; }
   grupos.forEach(([titulo, itens]) => {
     if (!itens.length) return;
     list.innerHTML += `<li class="date-sep">${titulo} <small>${itens.length}</small></li>`;
@@ -1807,9 +2093,9 @@ function renderTasks() {
 }
 function linhaTarefa(t) {
   const p = prazoInfo(t); const subs = t.subtasks || []; const feitasSub = subs.filter(s => s.done).length; const aberto = !!taskExpanded[t.id];
-  return `<li class="task-item ${t.done ? 'done' : ''}" style="border-left-color:${t.starred ? '#fbbf24' : COR_TAREFA}">
+  return `<li class="task-item ${t.done ? 'done' : ''}" style="border-left-color:${t.starred ? '#e0a800' : COR_TAREFA}">
     <div class="task-main">
-      <input type="checkbox" ${t.done ? 'checked' : ''} onclick="toggleTask(${t.id})" style="accent-color: #38bdf8;">
+      <input type="checkbox" ${t.done ? 'checked' : ''} onclick="toggleTask(${t.id})" style="accent-color: #007aff;">
       <div class="task-body" onclick="editarTarefa(${t.id})">
         <span class="task-text">${t.routineId ? '<span class="rot-tag" title="Tarefa de rotina">🔄</span> ' : ''}${textoComLink(t.text)}</span>
         <div class="task-meta">${p.rotulo ? `<span class="due ${p.classe}">📅 ${esc(p.rotulo)}</span>` : ''}${taskView === '__star' || taskView === '__all' ? `<span class="task-list-tag">📋 ${esc(listaNome(t.list))}</span>` : ''}${subs.length ? `<span class="sub-count" onclick="event.stopPropagation(); taskExpanded[${t.id}] = !taskExpanded[${t.id}]; renderTasks();">☑ ${feitasSub}/${subs.length}</span>` : ''}${!t.done ? `<span class="quick-dates" onclick="event.stopPropagation()"><button class="mini-btn xs" title="Prazo: hoje" onclick="adiarTarefa(${t.id}, 0)">hoje</button><button class="mini-btn xs" title="Prazo: amanhã" onclick="adiarTarefa(${t.id}, 1)">amanhã</button><button class="mini-btn xs" title="Prazo: +7 dias" onclick="adiarTarefa(${t.id}, 7)">+7d</button></span>` : ''}${t.notes ? `<span class="task-notes">${linkify(esc(t.notes))}</span>` : ''}${chipsAnexos(t, 'task', t.id)}</div>
@@ -2032,7 +2318,7 @@ function criarRotinasSugeridas() {
 function renderRotinas() {
   const ul = document.getElementById('rot-list-ul'); if (!ul) return; ul.innerHTML = '';
   preencherFreqs();
-  if (!routines.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma rotina ainda. Use as sugestões abaixo ou crie a sua.</li>'; return; }
+  if (!routines.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma rotina ainda. Use as sugestões abaixo ou crie a sua.</li>'; return; }
   [...routines].sort((a, b) => (a.active === false ? 1 : 0) - (b.active === false ? 1 : 0) || (a.next || '').localeCompare(b.next || '')).forEach(r => {
     const off = r.active === false;
     const aberta = tasks.find(t => t.routineId === r.id && !t.done);
@@ -2086,12 +2372,15 @@ function adicionarItemNota(id, input) {
 }
 function desmarcarTodosNota(id) { const n = notes.find(x => x.id === id); if (!n || !n.checklist) return; n.checklist.forEach(i => i.done = false); n.updatedAt = Date.now(); salvar('notes', notes); renderNotes(); }
 function limparFeitosNota(id) { const n = notes.find(x => x.id === id); if (!n || !n.checklist) return; if (!confirm('Apagar os itens já marcados desta lista?')) return; n.checklist = n.checklist.filter(i => !i.done); n.updatedAt = Date.now(); salvar('notes', notes); renderNotes(); }
-function corNota(c) { return CORES_NOTA[c] || CORES_NOTA.default; }
+// Nos temas claros as notas usam tons pastel claros (o texto é escuro); nos escuros, os tons escuros originais.
+const CORES_NOTA_CLARO = { default: ['#f2f2f7', '#d1d1d6'], red: ['#ffe1df', '#ff9f99'], orange: ['#ffecd4', '#ffc27a'], yellow: ['#fff5c7', '#f5d64e'], green: ['#dcf5e2', '#8fdca2'], teal: ['#d6f1f5', '#7fcfdc'], blue: ['#dcebff', '#8fbfff'], purple: ['#f0e2fa', '#cf9ff0'], pink: ['#ffe0e8', '#ff9bb5'], gray: ['#e9e9ee', '#b8b8c0'] };
+function temaClaro() { return ['ios', 'claro', 'papel', 'menta', 'nevoa'].includes(document.documentElement.dataset.tema); }
+function corNota(c) { const k = CORES_NOTA[c] ? c : 'default'; const base = CORES_NOTA[k]; if (!temaClaro()) return base; const [bg, borda] = CORES_NOTA_CLARO[k]; return { ...base, bg, borda }; }
 function todosMarcadores() { const s = new Set(); notes.forEach(n => (n.labels || []).forEach(l => s.add(l))); return [...s].sort((a, b) => a.localeCompare(b)); }
 
 function renderPaletaNota() {
   const el = document.getElementById('note-colors'); if (!el) return;
-  el.innerHTML = Object.entries(CORES_NOTA).map(([k, c]) => `<span class="color-dot ${noteColorSel === k ? 'sel' : ''}" style="background:${c.bg}; border-color:${c.borda}" title="${c.nome}" onclick="escolherCorNota('${k}')"></span>`).join('');
+  el.innerHTML = Object.keys(CORES_NOTA).map(k => [k, corNota(k)]).map(([k, c]) => `<span class="color-dot ${noteColorSel === k ? 'sel' : ''}" style="background:${c.bg}; border-color:${c.borda}" title="${c.nome}" onclick="escolherCorNota('${k}')"></span>`).join('');
 }
 function escolherCorNota(k) { noteColorSel = k; renderPaletaNota(); }
 function alternarTipoNota(tipo, el) {
@@ -2221,11 +2510,11 @@ function cardNota(n) {
 const AREAS_ESTUDO = { negocios: '📈 Negócios', investimentos: '💰 Investimentos', medicina: '🩺 Medicina', idiomas: '🗣️ Idiomas', tecnologia: '💻 Tecnologia', pessoal: '🌱 Desenvolvimento pessoal', outro: '📌 Outro' };
 const TIPOS_MATERIAL = { livro: '📖 Livro', curso: '🎓 Curso', artigo: '📄 Artigo', video: '🎬 Vídeo', podcast: '🎧 Podcast', outro: '📌 Outro' };
 const STATUS_MATERIAL = { afazer: 'A fazer', andamento: 'Em andamento', concluido: 'Concluído' };
-const CORES_TEMA = ['#38bdf8', '#a78bfa', '#22c55e', '#f472b6', '#fbbf24', '#fb923c', '#ef4444', '#94a3b8'];
+const CORES_TEMA = ['#007aff', '#af52de', '#34c759', '#ff2d55', '#e0a800', '#a2845e', '#ff3b30', '#8e8e93'];
 let materialFilter = 'andamento';
 
 function temaNome(id) { const t = topics.find(x => x.id === id); return t ? t.name : 'Geral'; }
-function temaCor(id) { const t = topics.find(x => x.id === id); return t ? t.color : '#64748b'; }
+function temaCor(id) { const t = topics.find(x => x.id === id); return t ? t.color : '#8e8e93'; }
 function inicioSemanaISO(d) { const x = d ? new Date(d) : new Date(); x.setDate(x.getDate() - x.getDay()); return isoDe(x); }
 function minutosNaSemana(topicId) {
   const ini = inicioSemanaISO(); const fim = new Date(); fim.setDate(fim.getDate() + (6 - fim.getDay())); const fimISO = isoDe(fim);
@@ -2278,7 +2567,7 @@ function removerTema(id) {
 }
 function renderTemas() {
   const ul = document.getElementById('topic-list'); if (!ul) return; ul.innerHTML = '';
-  if (!topics.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Crie seu primeiro tema — ex: "Gestão de clínicas", "Renda fixa", "Inglês".</li>'; return; }
+  if (!topics.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Crie seu primeiro tema — ex: "Gestão de clínicas", "Renda fixa", "Inglês".</li>'; return; }
   topics.forEach(t => {
     const min = minutosNaSemana(t.id); const meta = t.weeklyGoalMin || 0; const pct = meta ? Math.min(100, Math.round(min / meta * 100)) : 0;
     const mats = materials.filter(m => m.topicId === t.id); const emAnd = mats.filter(m => m.status === 'andamento').length;
@@ -2328,10 +2617,10 @@ function renderMateriais() {
   const ul = document.getElementById('material-list'); if (!ul) return; ul.innerHTML = '';
   let lista = [...materials]; if (materialFilter !== 'todos') lista = lista.filter(m => m.status === materialFilter);
   lista.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum material aqui.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum material aqui.</li>'; return; }
   lista.forEach(m => {
     const cor = temaCor(m.topicId);
-    ul.innerHTML += `<li class="material-item" style="border-left-color:${cor}"><div class="transaction-info" style="flex:1"><span>${(TIPOS_MATERIAL[m.kind] || '📌').slice(0, 2)} ${m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="color:#e2e8f0">${esc(m.title)} ↗</a>` : esc(m.title)} <small class="category-badge" style="color:${cor}; background:${cor}22">${esc(temaNome(m.topicId))}</small> <small class="item-date">${STATUS_MATERIAL[m.status] || ''}</small></span>
+    ul.innerHTML += `<li class="material-item" style="border-left-color:${cor}"><div class="transaction-info" style="flex:1"><span>${(TIPOS_MATERIAL[m.kind] || '📌').slice(0, 2)} ${m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="color:var(--txt-forte)">${esc(m.title)} ↗</a>` : esc(m.title)} <small class="category-badge" style="color:${cor}; background:${cor}22">${esc(temaNome(m.topicId))}</small> <small class="item-date">${STATUS_MATERIAL[m.status] || ''}</small></span>
         <div class="progress-line"><input type="range" min="0" max="100" value="${m.progress || 0}" onchange="progressoMaterial(${m.id}, this.value)" title="Progresso"><small>${m.progress || 0}%</small></div>${m.notes ? `<small class="item-notes">${esc(m.notes)}</small>` : ''}</div>
       <div class="item-actions"><button class="mini-btn" title="Avançar status" onclick="avancarMaterial(${m.id})">${m.status === 'concluido' ? '↩' : '▶'}</button><button class="mini-btn" title="Agendar revisões (1, 7, 30 dias)" onclick="agendarRevisao(${m.id})">🔁</button><button class="mini-btn" title="Editar" onclick="editarMaterial(${m.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMaterial(${m.id})">✕</button></div></li>`;
   });
@@ -2351,7 +2640,7 @@ function removerSessao(id) { const s = sessions.find(x => x.id === id); if (!s |
 function renderSessoes() {
   const ul = document.getElementById('session-list'); if (!ul) return; ul.innerHTML = '';
   const lista = [...sessions].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0)).slice(0, 25);
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma sessão ainda. Use o Pomodoro no Painel ou lance acima.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma sessão ainda. Use o Pomodoro no Painel ou lance acima.</li>'; return; }
   let ultima = '';
   lista.forEach(s => {
     if (s.date !== ultima) { ultima = s.date; const tot = sessions.filter(x => x.date === s.date).reduce((a, x) => a + x.minutes, 0); ul.innerHTML += `<li class="date-sep">${rotuloData(s.date)} <small>${isoParaBR(s.date)} · ${fmtMin(tot)}</small></li>`; }
@@ -2415,10 +2704,10 @@ function renderPainelEstudos() {
   const proxRev = tasks.filter(t => !t.done && t.text.startsWith('🔁 Revisar') && t.due).sort((a, b) => a.due.localeCompare(b.due))[0];
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = '<div class="stat-grid">';
-  html += tile('⏱', fmtMin(semana), metaTotal ? `nesta semana · meta ${fmtMin(metaTotal)} (${Math.min(100, Math.round(semana / metaTotal * 100))}%)` : 'nesta semana', '#a78bfa');
-  html += tile('🔥', `${streak}`, `dia${streak === 1 ? '' : 's'} seguido${streak === 1 ? '' : 's'} estudando`, '#f59e0b');
-  html += tile('📖', `${emAnd.length}`, 'em andamento', '#38bdf8');
-  html += tile('🔁', proxRev ? rotuloData(proxRev.due) : '—', proxRev ? proxRev.text.replace('🔁 Revisar: ', '').slice(0, 30) : 'nenhuma revisão marcada', '#22c55e');
+  html += tile('⏱', fmtMin(semana), metaTotal ? `nesta semana · meta ${fmtMin(metaTotal)} (${Math.min(100, Math.round(semana / metaTotal * 100))}%)` : 'nesta semana', '#af52de');
+  html += tile('🔥', `${streak}`, `dia${streak === 1 ? '' : 's'} seguido${streak === 1 ? '' : 's'} estudando`, '#bf8700');
+  html += tile('📖', `${emAnd.length}`, 'em andamento', '#007aff');
+  html += tile('🔁', proxRev ? rotuloData(proxRev.due) : '—', proxRev ? proxRev.text.replace('🔁 Revisar: ', '').slice(0, 30) : 'nenhuma revisão marcada', '#34c759');
   html += '</div>';
   const porTema = topics.filter(t => !t.archived).map(t => ({ t, min: minutosNaSemana(t.id) })).filter(x => x.min > 0 || x.t.weeklyGoalMin);
   if (porTema.length) html += '<div class="cat-block" style="margin-top:12px"><h5>Semana por tema</h5>' + porTema.map(({ t, min }) => { const meta = t.weeklyGoalMin || 0; const pct = meta ? Math.min(100, Math.round(min / meta * 100)) : (semana ? Math.round(min / semana * 100) : 0); return `<div class="cat-row"><span class="cat-name">${esc(t.name)}</span><div class="cat-bar"><div style="width:${pct}%; background:${t.color}"></div></div><span class="cat-val">${fmtMin(min)}${meta ? ` <small>/ ${fmtMin(meta)}</small>` : ''}</span></div>`; }).join('') + '</div>';
@@ -2435,16 +2724,16 @@ function redesenharEstudos() { preencherTemasSelects(); renderPainelEstudos(); r
 // wealth:   { snapshots: { 'aaaa-mm': patrimônio }, indicators: { cdi, selic, ipca, ref } }
 // ============================================================================
 const CLASSES_ATIVO = {
-  reserva: { nome: 'Reserva de emergência', cor: '#22c55e', icone: '🛟' },
-  rf:      { nome: 'Renda fixa',            cor: '#38bdf8', icone: '🏦' },
-  fundo:   { nome: 'Fundo',                 cor: '#a78bfa', icone: '🧺' },
-  acao:    { nome: 'Ações',                 cor: '#f472b6', icone: '📈' },
-  fii:     { nome: 'FIIs',                  cor: '#fb923c', icone: '🏢' },
-  cripto:  { nome: 'Cripto',                cor: '#fbbf24', icone: '🪙' },
-  prev:    { nome: 'Previdência',           cor: '#2dd4bf', icone: '🧓' },
-  outro:   { nome: 'Outro',                 cor: '#94a3b8', icone: '📌' }
+  reserva: { nome: 'Reserva de emergência', cor: '#34c759', icone: '🛟' },
+  rf:      { nome: 'Renda fixa',            cor: '#007aff', icone: '🏦' },
+  fundo:   { nome: 'Fundo',                 cor: '#af52de', icone: '🧺' },
+  acao:    { nome: 'Ações',                 cor: '#ff2d55', icone: '📈' },
+  fii:     { nome: 'FIIs',                  cor: '#a2845e', icone: '🏢' },
+  cripto:  { nome: 'Cripto',                cor: '#e0a800', icone: '🪙' },
+  prev:    { nome: 'Previdência',           cor: '#00c7be', icone: '🧓' },
+  outro:   { nome: 'Outro',                 cor: '#8e8e93', icone: '📌' }
 };
-const ESTAGIOS_PROJETO = { ideia: ['💡', 'Ideia', '#94a3b8'], estudo: ['🔍', 'Em estudo', '#38bdf8'], validacao: ['🧪', 'Validação', '#a78bfa'], andamento: ['🚀', 'Em andamento', '#22c55e'], pausado: ['⏸️', 'Pausado', '#f59e0b'], encerrado: ['🏁', 'Encerrado', '#64748b'] };
+const ESTAGIOS_PROJETO = { ideia: ['💡', 'Ideia', '#8e8e93'], estudo: ['🔍', 'Em estudo', '#007aff'], validacao: ['🧪', 'Validação', '#af52de'], andamento: ['🚀', 'Em andamento', '#34c759'], pausado: ['⏸️', 'Pausado', '#bf8700'], encerrado: ['🏁', 'Encerrado', '#8e8e93'] };
 let projectFilter = 'ativos';
 
 function classeAtivo(k) { return CLASSES_ATIVO[k] || CLASSES_ATIVO.outro; }
@@ -2503,13 +2792,13 @@ function removerAtivo(id) {
 }
 function renderAtivos() {
   const ul = document.getElementById('asset-list'); if (!ul) return; ul.innerHTML = '';
-  if (!assets.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Cadastre seu primeiro ativo — ex: "CDB Nubank" (Renda fixa) ou "Reserva Tesouro Selic".</li>'; return; }
+  if (!assets.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Cadastre seu primeiro ativo — ex: "CDB Nubank" (Renda fixa) ou "Reserva Tesouro Selic".</li>'; return; }
   const hoje = hojeISO();
   [...assets].sort((a, b) => (a.archived === b.archived ? (b.current || 0) - (a.current || 0) : a.archived ? 1 : -1)).forEach(a => {
     const c = classeAtivo(a.klass); const inv = investidoEm(a.id); const res = (a.current || 0) - inv; const p = inv ? res / inv * 100 : 0;
     const venc = a.due ? (a.due < hoje ? `<span class="badge-topay">venceu ${isoParaBR(a.due)}</span>` : `<span class="item-date">vence ${isoParaBR(a.due)}</span>`) : '';
     ul.innerHTML += `<li class="asset-item" style="border-left-color:${c.cor}; ${a.archived ? 'opacity:0.45' : ''}"><div class="transaction-info" style="flex:1"><span>${c.icone} ${esc(a.name)} <small class="category-badge" style="color:${c.cor}; background:${c.cor}22">${c.nome}</small>${a.institution ? ` <small class="item-date">${esc(a.institution)}</small>` : ''}${a.rate ? ` <small class="item-date">· ${esc(a.rate)}</small>` : ''} ${venc}${a.archived ? ' <small class="item-date">· arquivado</small>' : ''}</span>
-        <small class="item-date">investido ${formatCurrency(inv)} · resultado <span style="color:${res >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(res)} (${pct(p)})</span> · valor de ${isoParaBR(a.currentAt || hoje)}</small>${a.notes ? `<small class="item-notes">${esc(a.notes)}</small>` : ''}</div>
+        <small class="item-date">investido ${formatCurrency(inv)} · resultado <span style="color:${res >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(res)} (${pct(p)})</span> · valor de ${isoParaBR(a.currentAt || hoje)}</small>${a.notes ? `<small class="item-notes">${esc(a.notes)}</small>` : ''}</div>
       <div class="item-actions"><strong style="margin-right:6px">${formatCurrency(a.current)}</strong><button class="mini-btn" title="Atualizar valor atual" onclick="atualizarValorAtivo(${a.id})">💰</button><button class="mini-btn" title="Editar" onclick="editarAtivo(${a.id})">✎</button><button class="mini-btn" title="${a.archived ? 'Reativar' : 'Arquivar'}" onclick="arquivarAtivo(${a.id})">${a.archived ? '📤' : '🗄️'}</button><button class="mini-btn" title="Apagar" onclick="removerAtivo(${a.id})">✕</button></div></li>`;
   });
 }
@@ -2539,11 +2828,11 @@ function removerMovimento(id) {
 function renderMovimentos() {
   const ul = document.getElementById('move-list'); if (!ul) return; ul.innerHTML = '';
   const lista = [...moves].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, 20);
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma movimentação ainda.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma movimentação ainda.</li>'; return; }
   lista.forEach(m => {
     const ap = m.type === 'aporte';
     ul.innerHTML += `<li class="${ap ? 'expense-item' : 'income-item'}"><div class="transaction-info" style="flex:1"><span>${ap ? '📥 Aporte' : '📤 Resgate'} · ${esc(ativoNome(m.assetId))}${m.financeId ? ' <small class="item-date">· em Finanças</small>' : ''}</span><small class="item-date">${isoParaBR(m.date)}${m.note ? ' · ' + esc(m.note) : ''}</small></div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${ap ? '#38bdf8' : '#f59e0b'}">${ap ? '+' : '−'}${formatCurrency(m.amount)}</strong><button class="mini-btn" title="Apagar" onclick="removerMovimento(${m.id})">✕</button></div></li>`;
+      <div class="item-actions"><strong style="margin-right:6px; color:${ap ? '#007aff' : '#bf8700'}">${ap ? '+' : '−'}${formatCurrency(m.amount)}</strong><button class="mini-btn" title="Apagar" onclick="removerMovimento(${m.id})">✕</button></div></li>`;
   });
 }
 
@@ -2563,13 +2852,13 @@ function editarMeta(id) { const g = goals.find(x => x.id === id); if (!g) return
 function removerMeta(id) { const g = goals.find(x => x.id === id); if (!g || !confirm(`Apagar a meta "${g.name}"?`)) return; goals = goals.filter(x => x.id !== id); salvar('goals', goals); redesenharNegocios(); }
 function renderMetas() {
   const ul = document.getElementById('goal-list'); if (!ul) return; ul.innerHTML = '';
-  if (!goals.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Ex: "Reserva de 6 meses" (R$ 30.000, vinculada à reserva) ou "Capital pra clínica".</li>'; return; }
+  if (!goals.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Ex: "Reserva de 6 meses" (R$ 30.000, vinculada à reserva) ou "Capital pra clínica".</li>'; return; }
   goals.forEach(g => {
     const atual = valorMeta(g); const p = g.target ? Math.min(100, Math.round(atual / g.target * 100)) : 0; const falta = Math.max(0, g.target - atual);
     let porMes = '';
     if (g.deadline && falta > 0) { const [y, m, d] = g.deadline.split('-').map(Number); const meses = Math.max(1, Math.round((new Date(y, m - 1, d) - new Date()) / (30.44 * 86400000))); porMes = ` · ${formatCurrency(falta / meses)}/mês por ${meses} ${meses === 1 ? 'mês' : 'meses'}`; }
-    ul.innerHTML += `<li class="goal-item" style="border-left-color:${p >= 100 ? '#22c55e' : '#fbbf24'}"><div class="transaction-info" style="flex:1"><span>🎯 ${esc(g.name)} ${p >= 100 ? '<span class="badge-paid">alcançada</span>' : ''}<small class="item-date"> · ${rotuloVinculo(g)}${g.deadline ? ' · até ' + isoParaBR(g.deadline) : ''}</small></span>
-        <div class="cat-bar" style="margin-top:6px"><div style="width:${p}%; background:${p >= 100 ? '#22c55e' : '#fbbf24'}"></div></div>
+    ul.innerHTML += `<li class="goal-item" style="border-left-color:${p >= 100 ? '#34c759' : '#e0a800'}"><div class="transaction-info" style="flex:1"><span>🎯 ${esc(g.name)} ${p >= 100 ? '<span class="badge-paid">alcançada</span>' : ''}<small class="item-date"> · ${rotuloVinculo(g)}${g.deadline ? ' · até ' + isoParaBR(g.deadline) : ''}</small></span>
+        <div class="cat-bar" style="margin-top:6px"><div style="width:${p}%; background:${p >= 100 ? '#34c759' : '#e0a800'}"></div></div>
         <small class="item-date">${formatCurrency(atual)} de ${formatCurrency(g.target)} (${p}%)${falta > 0 ? ` · faltam ${formatCurrency(falta)}${porMes}` : ''}</small>${g.note ? `<small class="item-notes">${esc(g.note)}</small>` : ''}</div>
       <div class="item-actions"><button class="mini-btn" title="Editar" onclick="editarMeta(${g.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMeta(${g.id})">✕</button></div></li>`;
   });
@@ -2609,7 +2898,7 @@ function renderProjetos() {
       <select class="stage-select" style="color:${e[2]}" onchange="mudarEstagio(${p.id}, this.value)">${Object.entries(ESTAGIOS_PROJETO).map(([k, v]) => `<option value="${k}" ${k === p.stage ? 'selected' : ''}>${v[0]} ${v[1]}</option>`).join('')}</select>
       ${p.desc ? `<div class="note-body">${esc(p.desc)}</div>` : ''}
       ${tot ? `<div class="note-check"><small class="item-date">Próximos passos · ${feitos}/${tot}</small>${p.steps.map((s, i) => `<label class="subtask ${s.done ? 'done' : ''}"><input type="checkbox" ${s.done ? 'checked' : ''} onclick="togglePasso(${p.id}, ${i})"> ${esc(s.text)}</label>`).join('')}</div>` : ''}
-      ${p.budget || p.spent ? `<div><small class="item-date">💸 gasto ${formatCurrency(p.spent || 0)}${p.budget ? ` de ${formatCurrency(p.budget)} previstos (${gastoPct}%)` : ''}</small><div class="cat-bar" style="margin-top:4px"><div style="width:${gastoPct}%; background:${gastoPct > 100 ? '#ef4444' : '#f59e0b'}"></div></div></div>` : ''}
+      ${p.budget || p.spent ? `<div><small class="item-date">💸 gasto ${formatCurrency(p.spent || 0)}${p.budget ? ` de ${formatCurrency(p.budget)} previstos (${gastoPct}%)` : ''}</small><div class="cat-bar" style="margin-top:4px"><div style="width:${gastoPct}%; background:${gastoPct > 100 ? '#ff3b30' : '#bf8700'}"></div></div></div>` : ''}
       ${p.contacts ? `<small class="item-notes">👥 ${esc(p.contacts)}</small>` : ''}${p.notes ? `<small class="item-notes">${esc(p.notes)}</small>` : ''}
       <div class="note-foot"><small class="item-date" style="margin-left:auto">${new Date(p.updatedAt || p.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</small></div>
     </div>`;
@@ -2633,17 +2922,17 @@ function renderPainelNegocios() {
   const mes = hojeISO().slice(0, 7); const aportadoMes = moves.filter(m => m.type === 'aporte' && !m.initial && m.date.startsWith(mes)).reduce((a, m) => a + m.amount, 0);
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = '<div class="stat-grid">';
-  html += tile('🏦', formatCurrency(total), 'patrimônio investido (valor atual)', '#38bdf8');
-  html += tile('📥', formatCurrency(inv), `aportado no total · ${formatCurrency(aportadoMes)} neste mês`, '#a78bfa');
-  html += tile('📈', formatCurrency(res), `resultado simples (${pct(p)})`, res >= 0 ? '#22c55e' : '#ef4444');
-  html += tile('🛟', formatCurrency(reserva), 'reserva de emergência', '#22c55e');
+  html += tile('🏦', formatCurrency(total), 'patrimônio investido (valor atual)', '#007aff');
+  html += tile('📥', formatCurrency(inv), `aportado no total · ${formatCurrency(aportadoMes)} neste mês`, '#af52de');
+  html += tile('📈', formatCurrency(res), `resultado simples (${pct(p)})`, res >= 0 ? '#34c759' : '#ff3b30');
+  html += tile('🛟', formatCurrency(reserva), 'reserva de emergência', '#34c759');
   html += '</div>';
   // por classe
   const classes = Object.keys(CLASSES_ATIVO).map(k => ({ k, v: totalClasse(k) })).filter(x => x.v > 0).sort((a, b) => b.v - a.v);
   if (classes.length) html += '<div class="cat-block" style="margin-top:14px"><h5>Por classe</h5>' + classes.map(({ k, v }) => { const c = classeAtivo(k); return `<div class="cat-row"><span class="cat-name">${c.icone} ${c.nome}</span><div class="cat-bar"><div style="width:${Math.round(v / total * 100)}%; background:${c.cor}"></div></div><span class="cat-val">${formatCurrency(v)} <small>${Math.round(v / total * 100)}%</small></span></div>`; }).join('') + '</div>';
   // evolução mensal (últimos 6 meses com registro)
   const snaps = Object.entries(wealth.snapshots || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-6);
-  if (snaps.length >= 2) { const max = Math.max(1, ...snaps.map(s => s[1])); html += '<div class="cat-block"><h5>Evolução do patrimônio</h5><div class="fin-meses" style="height:120px">' + snaps.map(([m, v]) => `<div class="mes-col" title="${formatCurrency(v)}"><div class="mes-bars" style="height:70px"><div class="mes-bar" style="width:60%; height:${Math.round(v / max * 100)}%; background:#38bdf8"></div></div><small>${nomeMes(m).slice(0, 3)}</small><small class="mes-saldo" style="color:#94a3b8">${(v / 1000).toFixed(1)}k</small></div>`).join('') + '</div></div>'; }
+  if (snaps.length >= 2) { const max = Math.max(1, ...snaps.map(s => s[1])); html += '<div class="cat-block"><h5>Evolução do patrimônio</h5><div class="fin-meses" style="height:120px">' + snaps.map(([m, v]) => `<div class="mes-col" title="${formatCurrency(v)}"><div class="mes-bars" style="height:70px"><div class="mes-bar" style="width:60%; height:${Math.round(v / max * 100)}%; background:#007aff"></div></div><small>${nomeMes(m).slice(0, 3)}</small><small class="mes-saldo" style="color:#8e8e93">${(v / 1000).toFixed(1)}k</small></div>`).join('') + '</div></div>'; }
   // vencimentos próximos (60 dias)
   const lim = new Date(); lim.setDate(lim.getDate() + 60); const limISO = isoDe(lim); const hoje = hojeISO();
   const venc = assets.filter(a => !a.archived && a.due && a.due <= limISO).sort((a, b) => a.due.localeCompare(b.due));
@@ -2716,7 +3005,7 @@ function removerTreino(id) { const w = workouts.find(x => x.id === id); if (!w |
 function renderTreinos() {
   const ul = document.getElementById('workout-list'); if (!ul) return; ul.innerHTML = '';
   const lista = [...workouts].sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id).slice(0, 20);
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum treino ainda.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum treino ainda.</li>'; return; }
   lista.forEach(w => {
     const t = TIPOS_TREINO[w.type] || TIPOS_TREINO.outro;
     ul.innerHTML += `<li class="health-item"><div class="transaction-info" style="flex:1"><span>${t[0]} ${t[1]} <small class="item-date">${rotuloData(w.date)} · ${isoParaBR(w.date)}${w.minutes ? ' · ' + w.minutes + ' min' : ''} · ${'🔥'.repeat(w.intensity || 2)}</small></span>${(w.exercises || []).length ? `<small class="item-notes">${w.exercises.map(esc).join(' · ')}</small>` : ''}${w.note ? `<small class="item-notes">${esc(w.note)}</small>` : ''}</div>
@@ -2738,10 +3027,10 @@ function renderMedidas() {
   const lista = [...measures].sort((a, b) => a.date.localeCompare(b.date));
   const pesos = lista.filter(m => m.weight > 0).slice(-12);
   if (ch) {
-    if (pesos.length >= 2) { const min = Math.min(...pesos.map(m => m.weight)) - 1; const max = Math.max(...pesos.map(m => m.weight)) + 1; ch.innerHTML = '<div class="fin-meses" style="grid-template-columns:repeat(' + pesos.length + ',1fr); height:130px">' + pesos.map(m => `<div class="mes-col" title="${isoParaBR(m.date)}: ${m.weight} kg"><div class="mes-bars" style="height:80px"><div class="mes-bar" style="width:60%; height:${Math.round((m.weight - min) / (max - min) * 100)}%; background:#f472b6"></div></div><small>${isoParaBR(m.date).slice(0, 5)}</small><small class="mes-saldo" style="color:#e2e8f0">${m.weight}</small></div>`).join('') + '</div>'; }
+    if (pesos.length >= 2) { const min = Math.min(...pesos.map(m => m.weight)) - 1; const max = Math.max(...pesos.map(m => m.weight)) + 1; ch.innerHTML = '<div class="fin-meses" style="grid-template-columns:repeat(' + pesos.length + ',1fr); height:130px">' + pesos.map(m => `<div class="mes-col" title="${isoParaBR(m.date)}: ${m.weight} kg"><div class="mes-bars" style="height:80px"><div class="mes-bar" style="width:60%; height:${Math.round((m.weight - min) / (max - min) * 100)}%; background:#ff2d55"></div></div><small>${isoParaBR(m.date).slice(0, 5)}</small><small class="mes-saldo" style="color:var(--txt)">${m.weight}</small></div>`).join('') + '</div>'; }
     else ch.innerHTML = '<div class="stat-line muted">Registre pelo menos 2 pesagens pra ver a evolução.</div>';
   }
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma medida ainda.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma medida ainda.</li>'; return; }
   [...lista].reverse().slice(0, 10).forEach(m => {
     ul.innerHTML += `<li class="health-item"><div class="transaction-info" style="flex:1"><span>${m.weight ? `<strong>${m.weight} kg</strong>` : ''}${m.waist ? ` · cintura ${m.waist} cm` : ''}${m.bodyfat ? ` · ${m.bodyfat}% gordura` : ''}</span><small class="item-date">${isoParaBR(m.date)}${m.note ? ' · ' + esc(m.note) : ''}</small></div><div class="item-actions"><button class="mini-btn" title="Apagar" onclick="removerMedida(${m.id})">✕</button></div></li>`;
   });
@@ -2758,7 +3047,7 @@ function removerRefeicao(id) { meals = meals.filter(x => x.id !== id); salvar('m
 function renderRefeicoes() {
   const ul = document.getElementById('meal-list'); if (!ul) return; ul.innerHTML = '';
   const lista = [...meals].sort((a, b) => (b.date + (b.time || '')).localeCompare(a.date + (a.time || ''))).slice(0, 15);
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Diário simples: o que comeu e se foi boa, ok ou ruim. Sem calorias, sem culpa.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Diário simples: o que comeu e se foi boa, ok ou ruim. Sem calorias, sem culpa.</li>'; return; }
   let ultima = '';
   lista.forEach(m => {
     if (m.date !== ultima) { ultima = m.date; const doDia = meals.filter(x => x.date === m.date); const boas = doDia.filter(x => x.quality === 'boa').length; ul.innerHTML += `<li class="date-sep">${rotuloData(m.date)} <small>${isoParaBR(m.date)} · ${boas}/${doDia.length} boas</small></li>`; }
@@ -2797,7 +3086,7 @@ function renderMedico() {
   const hoje = hojeISO();
   const abertos = medical.filter(m => !m.done).sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
   const feitos = medical.filter(m => m.done).sort((a, b) => (b.doneAt || b.date || '').localeCompare(a.doneAt || a.date || '')).slice(0, 8);
-  if (!medical.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Seus próprios cuidados: consulta, exame, vacina, remédio. Com data, vira compromisso 🩺 no calendário.</li>'; return; }
+  if (!medical.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Seus próprios cuidados: consulta, exame, vacina, remédio. Com data, vira compromisso 🩺 no calendário.</li>'; return; }
   const linha = m => { const k = TIPOS_MEDICO[m.kind] || TIPOS_MEDICO.outro; const atras = m.date && m.date < hoje && !m.done; return `<li class="health-item" style="${m.done ? 'opacity:0.5' : ''}"><div class="transaction-info" style="flex:1"><span>${k[0]} ${esc(m.title)} <small class="item-date">${k[1]}${m.date ? ' · ' + rotuloData(m.date) + (m.time ? ' ' + esc(m.time) : '') : ' · sem data'}${atras ? ' <span class="badge-topay">passou</span>' : ''}</small></span>${m.place || m.notes ? `<small class="item-notes">${esc([m.place, m.notes].filter(Boolean).join(' · '))}</small>` : ''}</div><div class="item-actions"><button class="mini-btn ${m.done ? 'on' : ''}" title="${m.done ? 'Reabrir' : 'Concluído'}" onclick="concluirMedico(${m.id})">${m.done ? '↩' : '✓'}</button><button class="mini-btn" title="Editar" onclick="editarMedico(${m.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMedico(${m.id})">✕</button></div></li>`; };
   abertos.forEach(m => ul.innerHTML += linha(m));
   if (feitos.length) { ul.innerHTML += `<li class="date-sep">Concluídos <small>${medical.filter(m => m.done).length}</small></li>`; feitos.forEach(m => ul.innerHTML += linha(m)); }
@@ -2815,10 +3104,10 @@ function renderPainelSaude() {
   const goal = hydration.goal || 2500; const pct = Math.min(100, Math.round((hydration.ml || 0) / goal * 100));
   const tile = (icone, valor, rotulo, cor) => `<div class="stat-tile"><span class="stat-icon">${icone}</span><strong style="color:${cor}">${valor}</strong><small>${rotulo}</small></div>`;
   let html = '<div class="stat-grid">';
-  html += tile('🏋️', `${semana.length}`, `treino${semana.length === 1 ? '' : 's'} nesta semana · ${minSemana} min`, '#22c55e');
-  html += tile('💧', `${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L`, `de ${(goal / 1000).toFixed(1).replace('.', ',')} L hoje (${pct}%)`, '#38bdf8');
-  html += tile('⚖️', ultimo ? `${ultimo.weight} kg` : '—', ultimo ? `${isoParaBR(ultimo.date)}${anterior ? ` · ${delta > 0 ? '+' : ''}${delta.toFixed(1).replace('.', ',')} kg` : ''}` : 'sem pesagem', '#f472b6');
-  html += tile('🩺', prox ? rotuloData(prox.date) : '—', prox ? `${(TIPOS_MEDICO[prox.kind] || TIPOS_MEDICO.outro)[1]}: ${esc(prox.title).slice(0, 28)}` : 'nada marcado', '#a78bfa');
+  html += tile('🏋️', `${semana.length}`, `treino${semana.length === 1 ? '' : 's'} nesta semana · ${minSemana} min`, '#34c759');
+  html += tile('💧', `${((hydration.ml || 0) / 1000).toFixed(1).replace('.', ',')} L`, `de ${(goal / 1000).toFixed(1).replace('.', ',')} L hoje (${pct}%)`, '#007aff');
+  html += tile('⚖️', ultimo ? `${ultimo.weight} kg` : '—', ultimo ? `${isoParaBR(ultimo.date)}${anterior ? ` · ${delta > 0 ? '+' : ''}${delta.toFixed(1).replace('.', ',')} kg` : ''}` : 'sem pesagem', '#ff2d55');
+  html += tile('🩺', prox ? rotuloData(prox.date) : '—', prox ? `${(TIPOS_MEDICO[prox.kind] || TIPOS_MEDICO.outro)[1]}: ${esc(prox.title).slice(0, 28)}` : 'nada marcado', '#af52de');
   html += '</div>';
   html += `<div class="water-box"><div class="water-bar"><div style="width:${pct}%"></div></div><div class="water-btns"><button class="mini-btn" onclick="beberAgua(250)">+250 ml</button><button class="mini-btn" onclick="beberAgua(500)">+500 ml</button><button class="mini-btn" onclick="beberAgua(750)">+750 ml</button><button class="mini-btn" onclick="beberAgua(-250)" title="Tirar 250 ml">−250</button><button class="mini-btn" onclick="definirMetaAgua()" title="Mudar meta">🎯 meta</button></div></div>`;
   el.innerHTML = html;
@@ -2836,25 +3125,26 @@ function renderSaude() { preencherSelectsSaude(); renderPainelSaude(); renderTre
 // ============================================================================
 // Claros primeiro (do mais claro ao menos), depois os escuros.
 const TEMAS = {
+  ios:          ['', 'iOS (padrão)', '#f2f2f7', '#007aff'],
   claro:        ['☀️', 'Claro', '#f1f5f9', '#16a34a'],
   papel:        ['📄', 'Papel', '#f7f2e7', '#b45309'],
   menta:        ['🌿', 'Menta', '#e3ede6', '#047857'],
   nevoa:        ['🌫️', 'Névoa', '#dfe6ee', '#0369a1'],
   medio:        ['🌗', 'Médio', '#3a414d', '#34d399'],
   profissional: ['💼', 'Profissional', '#18243d', '#60a5fa'],
-  escuro:       ['🌑', 'Escuro', '#121212', '#22c55e'],
-  violeta:      ['🔮', 'Violeta', '#2b1f4d', '#f472b6'],
+  escuro:       ['🌑', 'Escuro', '#121212', '#34c759'],
+  violeta:      ['🔮', 'Violeta', '#2b1f4d', '#ff2d55'],
   gamer:        ['🎮', 'Gamer', '#04140c', '#00e676']
 };
 /** Os dois temas que mudaram de nome continuam valendo para quem já os usava. */
 const TEMAS_RENOMEADOS = { colorido: 'violeta', gamificado: 'gamer' };
 const MODOS_COR = { colorido: ['🎨', 'Colorido'], neutro: ['🩶', 'Neutro'] };
 const ABAS_INFO = [
-  ['btn-focus', '🎯 Painel Central'], ['btn-home', '📅 Agenda'], ['btn-finances', '💰 Finanças'],
+  ['btn-focus', '🎯 Painel Central'], ['btn-primos', '🖨️ Primos 3D'], ['btn-home', '📅 Agenda'], ['btn-finances', '💰 Finanças'],
   ['btn-tasks', '✅ Tarefas'], ['btn-notes', '📝 Notas'], ['btn-studies', '📚 Estudos'],
   ['btn-business', '📈 Negócios'], ['btn-health', '🩺 Saúde'], ['btn-leisure', '🎬 Lazer'], ['btn-trips', '✈️ Viagens'], ['btn-net', '🤝 Rede'], ['btn-clinic', '🏥 Clínica'], ['btn-prod', '🖨️ Produção'], ['btn-settings', '⚙️ Config']
 ];
-const APARENCIA_PADRAO = { tema: 'escuro', cores: 'colorido', abas: 'topo', ordem: ABAS_INFO.map(a => a[0]), ocultas: [], relogio: 'digital', segundos: false, capa: 'auto', capaUrl: '', capaData: '' };
+const APARENCIA_PADRAO = { tema: 'ios', cores: 'colorido', abas: 'topo', ordem: ABAS_INFO.map(a => a[0]), ocultas: [], relogio: 'digital', segundos: false, capa: 'auto', capaUrl: '', capaData: '' };
 /** Devolve SEMPRE o mesmo objeto (só completa o que falta), nunca uma cópia —
  *  com cópia, um `const c = cfgAparencia()` guardado numa variável se perderia
  *  na chamada seguinte. Mesmo cuidado do cfgFlut(). */
@@ -2866,9 +3156,11 @@ function cfgAparencia() {
     c[k] = Array.isArray(p) ? p.slice() : p;
   });
   if (TEMAS_RENOMEADOS[c.tema]) c.tema = TEMAS_RENOMEADOS[c.tema];   // "colorido"→violeta, "gamificado"→gamer
-  if (!TEMAS[c.tema]) c.tema = 'escuro';
+  if (!c.iosAplicado) { c.tema = 'ios'; c.iosAplicado = true; } // uma vez só: quem abriu a versão da Trinca ficou com 'escuro' salvo
+  if (!TEMAS[c.tema]) c.tema = 'ios';
   if (!MODOS_COR[c.cores]) c.cores = 'colorido';
   const ids = ABAS_INFO.map(a => a[0]);
+  if (Array.isArray(c.ordem) && !c.ordem.includes('btn-primos')) c.ordem.splice(1, 0, 'btn-primos'); // Primos 3D logo depois do Painel
   c.ordem = ordemTravada([...new Set([...(c.ordem || []).filter(i => ids.includes(i)), ...ids])]);
   c.ocultas = (c.ocultas || []).filter(i => ids.includes(i) && i !== 'btn-settings' && i !== 'btn-focus');
   return c;
@@ -2892,7 +3184,7 @@ function aplicarAparencia() {
   if (ativa && ativa.hidden) changeTab('focus');
   renderAparencia();
 }
-function escolherTema(t) { cfgAparencia().tema = t; salvarAparencia(); toast(`${TEMAS[t][0]} Tema ${TEMAS[t][1]}.`); }
+function escolherTema(t) { cfgAparencia().tema = t; salvarAparencia(); renderNotes(); renderPaletaNota(); toast(`${TEMAS[t][0]} Tema ${TEMAS[t][1]}.`); }
 function escolherModoCor(m) {
   cfgAparencia().cores = m; salvarAparencia();
   toast(m === 'neutro' ? '🩶 Modo neutro: cor só no que avisa (atraso, conta a pagar, dinheiro).' : '🎨 Modo colorido: tudo com as cores cheias.', 5000);
@@ -3012,9 +3304,9 @@ function calcularAvisos() {
   const rede = contacts.filter(precisaFalar);
   if (rede.length) add('rede:falar', '🤝', `${rede.length} pessoa${rede.length > 1 ? 's' : ''} pra retomar contato: ${rede.slice(0, 2).map(c => c.nome).join(', ')}`, 3, agora.getHours() >= 10, "changeTab('net'); filtrarRede('__lembrar');");
   // Entregas previstas para hoje ou atrasadas
-  const entHoje = orders.filter(o => o.status !== 'entregue' && o.eta === hoje);
+  const entHoje = entregas.filter(o => o.status !== 'entregue' && o.eta === hoje);
   if (entHoje.length) add('entrega:hoje', '📦', `Entrega prevista para hoje: ${entHoje.map(o => o.item).slice(0, 2).join(', ')}${entHoje.length > 2 ? '…' : ''}`, 2, agora.getHours() >= 9, "changeTab('notes');");
-  const entAtras = orders.filter(o => o.status !== 'entregue' && o.eta && o.eta < hoje);
+  const entAtras = entregas.filter(o => o.status !== 'entregue' && o.eta && o.eta < hoje);
   if (entAtras.length) add('entrega:atrasada', '⚠️', `${entAtras.length} entrega${entAtras.length > 1 ? 's' : ''} passou da previsão: ${entAtras.map(o => o.item).slice(0, 2).join(', ')}`, 2, agora.getHours() >= 9, "changeTab('notes');");
   // Revisões de estudo marcadas para hoje
   const rev = tasks.filter(t => !t.done && t.due === hoje && /^🔁 Revisar/.test(t.text));
@@ -3060,7 +3352,7 @@ function pedirPermissaoAvisos() {
 function atualizarStatusAvisos() {
   const el = document.getElementById('avisos-permissao'); if (!el) return;
   const p = ('Notification' in window) ? Notification.permission : 'indisponivel';
-  const mapa = { granted: ['🟢 Notificações do sistema ativadas.', '#22c55e'], denied: ['🔴 Notificações bloqueadas neste navegador — libere nas configurações do site.', '#ef4444'], default: ['⚪ Notificações do sistema ainda não autorizadas.', '#94a3b8'], indisponivel: ['⚪ Este navegador não tem notificações.', '#94a3b8'] };
+  const mapa = { granted: ['🟢 Notificações do sistema ativadas.', '#34c759'], denied: ['🔴 Notificações bloqueadas neste navegador — libere nas configurações do site.', '#ff3b30'], default: ['⚪ Notificações do sistema ainda não autorizadas.', '#8e8e93'], indisponivel: ['⚪ Este navegador não tem notificações.', '#8e8e93'] };
   const [txt, cor] = mapa[p] || mapa.default; el.innerText = txt; el.style.color = cor;
 }
 function salvarAvisos() {
@@ -3086,14 +3378,14 @@ setInterval(verificarAvisos, 60000);
 // LINKS COM NOME  +  COMPRAS E ENTREGAS
 // Item de lista pode ser "Purificador Consul CPC34 https://..." — a tela mostra
 // o nome e um 🔗 discreto. E o item comprado sai da lista e vira uma ENTREGA,
-// com status, previsão e rastreio (módulo `orders`).
+// com status, previsão e rastreio (módulo `entregas`).
 // ============================================================================
 const LOJAS = { 'mercadolivre.com': 'Mercado Livre', 'amazon.com': 'Amazon', 'magazineluiza.com': 'Magalu', 'americanas.com': 'Americanas', 'casasbahia.com': 'Casas Bahia', 'shopee.com': 'Shopee', 'aliexpress.com': 'AliExpress', 'kabum.com': 'KaBuM', 'submarino.com': 'Submarino', 'shoptime.com': 'Shoptime', 'carrefour.com': 'Carrefour', 'extra.com': 'Extra', 'leroymerlin.com': 'Leroy Merlin', 'madeiramadeira.com': 'MadeiraMadeira' };
 const STATUS_ENTREGA = {
-  comprado: ['🛒', 'Comprado', '#38bdf8'],
-  caminho:  ['🚚', 'A caminho', '#f59e0b'],
-  entregue: ['📦', 'Entregue', '#22c55e'],
-  problema: ['⚠️', 'Com problema', '#ef4444']
+  comprado: ['🛒', 'Comprado', '#007aff'],
+  caminho:  ['🚚', 'A caminho', '#bf8700'],
+  entregue: ['📦', 'Entregue', '#34c759'],
+  problema: ['⚠️', 'Com problema', '#ff3b30']
 };
 const ORDEM_STATUS = ['comprado', 'caminho', 'entregue'];
 
@@ -3145,7 +3437,7 @@ function confirmarCompra() {
     const t = { id: novoId(), date: hojeISO(), desc: `Compra: ${item}${o.store ? ' (' + o.store + ')' : ''}`, amount: valor, type: 'expense', category: 'Outros', notes: '', pending: false, orderId: o.id };
     transactions.push(t); o.financeId = t.id; salvar('finances', transactions); updateFinanceValues(); renderFinances();
   }
-  orders.push(o); salvar('orders', orders);
+  entregas.push(o); salvar('entregas', entregas);
   if (compraCtx && document.getElementById('compra-remove').checked) {
     const n = notes.find(x => x.id === compraCtx.noteId);
     if (n && n.checklist) { n.checklist.splice(compraCtx.index, 1); n.updatedAt = Date.now(); salvar('notes', notes); }
@@ -3166,59 +3458,59 @@ function novaCompraAvulsa() {
 let entregaFiltro = 'andamento';
 function filtrarEntregas(f, el) { entregaFiltro = f; document.querySelectorAll('#entrega-filtros span').forEach(s => s.classList.remove('active')); if (el) el.classList.add('active'); renderEntregas(); }
 function avancarEntrega(id) {
-  const o = orders.find(x => x.id === id); if (!o) return;
+  const o = entregas.find(x => x.id === id); if (!o) return;
   const i = ORDEM_STATUS.indexOf(o.status);
   o.status = i < 0 ? 'comprado' : ORDEM_STATUS[Math.min(i + 1, ORDEM_STATUS.length - 1)];
   if (o.status === 'entregue' && !o.deliveredAt) o.deliveredAt = hojeISO();
   if (o.status !== 'entregue') o.deliveredAt = '';
-  salvar('orders', orders); renderEntregas(); renderAvisos();
+  salvar('entregas', entregas); renderEntregas(); renderAvisos();
   toast(`${STATUS_ENTREGA[o.status][0]} ${o.item}: ${STATUS_ENTREGA[o.status][1]}`);
 }
-function problemaEntrega(id) { const o = orders.find(x => x.id === id); if (!o) return; o.status = o.status === 'problema' ? 'caminho' : 'problema'; salvar('orders', orders); renderEntregas(); renderAvisos(); }
+function problemaEntrega(id) { const o = entregas.find(x => x.id === id); if (!o) return; o.status = o.status === 'problema' ? 'caminho' : 'problema'; salvar('entregas', entregas); renderEntregas(); renderAvisos(); }
 function editarEntrega(id) {
-  const o = orders.find(x => x.id === id); if (!o) return;
+  const o = entregas.find(x => x.id === id); if (!o) return;
   const eta = prompt(`Previsão de entrega de "${o.item}" (dd/mm/aaaa, vazio para tirar):`, o.eta ? isoParaBR(o.eta) : '');
   if (eta === null) return;
   o.eta = eta.trim() ? brParaISO(eta.trim()) : '';
   const rast = prompt('Código de rastreio (opcional):', o.tracking || '');
   if (rast !== null) o.tracking = rast.trim();
-  salvar('orders', orders); renderEntregas(); renderAvisos();
+  salvar('entregas', entregas); renderEntregas(); renderAvisos();
 }
 function removerEntrega(id) {
-  const o = orders.find(x => x.id === id); if (!o || !confirm(`Apagar "${o.item}" das entregas?${o.financeId ? ' (o lançamento em Finanças fica)' : ''}`)) return;
-  orders = orders.filter(x => x.id !== id); salvar('orders', orders); renderEntregas(); renderAvisos();
+  const o = entregas.find(x => x.id === id); if (!o || !confirm(`Apagar "${o.item}" das entregas?${o.financeId ? ' (o lançamento em Finanças fica)' : ''}`)) return;
+  entregas = entregas.filter(x => x.id !== id); salvar('entregas', entregas); renderEntregas(); renderAvisos();
 }
 /** Volta o item para uma lista de compras (ex.: devolveu, quer comprar de novo). */
 function devolverParaLista(id) {
-  const o = orders.find(x => x.id === id); if (!o) return;
+  const o = entregas.find(x => x.id === id); if (!o) return;
   let n = notes.find(x => Array.isArray(x.checklist) && !x.archived && /compra/i.test(x.title || ''));
   if (!n) { n = { id: novoId(), title: 'Compras', content: '', checklist: [], color: 'yellow', labels: ['Compras'], pinned: false, archived: false, createdAt: Date.now(), updatedAt: Date.now() }; notes.push(n); }
   n.checklist.push({ text: o.url ? `${o.item} ${o.url}` : o.item, done: false }); n.updatedAt = Date.now();
-  orders = orders.filter(x => x.id !== id);
-  salvar('notes', notes); salvar('orders', orders); renderNotes(); renderEntregas();
+  entregas = entregas.filter(x => x.id !== id);
+  salvar('notes', notes); salvar('entregas', entregas); renderNotes(); renderEntregas();
   toast(`↩️ "${o.item}" voltou para a lista "${n.title}".`);
 }
 function renderEntregas() {
   const ul = document.getElementById('entrega-lista'); if (!ul) return; ul.innerHTML = '';
   const hoje = hojeISO();
-  let lista = [...orders];
+  let lista = [...entregas];
   if (entregaFiltro === 'andamento') lista = lista.filter(o => o.status !== 'entregue');
   else if (entregaFiltro === 'entregues') lista = lista.filter(o => o.status === 'entregue');
   lista.sort((a, b) => (a.eta || '9999').localeCompare(b.eta || '9999') || b.id - a.id);
-  const andamento = orders.filter(o => o.status !== 'entregue');
+  const andamento = entregas.filter(o => o.status !== 'entregue');
   const resumo = document.getElementById('entrega-resumo');
   if (resumo) {
     const total = andamento.reduce((a, o) => a + (Number(o.amount) || 0), 0);
     const atrasadas = andamento.filter(o => o.eta && o.eta < hoje).length;
-    resumo.innerHTML = `<span>📦 ${andamento.length} a caminho${total ? ' · ' + formatCurrency(total) : ''}</span>${atrasadas ? `<span style="color:#ef4444">⚠️ ${atrasadas} passou da previsão</span>` : ''}<span>✅ ${orders.filter(o => o.status === 'entregue').length} entregue(s)</span>`;
+    resumo.innerHTML = `<span>📦 ${andamento.length} a caminho${total ? ' · ' + formatCurrency(total) : ''}</span>${atrasadas ? `<span style="color:#ff3b30">⚠️ ${atrasadas} passou da previsão</span>` : ''}<span>✅ ${entregas.filter(o => o.status === 'entregue').length} entregue(s)</span>`;
   }
-  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nada aqui. Nas listas de compras, use o 🛒 do item para mandá-lo pra cá.</li>'; return; }
+  if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nada aqui. Nas listas de compras, use o 🛒 do item para mandá-lo pra cá.</li>'; return; }
   lista.forEach(o => {
     const st = STATUS_ENTREGA[o.status] || STATUS_ENTREGA.comprado;
     const atrasada = o.status !== 'entregue' && o.eta && o.eta < hoje;
     ul.innerHTML += `<li class="entrega-item" style="border-left-color:${st[2]}"><div class="transaction-info" style="flex:1">
         <span>${st[0]} ${esc(o.item)} ${o.url ? `<a class="link-chip" href="${esc(o.url)}" target="_blank" rel="noopener">${iconeDoLink(o.url)}${o.store ? ' ' + esc(o.store) : ''}</a>` : (o.store ? `<small class="item-date">${esc(o.store)}</small>` : '')}</span>
-        <small class="item-date">${st[1]}${o.amount ? ' · ' + formatCurrency(o.amount) : ''} · comprado ${isoParaBR(o.boughtAt)}${o.eta ? ` · previsão <strong style="color:${atrasada ? '#ef4444' : '#cbd5e1'}">${rotuloData(o.eta)}</strong>` : ''}${o.deliveredAt ? ` · entregue ${isoParaBR(o.deliveredAt)}` : ''}</small>
+        <small class="item-date">${st[1]}${o.amount ? ' · ' + formatCurrency(o.amount) : ''} · comprado ${isoParaBR(o.boughtAt)}${o.eta ? ` · previsão <strong style="color:${atrasada ? '#ff3b30' : 'var(--txt2)'}">${rotuloData(o.eta)}</strong>` : ''}${o.deliveredAt ? ` · entregue ${isoParaBR(o.deliveredAt)}` : ''}</small>
         ${o.tracking ? `<small class="item-notes">🔎 ${esc(o.tracking)}</small>` : ''}</div>
       <div class="item-actions">${o.status !== 'entregue' ? `<button class="mini-btn" title="Avançar status" onclick="avancarEntrega(${o.id})">▶</button>` : ''}<button class="mini-btn ${o.status === 'problema' ? 'on' : ''}" title="Marcar problema" onclick="problemaEntrega(${o.id})">⚠️</button><button class="mini-btn" title="Previsão e rastreio" onclick="editarEntrega(${o.id})">✎</button><button class="mini-btn" title="Voltar para a lista de compras" onclick="devolverParaLista(${o.id})">↩️</button><button class="mini-btn" title="Apagar" onclick="removerEntrega(${o.id})">✕</button></div></li>`;
   });
@@ -3240,7 +3532,7 @@ function buscarTudo(termo) {
   events.filter(e => bate(e.title, e.notes, e.people, e.minutes)).forEach(e => r.push({ ic: tipoEvento(e.type).icone, tipo: e.type === 'reuniao' ? 'Reunião' : 'Compromisso', txt: e.title, sub: `${rotuloData(e.date)}${e.time ? ' ' + e.time : ''}`, acao: `editarEvento(${e.id});` }));
   shifts.filter(s => bate(s.desc, s.notes, s.swap)).forEach(s => r.push({ ic: '🚑', tipo: 'Plantão', txt: s.desc, sub: `${rotuloData(s.date)} · ${formatCurrency(s.amount)}${s.paid ? ' · pago' : ' · a receber'}`, acao: `editarPlantao(${s.id});` }));
   transactions.filter(t => bate(t.desc, t.category, t.notes)).forEach(t => r.push({ ic: t.type === 'income' ? '💰' : '💸', tipo: 'Lançamento', txt: t.desc, sub: `${isoParaBR(dataTransacao(t))} · ${formatCurrency(t.amount)}${t.pending ? ' · pendente' : ''}`, acao: `changeTab('finances');` }));
-  orders.filter(o => bate(o.item, o.store, o.tracking)).forEach(o => r.push({ ic: '📦', tipo: 'Entrega', txt: o.item, sub: `${(STATUS_ENTREGA[o.status] || [])[1] || ''}${o.store ? ' · ' + o.store : ''}`, acao: `changeTab('notes');` }));
+  entregas.filter(o => bate(o.item, o.store, o.tracking)).forEach(o => r.push({ ic: '📦', tipo: 'Entrega', txt: o.item, sub: `${(STATUS_ENTREGA[o.status] || [])[1] || ''}${o.store ? ' · ' + o.store : ''}`, acao: `changeTab('notes');` }));
   materials.filter(m => bate(m.title, m.notes)).forEach(m => r.push({ ic: '📖', tipo: 'Material', txt: m.title, sub: `${temaNome(m.topicId)} · ${m.progress || 0}%`, acao: `changeTab('studies');` }));
   projects.filter(p => bate(p.name, p.desc, p.notes, p.contacts)).forEach(p => r.push({ ic: '🚀', tipo: 'Projeto', txt: p.name, sub: (ESTAGIOS_PROJETO[p.stage] || [])[1] || '', acao: `changeTab('business'); editarProjeto(${p.id});` }));
   trips.filter(t => bate(t.destino, t.notas)).forEach(t => r.push({ ic: '✈️', tipo: 'Viagem', txt: t.destino, sub: `${(STATUS_VIAGEM[t.status] || [])[1] || ''}${t.inicio ? ' · ' + isoParaBR(t.inicio) : ''}`, acao: `changeTab('trips'); abrirViagem(${t.id});` }));
@@ -3292,7 +3584,7 @@ function indentarItem(noteId, i, dir) {
 // não deixa guardar o caminho, então a lista de nomes fica só como lembrete).
 // ============================================================================
 const TIPOS_MIDIA = { filme: ['🎬', 'Filme'], serie: ['📺', 'Série'], doc: ['🎥', 'Documentário'], anime: ['🌸', 'Anime'], outro: ['🍿', 'Outro'] };
-const STATUS_MIDIA = { quero: ['🔖', 'Quero ver', '#38bdf8'], assistindo: ['▶️', 'Assistindo', '#f59e0b'], visto: ['✅', 'Visto', '#22c55e'], largado: ['🚫', 'Larguei', '#64748b'] };
+const STATUS_MIDIA = { quero: ['🔖', 'Quero ver', '#007aff'], assistindo: ['▶️', 'Assistindo', '#bf8700'], visto: ['✅', 'Visto', '#34c759'], largado: ['🚫', 'Larguei', '#8e8e93'] };
 const MOMENTOS = { foco: ['🎯', 'Foco / estudo'], treino: ['🏋️', 'Treino'], plantao: ['🚑', 'Plantão'], relax: ['🌙', 'Relaxar'], viagem: ['🚗', 'Estrada'], festa: ['🎉', 'Festa'], outro: ['🎵', 'Outro'] };
 let midiaFiltro = 'quero';
 let lazerSecao = 'midia';
@@ -3458,7 +3750,7 @@ function redesenharLazer() { preencherSelectsLazer(); renderMidia(); renderPlayl
 // contacts: [{ id, nome, onde, papel, tags[], tel, email, links, notas,
 //              ultimo, lembrar (dias), favorito }]
 // ============================================================================
-const STATUS_VIAGEM = { ideia: ['💭', 'Ideia', '#94a3b8'], planejando: ['🗺️', 'Planejando', '#38bdf8'], confirmada: ['✅', 'Confirmada', '#22c55e'], indo: ['✈️', 'Em viagem', '#f59e0b'], feita: ['📸', 'Já fui', '#64748b'] };
+const STATUS_VIAGEM = { ideia: ['💭', 'Ideia', '#8e8e93'], planejando: ['🗺️', 'Planejando', '#007aff'], confirmada: ['✅', 'Confirmada', '#34c759'], indo: ['✈️', 'Em viagem', '#bf8700'], feita: ['📸', 'Já fui', '#8e8e93'] };
 const TIPOS_RESERVA = { voo: '✈️', hotel: '🏨', carro: '🚗', passeio: '🎟️', restaurante: '🍽️', outro: '📌' };
 const MALA_PADRAO = ['Documentos (RG/CNH)', 'Carregador', 'Remédios', 'Escova de dentes', 'Roupa íntima', 'Roupa de banho', 'Tênis confortável', 'Fone de ouvido'];
 const DOCS_PADRAO = ['Identidade em dia', 'Cartão de vacinas', 'Seguro viagem', 'Reserva impressa/salva', 'Dinheiro trocado'];
@@ -3590,9 +3882,414 @@ function renderRede() {
       <div class="item-actions"><button class="mini-btn" title="Falei hoje" onclick="faleiCom(${c.id})">💬</button><button class="mini-btn ${c.favorito ? 'on' : ''}" title="Favorito" onclick="favoritarContato(${c.id})">⭐</button><button class="mini-btn" title="Editar" onclick="editarContato(${c.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerContato(${c.id})">✕</button></div></li>`;
   });
 }
+// ============================================================================
+// VOZ — duas bolinhas flutuantes em todas as páginas
+// 🎤 Ditado: você fala ("novo pedido do João, 3 vasos, 120 reais, entrega sexta"),
+//    o app entende, mostra o que vai criar e preenche o formulário da aba certa
+//    (o salvamento passa pelo próprio formulário, então segue todas as regras do app).
+// ✳ Claude: você fala uma MUDANÇA NO APP; o pedido fica guardado em "clauderequests".
+//    (Etapa 2: enviar esses pedidos ao Claude na nuvem, com aprovação antes de publicar.)
+// Reconhecimento de voz: o do próprio navegador (Safari usa o ditado da Apple).
+// Se não estiver disponível, a caixa de texto abre e você usa o 🎤 do teclado.
+// ============================================================================
+let vozModo = 'dados';        // 'dados' | 'claude'
+let vozReconhecedor = null;
+let vozGravando = false;
+let vozResultado = null;      // última interpretação do ditado
+
+const NUM_PALAVRAS = { um: 1, uma: 1, dois: 2, duas: 2, 'três': 3, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10, onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19, vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90, cem: 100, cento: 100, duzentos: 200, trezentos: 300, quatrocentos: 400, quinhentos: 500, seiscentos: 600, setecentos: 700, oitocentos: 800, novecentos: 900, mil: 1000 };
+const DIAS_SEMANA_VOZ = { domingo: 0, segunda: 1, 'terça': 2, terca: 2, quarta: 3, quinta: 4, sexta: 5, 'sábado': 6, sabado: 6 };
+const MESES_NOME = { janeiro: 1, fevereiro: 2, 'março': 3, marco: 3, abril: 4, maio: 5, junho: 6, julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12 };
+const CORES_FILAMENTO = ['preto', 'preta', 'branco', 'branca', 'vermelho', 'vermelha', 'azul', 'verde', 'amarelo', 'amarela', 'cinza', 'laranja', 'rosa', 'roxo', 'roxa', 'dourado', 'dourada', 'prata', 'prateado', 'transparente', 'marrom', 'bege', 'lilás', 'vinho'];
+
+function abaAtual() { const el = document.querySelector('.tab-content.active'); return el ? el.id : 'focus'; }
+function nomeAbaAtual() { const b = document.querySelector('.tab-btn.active .tab-lbl'); return b ? b.innerText.trim() : 'Painel'; }
+
+// --- Interpretação do ditado (tudo local, sem internet) ---
+function vozNumero(s) { s = String(s).trim(); if (/^\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, ''); return parseFloat(s.replace(',', '.')); }
+function proximoDiaSemana(idx) { const d = new Date(); let diff = (idx - d.getDay() + 7) % 7; if (diff === 0) diff = 7; d.setDate(d.getDate() + diff); return isoDe(d); }
+function dataDiaMes(dia, mes) {
+  const hoje = new Date(); let y = hoje.getFullYear(); let m = mes || hoje.getMonth() + 1;
+  let d = new Date(y, m - 1, dia);
+  if (isoDe(d) < hojeISO()) { if (mes) d = new Date(y + 1, m - 1, dia); else d = new Date(y, m, dia); }
+  return isoDe(d);
+}
+/** Tira do texto um pedaço reconhecido e devolve o que casou (ou null). */
+function vozExtrair(ctx, re) { const m = ctx.resto.match(re); if (!m) return null; ctx.resto = (ctx.resto.slice(0, m.index) + ' ' + ctx.resto.slice(m.index + m[0].length)).replace(/\s+/g, ' '); return m; }
+
+function interpretarDitado(textoOriginal, aba) {
+  let t = ' ' + textoOriginal.replace(/\s+/g, ' ').trim() + ' ';
+  t = t.replace(/\b([A-Za-zÀ-ÿ]+)\b/g, (w) => NUM_PALAVRAS[w.toLowerCase()] !== undefined && !/^(um|uma)$/i.test(w) ? String(NUM_PALAVRAS[w.toLowerCase()]) : w);
+  t = t.replace(/\b(\d{1,2})\s*h?\s+e\s+meia\b/gi, '$1:30').replace(/((?<![\wÀ-ÿ])[àa]s\s+\d{1,2})\s*h?\s+e\s+(\d{1,2})\b/gi, (s, a, b) => a + ':' + b.padStart(2, '0')); // "9 e meia" -> 9:30
+  for (let i = 0; i < 3; i++) t = t.replace(/\b(\d+)\s+e\s+(\d+)\b/g, (s, a, b) => { a = Number(a); b = Number(b); return a >= 20 && a % 10 === 0 && b < a && String(b).length < String(a).length ? String(a + b) : s; }); // "cento e vinte" -> 120
+  const ctx = { resto: t };
+  const low = t.toLowerCase();
+
+  // 1) o que é?
+  let tipo = '';
+  if (/\b(novo cliente|nova cliente|cadastrar cliente|cadastra cliente|cliente novo)\b/.test(low)) tipo = 'cliente';
+  else if (/\b(pedido|encomenda|or[çc]amento)\b/.test(low)) tipo = 'pedido';
+  else if (/\b(gastei|paguei|despesa|comprei|conta de)\b/.test(low)) tipo = 'despesa';
+  else if (/\b(recebi|receita|entrou|me pagou|pagou)\b/.test(low)) tipo = 'receita';
+  else if (/\b(tarefa|lembrete|lembrar de|preciso)\b/.test(low)) tipo = 'tarefa';
+  else if (/\b(compromisso|reuni[ãa]o|consulta|evento|visita|agendar|marcar)\b/.test(low)) tipo = 'compromisso';
+  else if (/\b(nota|anota|anotar|anota[çc][ãa]o|ideia)\b/.test(low)) tipo = 'nota';
+  else tipo = { primos: 'pedido', home: 'compromisso', finances: 'despesa', tasks: 'tarefa', notes: 'nota' }[aba] || 'nota';
+
+  // 2) pedaços comuns: valor, data, hora, telefone
+  let valor = null;
+  let m = vozExtrair(ctx, /(?:r\$\s*)(\d[\d.,]*)|(\d[\d.,]*)\s*(?:reais|real|contos?|pilas?)\b/i);
+  if (m) valor = vozNumero(m[1] || m[2]);
+  let data = '';
+  if ((m = vozExtrair(ctx, /\bdepois de amanh[ãa](?![\wÀ-ÿ])/i))) { const d = new Date(); d.setDate(d.getDate() + 2); data = isoDe(d); }
+  else if ((m = vozExtrair(ctx, /\bamanh[ãa](?![\wÀ-ÿ])/i))) { const d = new Date(); d.setDate(d.getDate() + 1); data = isoDe(d); }
+  else if ((m = vozExtrair(ctx, /\bhoje\b/i))) data = hojeISO();
+  else if ((m = vozExtrair(ctx, /\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/))) { data = m[3] ? isoDe(new Date(Number(m[3].length === 2 ? '20' + m[3] : m[3]), m[2] - 1, m[1])) : dataDiaMes(Number(m[1]), Number(m[2])); }
+  else if ((m = vozExtrair(ctx, /\b(?:dia\s+)?(\d{1,2})\s+de\s+(janeiro|fevereiro|mar[çc]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/i))) data = dataDiaMes(Number(m[1]), MESES_NOME[m[2].toLowerCase()]);
+  else if ((m = vozExtrair(ctx, /\bdia\s+(\d{1,2})\b/i))) data = dataDiaMes(Number(m[1]));
+  else if ((m = vozExtrair(ctx, /\b(?:na |no |pr[óo]xim[ao] |essa |esta )?(segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado|domingo)(?:[- ]feira)?(?: que vem)?\b/i))) data = proximoDiaSemana(DIAS_SEMANA_VOZ[m[1].toLowerCase().replace('ç', 'c').replace('á', 'a')]);
+  let hora = '';
+  if ((m = vozExtrair(ctx, /(?:(?<![\wÀ-ÿ])[àa]s\s+|\ba partir das\s+|\b)(\d{1,2})\s*(?:h|:|horas?\b)\s*(\d{2})?(?:\s*(?:min|minutos))?(\s+da\s+(?:tarde|noite))?/i)) || (m = vozExtrair(ctx, /(?<![\wÀ-ÿ])[àa]s\s+(\d{1,2})\b(\s+da\s+(?:tarde|noite))?/i))) {
+    let h = Number(m[1]); let min = m[2] && /^\d+$/.test(m[2]) ? m[2] : '00';
+    if (/tarde|noite/i.test(m[0]) && h < 12) h += 12;
+    if (h <= 23) hora = `${String(h).padStart(2, '0')}:${min}`;
+  }
+  let telefone = '';
+  if ((m = vozExtrair(ctx, /\(?\b\d{2}\)?\s*9?\s?\d{4}[-\s]?\d{4}\b/))) telefone = m[0].trim();
+
+  const limpar = (s, extras) => {
+    let r = ' ' + s + ' ';
+    (extras || []).forEach(re => { r = r.replace(re, ' '); });
+    r = r.replace(/(?<!\d)[,.]|[,.](?!\d)|;/g, ' ').replace(/\s+/g, ' ').trim();
+    const conect = /^(de|do|da|dos|das|para|pra|pro|com|e|o|a|os|as|no|na|em|um|uma|que|entrega|entregar|prazo|valor|por)\s+/i;
+    const conectFim = /\s+(de|do|da|dos|das|para|pra|pro|com|e|o|a|no|na|em|entrega|entregar|prazo|valor|por|at[ée])$/i;
+    for (let i = 0; i < 6; i++) r = r.replace(conect, '').replace(conectFim, '');
+    return r.charAt(0).toUpperCase() + r.slice(1);
+  };
+  const res = { tipo, texto: textoOriginal.trim(), campos: {} };
+
+  if (tipo === 'pedido') {
+    // cliente: primeiro procura um já cadastrado; senão, um nome próprio depois de "do/da/para"
+    let cliente = null, clienteNovo = '';
+    const achados = clients.filter(c => ctx.resto.toLowerCase().includes(c.name.toLowerCase())).sort((a, b) => b.name.length - a.name.length);
+    if (achados.length) { cliente = achados[0]; const i = ctx.resto.toLowerCase().indexOf(cliente.name.toLowerCase()); ctx.resto = ctx.resto.slice(0, i) + ' ' + ctx.resto.slice(i + cliente.name.length); ctx.resto = ctx.resto.replace(/\b(do|da|de|para|pra|pro)\s+(cliente\s+)?(?=\s|$)/i, ' '); }
+    else if ((m = vozExtrair(ctx, /\b(?:do|da|para o|para a|para|pra|pro)\s+(?:cliente\s+)?([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+(?:d[aeo]s?\s+)?[A-ZÀ-Ý][a-zà-ÿ]+)*)/) || vozExtrair(ctx, /\bcliente\s+([A-ZÀ-Ýa-zà-ÿ]+(?:\s+[A-ZÀ-Ý][a-zà-ÿ]+)*)/))) clienteNovo = m[1].trim().replace(/^./, c => c.toUpperCase());
+    let status = /\bor[çc]amento\b/i.test(t) ? 'orcamento' : /\bimprimindo\b/i.test(t) ? 'imprimindo' : 'aprovado';
+    let material = '';
+    const mats = [...MATERIAIS_3D].filter(x => x !== 'Outro').sort((a, b) => b.length - a.length);
+    ctx.resto = ctx.resto.replace(/\bp\.?\s?l\.?\s?a\b/gi, 'PLA').replace(/\bp\.?\s?e\.?\s?t\.?\s?g\b/gi, 'PETG');
+    for (const x of mats) { const re = new RegExp('\\b(?:em |de )?' + x.replace(/ /g, '\\s+') + '\\b', 'i'); if (re.test(ctx.resto)) { material = x; vozExtrair(ctx, re); break; } }
+    let impressora = '';
+    if (vozExtrair(ctx, /\b(?:na |pela )?(?:anycubic |any cubic )?kobra(?: x)?\b/i)) impressora = 'Anycubic Kobra X';
+    else if ((m = vozExtrair(ctx, /\b(?:na |pela )?(?:bambu |bambu lab )?a ?1\s*(?:#|n[úu]mero\s*)?(1|2|primeira|segunda)\b/i))) impressora = /2|segunda/i.test(m[1]) ? IMPRESSORAS_3D[1] : IMPRESSORAS_3D[0];
+    const cores = [];
+    CORES_FILAMENTO.forEach(c => { const re = new RegExp('\\b' + c + '\\b', 'i'); if (re.test(ctx.resto)) { cores.push(c); ctx.resto = ctx.resto.replace(re, ' '); } });
+    ctx.resto = ctx.resto.replace(/\b(na cor|nas cores|cor|cores)\b/gi, ' ');
+    let qtd = 1;
+    if ((m = vozExtrair(ctx, /\b(\d{1,4})\s*(?:x\b|unidades?\b|p[eç]as?\b)?/i))) qtd = Number(m[1]) || 1;
+    const titulo = limpar(ctx.resto, [/\b(novo|nova|registrar|registra|cadastrar|criar|cria|adicionar|adiciona|anotar|anota)\b/gi, /\b(pedido|encomenda|or[çc]amento|imprimindo|aprovado)\b/gi, /\bno valor de\b/gi, /\bpara entrega\b/gi, /\bentrega(r)?\b/gi, /\bprazo\b/gi]);
+    res.campos = { cliente, clienteNovo, titulo, qtd, material, cores: cores.join(' e ').replace(/^./, c => c.toUpperCase()), impressora, valor, data, status };
+    res.resumo = [['Tipo', `📦 Pedido (${statusPedido(status).nome.toLowerCase()})`], ['Cliente', cliente ? cliente.name : clienteNovo ? clienteNovo + ' (novo)' : '—'], ['Peça', titulo || '—'], ['Qtd.', String(qtd)], ['Material / cor', [material, res.campos.cores].filter(Boolean).join(' · ') || '—'], ['Impressora', impressora || '—'], ['Valor', valor ? formatCurrency(valor) : '—'], ['Entrega', data ? rotuloDataLonga(data) : '—']];
+    res.ok = !!titulo;
+  } else if (tipo === 'cliente') {
+    let email = ''; if ((m = vozExtrair(ctx, /\b[\w.+-]+@[\w-]+\.[\w.]+\b/))) email = m[0];
+    let cidade = ''; if ((m = vozExtrair(ctx, /\b(?:de|em|mora em|da cidade de)\s+([A-ZÀ-Ý][a-zà-ÿ]+(?:\s+[A-ZÀ-Ý][a-zà-ÿ]+)*)\s*$/))) cidade = m[1];
+    const nome = limpar(ctx.resto, [/\b(novo|nova|cadastrar|cadastra|registrar|criar|adicionar)\b/gi, /\bclientes?\b/gi, /\b(telefone|whatsapp|zap|celular|n[úu]mero|e-?mail)\b/gi]);
+    res.campos = { nome, telefone, email, cidade };
+    res.resumo = [['Tipo', '👤 Cliente'], ['Nome', nome || '—'], ['WhatsApp', telefone || '—'], ['E-mail', email || '—'], ['Cidade', cidade || '—']];
+    res.ok = !!nome;
+  } else if (tipo === 'despesa' || tipo === 'receita') {
+    const desc = limpar(ctx.resto, [/\b(gastei|paguei|despesa|comprei|recebi|receita|entrou|me pagou|pagou|lan[çc]ar|lan[çc]a|registrar)\b/gi]);
+    const l = low; let cat = 'Outros';
+    if (tipo === 'despesa') cat = /filamento|insumo|resina|bico|hotend|placa|pla\b|petg/.test(l) ? 'Filamento / Insumos' : /gasolina|combust[íi]vel|uber|[ôo]nibus|estacionamento/.test(l) ? 'Transporte' : /mercado|almo[çc]o|jantar|lanche|restaurante|comida|ifood/.test(l) ? 'Alimentação' : /aluguel|condom[íi]nio|luz|energia|[áa]gua|internet/.test(l) ? 'Moradia' : /imposto|das\b|mei\b/.test(l) ? 'Impostos' : 'Outros';
+    else cat = /primos|impress[ãa]o|pe[çc]a|pedido/.test(l) ? 'Primos 3D' : /projeto|engenharia|laudo|obra|art\b/.test(l) ? 'Engenharia / Projetos' : 'Outros';
+    res.campos = { desc, valor, data: data || hojeISO(), categoria: cat };
+    res.resumo = [['Tipo', tipo === 'despesa' ? '💸 Despesa' : '💰 Receita'], ['Descrição', desc || '—'], ['Valor', valor ? formatCurrency(valor) : '— (falta dizer o valor)'], ['Data', rotuloDataLonga(res.campos.data)], ['Categoria', cat]];
+    res.ok = !!desc && !!valor;
+  } else if (tipo === 'tarefa') {
+    const texto = limpar(ctx.resto, [/\b(nova|criar|adicionar|adiciona|anotar)\b/gi, /\btarefas?\b/gi, /\blembrete\b/gi, /\blembrar de\b/gi, /\bpreciso\b/gi, /\bat[ée](?![\wÀ-ÿ])/gi]);
+    res.campos = { texto, data };
+    res.resumo = [['Tipo', '✅ Tarefa'], ['O quê', texto || '—'], ['Prazo', data ? rotuloDataLonga(data) : '—']];
+    res.ok = !!texto;
+  } else if (tipo === 'compromisso') {
+    const l = low;
+    const tipoEv = /reuni[ãa]o|visita|obra|cliente|trabalho/.test(l) ? 'trabalho' : /consulta|m[ée]dico|dentista|exame/.test(l) ? 'saude' : /aula|prova|curso|estud/.test(l) ? 'estudo' : /anivers[áa]rio|festa|churrasco|jantar/.test(l) ? 'social' : /primos|fornecedor|neg[óo]cio/.test(l) ? 'negocios' : 'pessoal';
+    const titulo = limpar(ctx.resto, [/\b(novo|marcar|agendar|criar|adicionar)\b/gi, /\bcompromissos?\b/gi, /\bevento\b/gi]);
+    res.campos = { titulo, data: data || hojeISO(), hora, tipoEv };
+    res.resumo = [['Tipo', `${tipoEvento(tipoEv).icone} Compromisso (${tipoEvento(tipoEv).nome})`], ['O quê', titulo || '—'], ['Quando', rotuloDataLonga(res.campos.data) + (hora ? ' às ' + hora : '')]];
+    res.ok = !!titulo;
+  } else {
+    const conteudo = limpar(textoOriginal, [/^\s*(nova nota|nota|anota(r)?|anota[çc][ãa]o)\s*:?\s*/i]);
+    res.tipo = 'nota'; res.campos = { conteudo };
+    res.resumo = [['Tipo', '📝 Nota'], ['Texto', conteudo || '—']];
+    res.ok = !!conteudo;
+  }
+  return res;
+}
+
+/** Leva o ditado para o formulário certo. salvar=true também envia o formulário. */
+function aplicarDitado(salvarDireto) {
+  const r = vozResultado; if (!r) return;
+  if (salvarDireto && !r.ok) { toast('Faltou alguma informação — confira no formulário.'); salvarDireto = false; }
+  const $ = id => document.getElementById(id); const c = r.campos;
+  fecharVoz();
+  let form, foco;
+  if (r.tipo === 'pedido') {
+    changeTab('primos'); cancelarEdicaoPedido();
+    if (c.cliente) $('order-client').value = String(c.cliente.id);
+    else if (c.clienteNovo) { $('order-client').value = '__novo'; $('order-client-new').hidden = false; $('order-client-new').value = c.clienteNovo; }
+    $('order-title').value = c.titulo; $('order-qty').value = c.qtd || 1;
+    if (c.material) $('order-material').value = c.material;
+    $('order-color').value = c.cores || ''; $('order-printer').value = c.impressora || '';
+    $('order-price').value = c.valor || ''; $('order-due').value = c.data || ''; $('order-status').value = c.status;
+    $('order-notes').value = ''; form = 'order-form'; foco = 'order-title';
+  } else if (r.tipo === 'cliente') {
+    changeTab('primos'); cancelarEdicaoCliente();
+    $('client-name').value = c.nome; $('client-phone').value = c.telefone; $('client-email').value = c.email; $('client-city').value = c.cidade;
+    form = 'client-form'; foco = 'client-name';
+  } else if (r.tipo === 'despesa' || r.tipo === 'receita') {
+    changeTab('finances'); cancelarEdicaoFin();
+    $('type').value = r.tipo === 'despesa' ? 'expense' : 'income'; preencherCategorias(false); definirCategoriaNaTela(c.categoria);
+    $('desc').value = c.desc; $('amount').value = c.valor || ''; $('fin-date').value = c.data;
+    form = 'finance-form'; foco = 'desc';
+  } else if (r.tipo === 'tarefa') {
+    changeTab('tasks'); cancelarEdicaoTarefa();
+    $('task-desc').value = c.texto; $('task-due').value = c.data || '';
+    form = 'task-form'; foco = 'task-desc';
+  } else if (r.tipo === 'compromisso') {
+    changeTab('home'); if (typeof verSecaoAgenda === 'function') verSecaoAgenda('compromissos'); cancelarEdicaoEvento();
+    $('event-title').value = c.titulo; $('event-date').value = c.data; $('event-time').value = c.hora || ''; $('event-type').value = c.tipoEv;
+    form = 'event-form'; foco = 'event-title';
+  } else {
+    changeTab('notes'); cancelarEdicaoNota(); alternarTipoNota('texto', document.querySelector('#note-tipo span'));
+    $('note-content').value = c.conteudo; form = 'note-form'; foco = 'note-content';
+  }
+  if (salvarDireto) $(form).requestSubmit();
+  else setTimeout(() => { $(foco).scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('✎ Confira os campos e toque em salvar.'); }, 150);
+}
+
+// --- Janela de voz (folha que sobe de baixo) ---
+function abrirVoz(modo) {
+  vozModo = modo; vozResultado = null;
+  const $ = id => document.getElementById(id);
+  $('voice-title').innerText = modo === 'claude' ? '✳ Pedir mudança ao Claude' : '🎤 Ditado';
+  $('voice-context').innerText = modo === 'claude'
+    ? `Página: ${nomeAbaAtual()}. Diga o que quer mudar ou adicionar no app.`
+    : `Ex.: "novo pedido do João, 3 vasos em PLA preto, 120 reais, entrega sexta" · "gastei 90 reais em filamento" · "reunião com cliente amanhã às 14h"`;
+  $('voice-help').innerHTML = modo === 'claude' ? AJUDA_CLAUDE : AJUDA_DITADO; $('voice-help').parentElement.open = false;
+  $('voice-text').value = ''; $('voice-text').placeholder = modo === 'claude' ? 'Ex.: na Primos 3D, adiciona um campo de peso da peça em gramas' : 'Fale ou digite aqui...';
+  $('voice-preview').innerHTML = ''; $('voice-actions').innerHTML = '';
+  $('voice-send').hidden = modo !== 'claude'; $('voice-interpret').hidden = modo === 'claude';
+  renderPedidosClaude(); if (modo === 'claude') atualizarClaude(true);
+  $('voice-sheet').style.display = 'flex';
+  iniciarGravacao();
+}
+function fecharVoz() { pararGravacao(); document.getElementById('voice-sheet').style.display = 'none'; }
+function vozAberta() { return document.getElementById('voice-sheet').style.display === 'flex'; }
+function setVozStatus(txt, cor) { const el = document.getElementById('voice-status'); if (el) { el.innerText = txt || ''; el.style.color = cor || ''; } }
+function atualizarBotaoGravar() {
+  const b = document.getElementById('voice-rec'); if (!b) return;
+  b.classList.toggle('on', vozGravando); b.innerText = vozGravando ? '■ Parar' : '🎙 Falar';
+}
+// O microfone fica aberto até VOCÊ tocar em Parar. O iPhone às vezes encerra sozinho
+// depois de um silêncio: nesse caso o app religa e continua escrevendo no mesmo texto.
+let vozQuerGravar = false;
+let vozReligadas = 0;
+let vozErro = false;       // houve erro de microfone (mantém o aviso na tela)
+function iniciarGravacao() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { setVozStatus('Toque no 🎤 do teclado para ditar.'); document.getElementById('voice-text').focus(); atualizarBotaoGravar(); return; }
+  vozQuerGravar = true; vozGravando = true; vozReligadas = 0; vozErro = false; atualizarBotaoGravar();
+  setVozStatus('🔴 Ouvindo… fale à vontade e toque em Parar quando terminar.', '#ff3b30');
+  ouvirVoz();
+}
+function ouvirVoz() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const caixa = document.getElementById('voice-text');
+  let r;
+  try { r = new SR(); } catch (err) { vozQuerGravar = false; vozGravando = false; atualizarBotaoGravar(); setVozStatus('Use o 🎤 do teclado para ditar.'); caixa.focus(); return; }
+  vozReconhecedor = r;
+  r.lang = 'pt-BR'; r.interimResults = true; r.continuous = true;
+  const base = caixa.value.trim() ? caixa.value.trim() + ' ' : '';
+  r.onresult = (e) => { let s = ''; for (const res of e.results) s += res[0].transcript; caixa.value = base + s.trim(); caixa.scrollTop = caixa.scrollHeight; vozReligadas = 0; };
+  r.onerror = (e) => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return; // silêncio: segue ouvindo
+    vozQuerGravar = false; vozErro = true;
+    setVozStatus(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Microfone bloqueado — toque em Falar de novo, ou use o 🎤 do teclado.' : 'Não consegui ouvir. Toque em Falar de novo, ou use o 🎤 do teclado.', '#ff9500');
+  };
+  r.onend = () => {
+    vozReconhecedor = null;
+    if (vozQuerGravar && vozAberta() && vozReligadas < 20) { vozReligadas++; setTimeout(() => { if (vozQuerGravar) ouvirVoz(); }, 200); return; }
+    vozQuerGravar = false; vozGravando = false; atualizarBotaoGravar();
+    if (!vozErro) setVozStatus('');
+    if (vozModo === 'dados' && vozAberta() && caixa.value.trim()) interpretarVoz();
+  };
+  try { r.start(); }
+  catch (err) { vozQuerGravar = false; vozGravando = false; atualizarBotaoGravar(); setVozStatus('Toque em Falar para continuar, ou use o 🎤 do teclado.', '#ff9500'); }
+}
+function pararGravacao() {
+  vozQuerGravar = false;
+  if (vozReconhecedor) { try { vozReconhecedor.stop(); } catch (e) { } setTimeout(() => { if (!vozQuerGravar && vozGravando) { vozGravando = false; atualizarBotaoGravar(); } }, 1500); }
+  else { vozGravando = false; atualizarBotaoGravar(); }
+}
+function alternarGravacao() { if (vozGravando) pararGravacao(); else { setVozStatus(''); iniciarGravacao(); } }
+
+function interpretarVoz() {
+  const txt = document.getElementById('voice-text').value.trim(); if (!txt) { toast('Fale ou digite primeiro.'); return; }
+  vozResultado = interpretarDitado(txt, abaAtual());
+  document.getElementById('voice-preview').innerHTML = `<div class="voice-card">${vozResultado.resumo.map(([k, v]) => `<div class="voice-row"><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div>`;
+  document.getElementById('voice-actions').innerHTML = `<button type="button" class="btn voice-primary" onclick="aplicarDitado(true)" ${vozResultado.ok ? '' : 'disabled'}>✓ Salvar</button><button type="button" class="btn" onclick="aplicarDitado(false)">✎ Revisar no formulário</button>`;
+}
+
+// --- ✳ Pedidos de mudança no app → Claude no computador (via o GitHub do próprio app) ---
+// Fluxo: você fala → o app abre um "issue" (título começa com ✳) no repositório do app →
+// o Claude Code aberto no computador vigia esses pedidos, faz a mudança, publica e responde no issue:
+//   "⏳ ..." = começou · "🚀 ..." = publicado (issue fechado) · "💬 ..." = precisa de mais detalhes · "⚠️ ..." = erro.
+// Pedido: { id, date, page, text, status, issue, nota, avisado }
+//   status: 'fila' (não enviado) → 'enviado' (esperando o computador) → 'trabalhando' → 'publicado' | 'duvida' | 'erro'
+// Configuração SÓ deste aparelho (não sincroniza): lifeos_claude_config = { repo: 'usuario/Genesis', token }
+// Isolamento: o app só escreve issues no repositório do próprio app.
+let claudeConfig = JSON.parse(localStorage.getItem('lifeos_claude_config')) || { repo: '', token: '' };
+let claudeUltimaConsulta = 0;
+const STATUS_PEDIDO_CLAUDE = {
+  fila:        ['📥', 'guardado — ainda não enviado', '#8e8e93', false],
+  enviado:     ['', 'enviado — esperando o computador', '#007aff', true],
+  trabalhando: ['', 'Claude trabalhando no computador…', '#ff9500', true],
+  publicado:   ['🚀', 'publicado — feche e reabra o app', '#34c759', false],
+  duvida:      ['💬', 'o Claude precisa de mais detalhes', '#af52de', false],
+  erro:        ['⚠️', 'deu erro — peça de novo', '#ff3b30', false]
+};
+const AJUDA_DITADO = `<p><strong>1.</strong> Toque em <strong>🎙 Falar</strong>, fale tudo com calma e toque em <strong>■ Parar</strong>.</p>
+<p><strong>2.</strong> O app mostra o que entendeu. <strong>✓ Salvar</strong> cria na hora; <strong>✎ Revisar</strong> abre o formulário preenchido.</p>
+<p><strong>Comece pelo tipo:</strong> "novo pedido", "orçamento", "novo cliente", "gastei", "recebi", "tarefa", "reunião/compromisso" ou "anota".</p>
+<p><strong>Pedido:</strong> cliente com "do/da/para", quantidade, material e cor, valor em "reais" e prazo ("entrega sexta", "dia 15", "amanhã").</p>`;
+const AJUDA_CLAUDE = `<p><strong>1.</strong> Fale a mudança que quer <em>no app</em> — ex.: "na Primos 3D, adiciona um campo de peso da peça em gramas". Toque em <strong>■ Parar</strong> e depois em <strong>✳ Enviar</strong>.</p>
+<p><strong>2.</strong> O pedido vai para o <strong>Claude no seu computador</strong> (a conversa do Genesis precisa estar aberta no PC). Pode sair desta tela: o símbolo girando no botão ✳ mostra que está em andamento.</p>
+<p><strong>3.</strong> Quando aparecer <strong>🚀 publicado</strong>, feche e reabra o app para ver a mudança.</p>
+<p>Para <em>lançar dados</em> (pedido, cliente, gasto...), use o 🎤 azul — ele faz na hora, sem o computador.</p>`;
+
+function repoPadrao() { const h = location.hostname; if (!h.endsWith('.github.io')) return ''; const seg = location.pathname.split('/').filter(Boolean)[0]; return seg ? `${h.split('.')[0]}/${seg}` : ''; }
+function claudeConfigurado() { return !!(claudeConfig.repo && claudeConfig.token); }
+/** Chamada à API do GitHub, sempre dentro do repositório do app. */
+async function gh(caminho, opcoes = {}) {
+  const r = await fetch(`https://api.github.com/repos/${claudeConfig.repo}${caminho}`, {
+    ...opcoes, cache: 'no-store',
+    headers: { 'Accept': 'application/vnd.github+json', 'Authorization': `Bearer ${claudeConfig.token}`, 'X-GitHub-Api-Version': '2022-11-28', ...(opcoes.body ? { 'Content-Type': 'application/json' } : {}) }
+  });
+  if (!r.ok) { let msg = String(r.status); try { msg += ' ' + (await r.json()).message; } catch (e) { } throw new Error(msg); }
+  return r.status === 204 ? null : r.json();
+}
+
+async function enviarPedidoClaude() {
+  if (vozGravando) { pararGravacao(); await new Promise(ok => setTimeout(ok, 600)); } // espera a última frase chegar
+  const txt = document.getElementById('voice-text').value.trim(); if (!txt) { toast('Fale ou digite o que quer mudar.'); return; }
+  const req = { id: novoId(), date: hojeISO(), page: nomeAbaAtual(), text: txt, status: 'fila' };
+  claudeReqs.unshift(req); salvar('clauderequests', claudeReqs);
+  document.getElementById('voice-text').value = '';
+  if (!claudeConfigurado()) { renderPedidosClaude(); toast('✳ Pedido guardado. Para enviar ao computador, configure em Ajustes → Claude.', 6000); return; }
+  await enviarUmPedido(req); renderPedidosClaude(); atualizarIndicadorClaude();
+}
+async function enviarUmPedido(req) {
+  try {
+    const resumo = req.text.replace(/\s+/g, ' ');
+    const issue = await gh('/issues', { method: 'POST', body: JSON.stringify({ title: '✳ ' + resumo.slice(0, 70) + (resumo.length > 70 ? '…' : ''), body: `**Página do app:** ${req.page}\n\n**Pedido (ditado no app):**\n${req.text}` }) });
+    req.issue = issue.number; req.status = 'enviado'; salvar('clauderequests', claudeReqs);
+    toast('✳ Enviado para o computador! Pode sair desta tela — o ✳ gira enquanto o Claude trabalha.', 6000);
+  } catch (e) { toast(`Não consegui enviar agora (${e.message}). O pedido ficou guardado.`, 6000); }
+}
+async function enviarPendentesClaude() { for (const r of claudeReqs.filter(x => x.status === 'fila')) await enviarUmPedido(r); renderPedidosClaude(); atualizarIndicadorClaude(); }
+function removerPedidoClaude(id) { claudeReqs = claudeReqs.filter(r => r.id !== id); salvar('clauderequests', claudeReqs); renderPedidosClaude(); atualizarIndicadorClaude(); }
+function emAndamentoClaude() { return claudeReqs.some(r => (STATUS_PEDIDO_CLAUDE[r.status] || [])[3]); }
+
+/** Lê no GitHub o andamento dos pedidos enviados (pela última resposta do Claude no issue). */
+async function atualizarClaude(silencioso) {
+  if (!claudeConfigurado()) { atualizarIndicadorClaude(); return; }
+  claudeUltimaConsulta = Date.now();
+  let mudou = false, publicou = false;
+  try {
+    for (const r of claudeReqs.filter(x => x.issue && x.status !== 'publicado').slice(0, 8)) {
+      const is = await gh(`/issues/${r.issue}`);
+      let ultimo = '';
+      if (is.comments > 0) { const coms = await gh(`/issues/${r.issue}/comments?per_page=100`); ultimo = ((coms[coms.length - 1] || {}).body || '').trim(); }
+      const semEmoji = s => s.replace(/^\S+\s*/, '').trim();
+      let novo = 'enviado', nota = '';
+      if (ultimo.startsWith('🚀')) { novo = 'publicado'; nota = semEmoji(ultimo); }
+      else if (is.state === 'closed') novo = 'publicado';
+      else if (ultimo.startsWith('💬')) { novo = 'duvida'; nota = semEmoji(ultimo); }
+      else if (ultimo.startsWith('⚠️')) { novo = 'erro'; nota = semEmoji(ultimo); }
+      else if (ultimo.startsWith('⏳')) novo = 'trabalhando';
+      if (novo !== r.status || nota !== (r.nota || '')) {
+        if (novo === 'publicado' && !r.avisado) { r.avisado = true; publicou = true; }
+        r.status = novo; r.nota = nota; mudou = true;
+      }
+    }
+    if (mudou) salvar('clauderequests', claudeReqs);
+  } catch (e) { if (!silencioso) toast('Claude: ' + e.message, 6000); }
+  if (publicou) toast('🚀 Sua mudança foi publicada! Feche e reabra o app para ver.', 9000);
+  atualizarIndicadorClaude(); renderPedidosClaude();
+}
+
+/** O botão ✳ gira enquanto houver pedido em andamento; ganha um "!" se o Claude pediu detalhes. */
+function atualizarIndicadorClaude() {
+  const b = document.querySelector('.fab-claude'); if (!b) return;
+  b.classList.toggle('trabalhando', emAndamentoClaude());
+  let el = b.querySelector('.fab-badge'); const duvida = claudeReqs.some(r => r.status === 'duvida');
+  if (!duvida) { if (el) el.remove(); return; }
+  if (!el) { el = document.createElement('span'); el.className = 'fab-badge'; b.appendChild(el); }
+  el.innerText = '!';
+}
+function renderPedidosClaude() {
+  const el = document.getElementById('voice-requests'); if (!el) return;
+  if (vozModo !== 'claude') { el.innerHTML = ''; return; }
+  let html = '';
+  if (!claudeConfigurado()) html += `<div class="voice-card" style="padding:12px"><span class="hint" style="margin:0">Para mandar pedidos ao Claude no computador, configure em <strong>Ajustes → ✳ Claude</strong>. Até lá, eles ficam guardados aqui.</span><button type="button" class="btn" style="width:100%; margin-top:10px" onclick="fecharVoz(); changeTab('settings'); document.getElementById('claude-repo').scrollIntoView({ block: 'center' })">Abrir Ajustes</button></div>`;
+  const pend = claudeReqs.filter(r => r.status === 'fila').length;
+  if (claudeReqs.length) {
+    html += `<div style="display:flex; justify-content:space-between; align-items:center"><h4>Seus pedidos</h4>${claudeConfigurado() ? `<span style="display:flex; gap:6px">${pend ? `<button type="button" class="mini-btn" onclick="enviarPendentesClaude()">Enviar ${pend} guardado${pend > 1 ? 's' : ''}</button>` : ''}<button type="button" class="mini-btn" title="Atualizar" onclick="atualizarClaude()">↻</button></span>` : ''}</div>`;
+    html += `<ul class="transaction-list">${claudeReqs.slice(0, 10).map(r => { const s = STATUS_PEDIDO_CLAUDE[r.status] || STATUS_PEDIDO_CLAUDE.fila; return `<li><div class="transaction-info" style="flex:1"><span>${esc(r.text)}</span><small class="item-date">${esc(r.page)} · ${isoParaBR(r.date).slice(0, 5)} · <span style="color:${s[2]}">${s[3] ? '<span class="spin"></span> ' : s[0] + ' '}${s[1]}</span></small>${r.nota ? `<small class="item-notes">${esc(r.nota)}</small>` : ''}</div><div class="item-actions"><button class="mini-btn" title="Tirar da lista" onclick="removerPedidoClaude(${r.id})">✕</button></div></li>`; }).join('')}</ul>`;
+  }
+  el.innerHTML = html;
+}
+
+// Ajustes → ✳ Claude
+function carregarClaudeConfigNaTela() {
+  const r = document.getElementById('claude-repo'); const t = document.getElementById('claude-token');
+  if (r) r.value = claudeConfig.repo || repoPadrao(); if (t) t.value = claudeConfig.token || '';
+  setClaudeStatus(claudeConfigurado() ? '🟢 Configurado neste aparelho.' : '⚪ Não configurado.', claudeConfigurado() ? '#34c759' : '#8e8e93');
+}
+function setClaudeStatus(txt, cor) { const el = document.getElementById('claude-status'); if (el) { el.innerText = txt; el.style.color = cor || ''; } }
+async function salvarClaudeConfig() {
+  const repo = document.getElementById('claude-repo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '');
+  const token = document.getElementById('claude-token').value.trim();
+  if (repo && !/^[\w.-]+\/[\w.-]+$/.test(repo)) { alert('O repositório deve ser no formato usuario/nome — ex.: fulano/Genesis'); return; }
+  claudeConfig = { repo, token };
+  localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); // configuração do aparelho, como a da sincronização (não é dado do app)
+  if (!claudeConfigurado()) { setClaudeStatus('⚪ Não configurado.', '#8e8e93'); return; }
+  setClaudeStatus('🔄 Testando...', '#007aff');
+  try { const info = await gh(''); await gh('/issues?per_page=1'); setClaudeStatus(`🟢 Conectado a ${info.full_name}. Já pode usar o botão ✳.`, '#34c759'); atualizarClaude(true); }
+  catch (e) { setClaudeStatus('🔴 Não conectou: ' + e.message + ' — confira o token e as permissões.', '#ff3b30'); }
+}
+// confere o andamento ao abrir o app, ao voltar pra ele e a cada 20 s enquanto houver pedido em andamento
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - claudeUltimaConsulta > 15000) atualizarClaude(true); });
+setInterval(() => { if (document.visibilityState === 'visible' && claudeConfigurado() && emAndamentoClaude()) atualizarClaude(true); }, 20000);
+document.getElementById('voice-sheet').addEventListener('click', (e) => { if (e.target.id === 'voice-sheet') fecharVoz(); });
+
+
+// --- Entregas × pedidos da Primos 3D ---
+// Na versão da Trinca, as compras a caminho ficavam no módulo `orders`; aqui `orders` são os pedidos da
+// Primos 3D e as compras viraram `entregas`. Entrega tem "item" (e loja/rastreio/previsão); pedido tem "title".
+function ehEntrega(o) { return !!o && typeof o === 'object' && o.item !== undefined && o.title === undefined; }
+function separarEntregasDePedidos(lista) { const ent = [], ped = []; (lista || []).forEach(o => (ehEntrega(o) ? ent : ped).push(o)); return [ent, ped]; }
+/** Se este aparelho usou a versão da Trinca, alguma entrega pode ter ido parar em `orders`: devolve para `entregas`. */
+function migrarEntregasDePedidos() {
+  const [ent, ped] = separarEntregasDePedidos(orders); if (!ent.length) return false;
+  entregas = entregas.concat(ent.filter(e => !entregas.some(x => x.id === e.id))); orders = ped;
+  salvar('entregas', entregas); salvar('orders', orders); return true;
+}
+
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, orders, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.orders) salvar('orders', data.orders); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -4219,7 +4916,7 @@ function renderAnexoModal() {
     ? lista.map((a, k) => `<li><div class="transaction-info" style="flex:1"><span>${a.tipo === 'img' ? '🖼️' : iconeDoLink(a.url || '')} ${esc(a.nome || a.url || 'anexo')}</span>
         <small class="item-date">${a.tipo === 'img' ? (imgPorId(a.imgId) ? 'imagem neste aparelho' : '⚠️ enviada noutro aparelho — aqui não aparece') : 'link'}</small></div>
         <div class="item-actions"><button class="mini-btn" title="Abrir" onclick="abrirAnexo(${k})">↗</button><button class="mini-btn" title="Tirar" onclick="removerAnexo(${k})">✕</button></div></li>`).join('')
-    : '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum anexo ainda.</li>';
+    : '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum anexo ainda.</li>';
   const info = document.getElementById('anexo-espaco');
   if (info) info.innerText = `Imagens guardadas neste aparelho: ${tamanhoImgs()} KB de ${IMGS_KB_TOTAL} KB.`;
 }
@@ -4594,7 +5291,7 @@ const PAINEIS = {
   musica:   { ic: '🎵', nome: 'Música' },
   dev:      { ic: '🛠️', nome: 'Ajustes' }
 };
-const FLUT_PADRAO = { ligado: true, celular: false, largura: 310, ativos: ['notas'], pos: {}, encolhidos: [], nota: null };
+const FLUT_PADRAO = { ligado: false, celular: false, largura: 310, ativos: ['notas'], pos: {}, encolhidos: [], nota: null };
 /** Devolve SEMPRE o mesmo objeto (preenchendo o que faltar), nunca uma cópia:
  *  com cópia, um `cfgFlut().x = 1` se perderia na chamada seguinte. */
 function cfgFlut() {
@@ -4604,6 +5301,7 @@ function cfgFlut() {
     const p = FLUT_PADRAO[k];
     c[k] = Array.isArray(p) ? p.slice() : (p && typeof p === 'object' ? {} : p);
   });
+  c.ligado = false; // Genesis do Rafael: janelas flutuantes desligadas de vez (pedido de 29/09/2026) — a tela fica só com a página
   return c;
 }
 function gravarFlut() { localStorage.setItem('lifeos_prefs', JSON.stringify(prefs)); }
@@ -4905,12 +5603,12 @@ const TIPOS_SERVICO = {
   pacote:       ['📦', 'Pacote de sessões']
 };
 const ETAPAS = {
-  lead:      ['🌱', 'Lead', '#94a3b8', 'Chegou o contato'],
-  avaliacao: ['🗣️', 'Avaliação', '#38bdf8', 'Vai passar por avaliação'],
-  agendado:  ['📅', 'Agendado', '#fbbf24', 'Data marcada'],
-  feito:     ['✅', 'Feito', '#22c55e', 'Executado e faturado'],
-  retorno:   ['🔄', 'Retorno', '#a78bfa', 'Acompanhamento'],
-  perdido:   ['✖️', 'Perdido', '#ef4444', 'Não fechou']
+  lead:      ['🌱', 'Lead', '#8e8e93', 'Chegou o contato'],
+  avaliacao: ['🗣️', 'Avaliação', '#007aff', 'Vai passar por avaliação'],
+  agendado:  ['📅', 'Agendado', '#e0a800', 'Data marcada'],
+  feito:     ['✅', 'Feito', '#34c759', 'Executado e faturado'],
+  retorno:   ['🔄', 'Retorno', '#af52de', 'Acompanhamento'],
+  perdido:   ['✖️', 'Perdido', '#ff3b30', 'Não fechou']
 };
 const ORDEM_ETAPAS = ['lead', 'avaliacao', 'agendado', 'feito', 'retorno'];
 const ORIGENS = ['Indicação', 'Instagram', 'Google', 'WhatsApp', 'Passou na frente', 'Parceria', 'Outro'];
@@ -4970,14 +5668,14 @@ function removerServico(id) {
 }
 function renderServicos() {
   const ul = document.getElementById('serv-lista'); if (!ul) return;
-  if (!servicos.length) { ul.innerHTML = '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhum serviço ainda. Cadastre o que a clínica vende, com preço <em>e</em> custo — a margem sai sozinha.</li>'; return; }
+  if (!servicos.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum serviço ainda. Cadastre o que a clínica vende, com preço <em>e</em> custo — a margem sai sozinha.</li>'; return; }
   ul.innerHTML = [...servicos].sort((a, b) => (b.preco || 0) - (a.preco || 0)).map(s => {
     const m = margemServico(s); const t = TIPOS_SERVICO[s.tipo] || TIPOS_SERVICO.procedimento;
     const off = s.ativo === false;
     return `<li style="${off ? 'opacity:0.45' : ''}"><div class="transaction-info" style="flex:1">
       <span>${t[0]} ${esc(s.nome)}${off ? ' <small class="item-date">(fora do catálogo)</small>' : ''}</span>
       <small class="item-date">${esc(t[1])}${s.tipo === 'pacote' ? ` · ${s.sessoes || 1} sessões · ${formatCurrency(precoPorSessao(s))}/sessão` : ''}${s.comissaoPct ? ` · comissão ${s.comissaoPct}%` : ''}</small>
-      <small class="item-notes">💰 ${formatCurrency(s.preco)} − custo ${formatCurrency(s.custo || 0)}${m.comissao ? ' − comissão ' + formatCurrency(m.comissao) : ''} = <strong style="color:${m.lucro >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(m.lucro)}</strong> <span class="margem-pct">(${m.pct}%)</span></small>
+      <small class="item-notes">💰 ${formatCurrency(s.preco)} − custo ${formatCurrency(s.custo || 0)}${m.comissao ? ' − comissão ' + formatCurrency(m.comissao) : ''} = <strong style="color:${m.lucro >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(m.lucro)}</strong> <span class="margem-pct">(${m.pct}%)</span></small>
       ${s.notas ? `<small class="item-notes">${esc(s.notas)}</small>` : ''}</div>
       <div class="item-actions"><button class="mini-btn ${off ? '' : 'on'}" title="${off ? 'Voltar ao catálogo' : 'Tirar do catálogo'}" onclick="alternarServicoAtivo(${s.id})">${off ? '▶' : '⏸'}</button><button class="mini-btn" title="Editar" onclick="editarServico(${s.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerServico(${s.id})">✕</button></div></li>`;
   }).join('');
@@ -5127,14 +5825,14 @@ function renderRepasses() {
   const aberto = repasses.filter(r => !r.pago);
   const info = document.getElementById('repasse-resumo');
   if (info) info.innerHTML = aberto.length
-    ? `<span>💸 A repassar: <strong style="color:#ef4444">${formatCurrency(aberto.reduce((a, r) => a + r.valor, 0))}</strong> (${aberto.length})</span>`
+    ? `<span>💸 A repassar: <strong style="color:#ff3b30">${formatCurrency(aberto.reduce((a, r) => a + r.valor, 0))}</strong> (${aberto.length})</span>`
     : '<span>Nenhuma comissão em aberto.</span>';
   const lista = [...repasses].sort((a, b) => (a.pago === b.pago ? b.criadoEm - a.criadoEm : a.pago ? 1 : -1));
   el.innerHTML = lista.length ? lista.map(r => `<li style="${r.pago ? 'opacity:0.55' : ''}"><div class="transaction-info" style="flex:1">
       <span>👤 ${esc(r.pessoa)}${r.pago ? ` <span class="badge-paid">pago ${r.pagoEm ? isoParaBR(r.pagoEm).slice(0, 5) : ''}</span>` : ' <span class="badge-topay">a repassar</span>'}</span>
       <small class="item-date">${esc(r.servicoNome || '')} · ${r.pct}% de ${formatCurrency(r.base)}</small></div>
-      <div class="item-actions"><strong style="margin-right:6px; color:#ef4444">${formatCurrency(r.valor)}</strong><button class="mini-btn ${r.pago ? 'on' : ''}" title="${r.pago ? 'Desfazer' : 'Pagar e lançar em Finanças'}" onclick="pagarRepasse(${r.id})">💵</button></div></li>`).join('')
-    : '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Comissões aparecem aqui quando um serviço com % é marcado como feito e tem responsável.</li>';
+      <div class="item-actions"><strong style="margin-right:6px; color:#ff3b30">${formatCurrency(r.valor)}</strong><button class="mini-btn ${r.pago ? 'on' : ''}" title="${r.pago ? 'Desfazer' : 'Pagar e lançar em Finanças'}" onclick="pagarRepasse(${r.id})">💵</button></div></li>`).join('')
+    : '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Comissões aparecem aqui quando um serviço com % é marcado como feito e tem responsável.</li>';
 }
 
 // --- painel da clínica ------------------------------------------------------
@@ -5156,12 +5854,12 @@ function renderPainelClinica() {
   const ym = hojeISO().slice(0, 7); const i = indicadoresClinica(ym);
   const tile = (ic, v, r, cor) => `<div class="stat-tile"><span class="stat-icon">${ic}</span><strong style="color:${cor || 'var(--txt-forte)'}">${v}</strong><small>${r}</small></div>`;
   el.innerHTML = `<div class="stat-grid">
-      ${tile('💰', formatCurrency(i.faturamento), `faturado em ${nomeMes(ym).toLowerCase()}`, '#22c55e')}
-      ${tile('🎯', formatCurrency(i.lucro), 'depois de custo e comissão', i.lucro >= 0 ? '#22c55e' : '#ef4444')}
+      ${tile('💰', formatCurrency(i.faturamento), `faturado em ${nomeMes(ym).toLowerCase()}`, '#34c759')}
+      ${tile('🎯', formatCurrency(i.lucro), 'depois de custo e comissão', i.lucro >= 0 ? '#34c759' : '#ff3b30')}
       ${tile('🧾', formatCurrency(i.ticket), `ticket médio · ${plural(i.doMes.length, 'atendimento', 'atendimentos')}`)}
       ${tile('📈', i.conversao + '%', 'do funil vira atendimento')}
-      ${tile('🔮', formatCurrency(i.pipeline), 'em negociação agora', '#38bdf8')}
-      ${tile('⏳', formatCurrency(i.aReceber), 'feito e ainda não recebido', i.aReceber ? '#f59e0b' : undefined)}
+      ${tile('🔮', formatCurrency(i.pipeline), 'em negociação agora', '#007aff')}
+      ${tile('⏳', formatCurrency(i.aReceber), 'feito e ainda não recebido', i.aReceber ? '#bf8700' : undefined)}
     </div>`;
   // por serviço e por origem
   const porServico = {}; const porOrigem = {};
@@ -5177,8 +5875,8 @@ function renderPainelClinica() {
   };
   const det = document.getElementById('clinica-detalhe');
   if (det) det.innerHTML = `<div class="stat-lists">
-    <div><h5>✨ Faturamento por serviço (mês)</h5>${barras(porServico, '#22c55e', true)}</div>
-    <div><h5>🌱 De onde vêm as pessoas</h5>${barras(porOrigem, '#38bdf8', false)}</div></div>`;
+    <div><h5>✨ Faturamento por serviço (mês)</h5>${barras(porServico, '#34c759', true)}</div>
+    <div><h5>🌱 De onde vêm as pessoas</h5>${barras(porOrigem, '#007aff', false)}</div></div>`;
 }
 
 // --- a aba ------------------------------------------------------------------
@@ -5268,12 +5966,12 @@ const MATERIAIS = {
   tpu:   ['🟣', 'TPU'],    resina: ['🟡', 'Resina'], outro: ['⚪', 'Outro']
 };
 const STATUS_ORDEM = {
-  fila:      ['📋', 'Na fila', '#94a3b8'],
-  imprimindo:['🖨️', 'Imprimindo', '#38bdf8'],
-  acabamento:['🧽', 'Acabamento', '#fbbf24'],
-  pronto:    ['📦', 'Pronto', '#22c55e'],
-  entregue:  ['🚚', 'Entregue', '#64748b'],
-  falhou:    ['💥', 'Falhou', '#ef4444']
+  fila:      ['📋', 'Na fila', '#8e8e93'],
+  imprimindo:['🖨️', 'Imprimindo', '#007aff'],
+  acabamento:['🧽', 'Acabamento', '#e0a800'],
+  pronto:    ['📦', 'Pronto', '#34c759'],
+  entregue:  ['🚚', 'Entregue', '#8e8e93'],
+  falhou:    ['💥', 'Falhou', '#ff3b30']
 };
 const FLUXO_ORDEM = ['fila', 'imprimindo', 'acabamento', 'pronto', 'entregue'];
 // Taxa média de cada canal — o usuário pode mudar em cada venda.
@@ -5322,7 +6020,7 @@ function renderMaquinas() {
       <span>🖨️ ${esc(m.nome)}${alerta ? ' <span class="badge-topay">manutenção</span>' : ''}</span>
       <small class="item-date">${m.potenciaW || 0} W · ${formatCurrency(ch)}/h${m.manutencaoCadaH ? ` · ${Math.round(m.horasRodadas || 0)}h rodadas (revisar a cada ${m.manutencaoCadaH}h)` : ` · ${Math.round(m.horasRodadas || 0)}h rodadas`}</small></div>
       <div class="item-actions">${alerta ? `<button class="mini-btn" title="Marcar manutenção feita" onclick="manutencaoFeita(${m.id})">🔧</button>` : ''}<button class="mini-btn" title="Editar" onclick="editarMaquina(${m.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMaquina(${m.id})">✕</button></div></li>`;
-  }).join('') : '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Nenhuma impressora. Cadastre uma para o custo por hora entrar no preço.</li>';
+  }).join('') : '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhuma impressora. Cadastre uma para o custo por hora entrar no preço.</li>';
 }
 function manutencaoFeita(id) {
   const m = maquinaPorId(id); if (!m) return;
@@ -5369,9 +6067,9 @@ function renderFilamentos() {
     return `<li><div class="transaction-info" style="flex:1">
       <span>${mat[0]} ${esc(nomeFilamento(f))}${f.marca ? ` <small class="item-date">${esc(f.marca)}</small>` : ''}${baixo ? ' <span class="badge-topay">acabando</span>' : ''}</span>
       <small class="item-date">${Math.round(Number(f.gramasRestantes) || 0)} g de ${f.gramasRolo || 1000} g · ${formatCurrency(custoPorGrama(f) * 1000)}/kg</small>
-      <div class="cat-bar" style="margin-top:4px"><div style="width:${pct}%; background:${baixo ? '#ef4444' : '#22c55e'}"></div></div></div>
+      <div class="cat-bar" style="margin-top:4px"><div style="width:${pct}%; background:${baixo ? '#ff3b30' : '#34c759'}"></div></div></div>
       <div class="item-actions"><button class="mini-btn" title="Repor o rolo (volta ao cheio)" onclick="reporFilamento(${f.id})">↻</button><button class="mini-btn" title="Editar" onclick="editarFilamento(${f.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerFilamento(${f.id})">✕</button></div></li>`;
-  }).join('') : '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Cadastre os rolos: é daqui que sai o custo por grama de cada peça.</li>';
+  }).join('') : '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Cadastre os rolos: é daqui que sai o custo por grama de cada peça.</li>';
 }
 function reporFilamento(id) {
   const f = filamentoPorId(id); if (!f) return;
@@ -5455,7 +6153,7 @@ function previaCusto() {
   };
   const c = custoProduto(p);
   if (!c.total) { el.innerHTML = ''; return; }
-  el.innerHTML = `🧵 ${formatCurrency(c.filamento)} + 🖨️ ${formatCurrency(c.maquina)} + 🧽 ${formatCurrency(c.mao)}${c.extra ? ' + ➕ ' + formatCurrency(c.extra) : ''} = <strong>${formatCurrency(c.total)}</strong> de custo · sugerido <strong style="color:#22c55e">${formatCurrency(precoSugerido(p))}</strong>`;
+  el.innerHTML = `🧵 ${formatCurrency(c.filamento)} + 🖨️ ${formatCurrency(c.maquina)} + 🧽 ${formatCurrency(c.mao)}${c.extra ? ' + ➕ ' + formatCurrency(c.extra) : ''} = <strong>${formatCurrency(c.total)}</strong> de custo · sugerido <strong style="color:#34c759">${formatCurrency(precoSugerido(p))}</strong>`;
 }
 function renderProdutos() {
   const ul = document.getElementById('prd-lista'); if (!ul) return;
@@ -5465,9 +6163,9 @@ function renderProdutos() {
     return `<li style="${p.ativo === false ? 'opacity:0.45' : ''}"><div class="transaction-info" style="flex:1">
       <span>🧩 ${esc(p.nome)}</span>
       <small class="item-date">${p.gramas || 0} g · ${p.horas || 0}h de máquina${p.minAcabamento ? ' · ' + p.minAcabamento + ' min de acabamento' : ''}</small>
-      <small class="item-notes">custo <strong>${formatCurrency(c.total)}</strong> · vende a <strong>${formatCurrency(preco)}</strong> · sobra <strong style="color:${lucro >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(lucro)}</strong> <span class="margem-pct">(${pct}%)</span></small></div>
+      <small class="item-notes">custo <strong>${formatCurrency(c.total)}</strong> · vende a <strong>${formatCurrency(preco)}</strong> · sobra <strong style="color:${lucro >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(lucro)}</strong> <span class="margem-pct">(${pct}%)</span></small></div>
       <div class="item-actions"><button class="mini-btn" title="Mandar para a fila" onclick="ordemDoProduto(${p.id})">▶</button><button class="mini-btn" title="Editar" onclick="editarProduto(${p.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerProduto(${p.id})">✕</button></div></li>`;
-  }).join('') : '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">Cadastre uma peça com gramas e horas — o app calcula o custo e sugere o preço.</li>';
+  }).join('') : '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Cadastre uma peça com gramas e horas — o app calcula o custo e sugere o preço.</li>';
 }
 function editarProduto(id) {
   const p = produtoPorId(id); if (!p) return;
@@ -5585,7 +6283,7 @@ function previaVenda() {
   if (!v.preco) { el.innerHTML = ''; return; }
   const r = liquidoVenda(v);
   const pct = r.bruto > 0 ? Math.round(r.liquido / r.bruto * 100) : 0;
-  el.innerHTML = `${formatCurrency(r.bruto)} − taxa ${formatCurrency(r.taxa)} − frete ${formatCurrency(r.frete)} − custo ${formatCurrency(r.custo)} = <strong style="color:${r.liquido >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(r.liquido)}</strong> <span class="margem-pct">(${pct}% do que o cliente pagou)</span>`;
+  el.innerHTML = `${formatCurrency(r.bruto)} − taxa ${formatCurrency(r.taxa)} − frete ${formatCurrency(r.frete)} − custo ${formatCurrency(r.custo)} = <strong style="color:${r.liquido >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(r.liquido)}</strong> <span class="margem-pct">(${pct}% do que o cliente pagou)</span>`;
 }
 function removerVenda(id) {
   const v = vendas.find(x => x.id === id); if (!v || !confirm('Apagar esta venda? O lançamento em Finanças sai junto.')) return;
@@ -5602,7 +6300,7 @@ function renderVendas() {
   const somaB = doMes.reduce((a, v) => a + liquidoVenda(v).bruto, 0);
   const r = document.getElementById('vnd-resumo');
   if (r) r.innerHTML = doMes.length
-    ? `<span>🧾 Vendido no mês: <strong>${formatCurrency(somaB)}</strong> (${doMes.length})</span><span>💚 Sobrou de verdade: <strong style="color:${somaL >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(somaL)}</strong></span>`
+    ? `<span>🧾 Vendido no mês: <strong>${formatCurrency(somaB)}</strong> (${doMes.length})</span><span>💚 Sobrou de verdade: <strong style="color:${somaL >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(somaL)}</strong></span>`
     : '<span>Nenhuma venda neste mês.</span>';
   ul.innerHTML = vendas.length ? [...vendas].sort((a, b) => (b.data || '').localeCompare(a.data || '')).slice(0, 30).map(v => {
     const p = produtoPorId(v.produtoId); const pl = PLATAFORMAS[v.plataforma] || PLATAFORMAS.direto;
@@ -5610,8 +6308,8 @@ function renderVendas() {
     return `<li><div class="transaction-info" style="flex:1">
       <span>${pl[0]} ${esc(p ? p.nome : 'produto apagado')}${v.qtd > 1 ? ` ×${v.qtd}` : ''}</span>
       <small class="item-date">${esc(pl[1])} · ${isoParaBR(v.data)} · bruto ${formatCurrency(c.bruto)} − taxa ${formatCurrency(c.taxa)} − frete ${formatCurrency(c.frete)} − custo ${formatCurrency(c.custo)}</small></div>
-      <div class="item-actions"><strong style="margin-right:6px; color:${c.liquido >= 0 ? '#22c55e' : '#ef4444'}">${formatCurrency(c.liquido)}</strong><button class="mini-btn" title="Apagar" onclick="removerVenda(${v.id})">✕</button></div></li>`;
-  }).join('') : '<li style="justify-content:center; color:#64748b; background:transparent; border:none;">As vendas entram aqui com taxa e frete descontados.</li>';
+      <div class="item-actions"><strong style="margin-right:6px; color:${c.liquido >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(c.liquido)}</strong><button class="mini-btn" title="Apagar" onclick="removerVenda(${v.id})">✕</button></div></li>`;
+  }).join('') : '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">As vendas entram aqui com taxa e frete descontados.</li>';
 }
 
 // --- painel -----------------------------------------------------------------
@@ -5631,11 +6329,11 @@ function renderPainelProducao() {
   const tile = (ic, v, r, cor) => `<div class="stat-tile"><span class="stat-icon">${ic}</span><strong style="color:${cor || 'var(--txt-forte)'}">${v}</strong><small>${r}</small></div>`;
   el.innerHTML = `<div class="stat-grid">
     ${tile('🧾', formatCurrency(bruto), `vendido em ${nomeMes(ym).toLowerCase()}`)}
-    ${tile('💚', formatCurrency(liquido), 'sobrou depois de tudo', liquido >= 0 ? '#22c55e' : '#ef4444')}
-    ${tile('✂️', formatCurrency(taxas), 'foi em taxa e frete', taxas ? '#f59e0b' : undefined)}
-    ${tile('📋', naFila.length, `na fila · ${horasFila.toFixed(1)}h de máquina`, '#38bdf8')}
-    ${tile('🧵', (estoque / 1000).toFixed(2) + ' kg', acabando ? `${plural(acabando, 'rolo acabando', 'rolos acabando')}` : 'de filamento', acabando ? '#ef4444' : undefined)}
-    ${tile('💥', taxaFalha + '%', `de falha · ${plural(falhas, 'perda', 'perdas')}`, taxaFalha > 15 ? '#ef4444' : undefined)}
+    ${tile('💚', formatCurrency(liquido), 'sobrou depois de tudo', liquido >= 0 ? '#34c759' : '#ff3b30')}
+    ${tile('✂️', formatCurrency(taxas), 'foi em taxa e frete', taxas ? '#bf8700' : undefined)}
+    ${tile('📋', naFila.length, `na fila · ${horasFila.toFixed(1)}h de máquina`, '#007aff')}
+    ${tile('🧵', (estoque / 1000).toFixed(2) + ' kg', acabando ? `${plural(acabando, 'rolo acabando', 'rolos acabando')}` : 'de filamento', acabando ? '#ff3b30' : undefined)}
+    ${tile('💥', taxaFalha + '%', `de falha · ${plural(falhas, 'perda', 'perdas')}`, taxaFalha > 15 ? '#ff3b30' : undefined)}
   </div>`;
   // lucro por produto no mês
   const porProduto = {};
@@ -5647,7 +6345,7 @@ function renderPainelProducao() {
   const itens = Object.entries(porProduto).sort((a, b) => b[1] - a[1]);
   const total = itens.reduce((a, [, x]) => a + Math.abs(x), 0);
   if (det) det.innerHTML = `<div class="stat-lists"><div><h5>🧩 O que deu lucro este mês</h5>${
-    itens.length ? itens.map(([k, x]) => `<div class="cat-row"><span class="cat-name">${esc(k)}</span><div class="cat-bar"><div style="width:${total ? Math.round(Math.abs(x) / total * 100) : 0}%; background:${x >= 0 ? '#22c55e' : '#ef4444'}"></div></div><span class="cat-val">${formatCurrency(x)}</span></div>`).join('')
+    itens.length ? itens.map(([k, x]) => `<div class="cat-row"><span class="cat-name">${esc(k)}</span><div class="cat-bar"><div style="width:${total ? Math.round(Math.abs(x) / total * 100) : 0}%; background:${x >= 0 ? '#34c759' : '#ff3b30'}"></div></div><span class="cat-val">${formatCurrency(x)}</span></div>`).join('')
       : '<div class="stat-line muted">nenhuma venda ainda</div>'}</div></div>`;
 }
 
@@ -5803,7 +6501,7 @@ if (_vndProd) _vndProd.addEventListener('change', previaVenda);
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'orders', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -5932,7 +6630,9 @@ function redesenharTudo() {
   tasks = (JSON.parse(localStorage.getItem('lifeos_tasks')) || []).map(t => typeof t === 'string' ? { text: t, done: false } : t);
   tasklists = JSON.parse(localStorage.getItem('lifeos_tasklists')) || tasklists; normalizarTarefas();
   routines = JSON.parse(localStorage.getItem('lifeos_routines')) || [];
-  orders = JSON.parse(localStorage.getItem('lifeos_orders')) || [];
+  entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || [];
+  orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
+  claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || [];
   media = JSON.parse(localStorage.getItem('lifeos_media')) || []; playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || [];
   trips = JSON.parse(localStorage.getItem('lifeos_trips')) || []; contacts = JSON.parse(localStorage.getItem('lifeos_contacts')) || [];
   devnotes = JSON.parse(localStorage.getItem('lifeos_devnotes')) || {};
@@ -5945,6 +6645,7 @@ function redesenharTudo() {
   assets = JSON.parse(localStorage.getItem('lifeos_assets')) || []; moves = JSON.parse(localStorage.getItem('lifeos_moves')) || []; goals = JSON.parse(localStorage.getItem('lifeos_goals')) || []; projects = JSON.parse(localStorage.getItem('lifeos_projects')) || []; wealth = JSON.parse(localStorage.getItem('lifeos_wealth')) || wealth;
   workouts = JSON.parse(localStorage.getItem('lifeos_workouts')) || []; measures = JSON.parse(localStorage.getItem('lifeos_measures')) || []; hydration = JSON.parse(localStorage.getItem('lifeos_hydration')) || hydration; meals = JSON.parse(localStorage.getItem('lifeos_meals')) || []; medical = JSON.parse(localStorage.getItem('lifeos_medical')) || [];
   profile = JSON.parse(localStorage.getItem('lifeos_profile')) || profile; aplicarPerfil();
+  renderPrimos(); renderPedidosClaude(); atualizarIndicadorClaude();
   renderFocusTab(); preencherLocais(); renderShifts(); renderEvents(); updateFinanceValues(); renderFinances(); renderRecorrentes(); renderOrcamento(); renderTaskLists(); renderTasks(); renderRotinas(); renderNotes(); renderEntregas(); redesenharEstudos(); redesenharNegocios(); renderSaude(); renderAvisos(); updateStudyStats(); renderJournal(); atualizarSaudacao();
 }
 
@@ -5953,7 +6654,7 @@ function setAgendaStatus(estado, texto) {
   localStorage.setItem('lifeos_agenda_status', JSON.stringify({ estado, texto, quando: Date.now() }));
   const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   el.innerText = (estado === 'ok' ? '📆 Google Agenda ' + hora + ': ' : '📆 Google Agenda — erro: ') + texto;
-  el.style.color = estado === 'ok' ? '#22c55e' : '#ef4444';
+  el.style.color = estado === 'ok' ? '#34c759' : '#ff3b30';
 }
 function enviarAgendaAgora() {
   if (!syncConfig.agenda) { toast('Marque "Enviar para o Google Calendar" e clique em Salvar e testar primeiro.'); return; }
@@ -5965,12 +6666,12 @@ function setSyncStatus(estado, detalhe) {
   const ultima = localStorage.getItem('lifeos_sync_ultima');
   const hora = ultima ? new Date(Number(ultima)).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '';
   const mapa = {
-    naoconfig: ['⚪', 'Sincronização não configurada — preencha URL e token abaixo.', '#64748b'],
-    andamento: ['🔄', 'Sincronizando...', '#38bdf8'],
-    ok:        ['🟢', 'Sincronizado' + (hora ? ' às ' + hora : '') + ' · automático a cada 30 s', '#22c55e'],
-    pendente:  ['🟡', 'Alterações pendentes' + (hora ? ' (último sync ' + hora + ')' : ''), '#f59e0b'],
-    offline:   ['🔴', 'Offline — vai sincronizar quando a internet voltar.', '#ef4444'],
-    erro:      ['🔴', 'Erro: ' + (detalhe || 'falha na sincronização'), '#ef4444']
+    naoconfig: ['⚪', 'Sincronização não configurada — preencha URL e token abaixo.', '#8e8e93'],
+    andamento: ['🔄', 'Sincronizando...', '#007aff'],
+    ok:        ['🟢', 'Sincronizado' + (hora ? ' às ' + hora : '') + ' · automático a cada 30 s', '#34c759'],
+    pendente:  ['🟡', 'Alterações pendentes' + (hora ? ' (último sync ' + hora + ')' : ''), '#bf8700'],
+    offline:   ['🔴', 'Offline — vai sincronizar quando a internet voltar.', '#ff3b30'],
+    erro:      ['🔴', 'Erro: ' + (detalhe || 'falha na sincronização'), '#ff3b30']
   };
   const [icone, texto, cor] = mapa[estado] || mapa.naoconfig;
   if (el) { el.innerText = icone + ' ' + texto; el.style.color = cor; }
@@ -6003,7 +6704,7 @@ function carregarSyncConfigNaTela() {
   if (t) t.value = syncConfig.token || '';
   const a = document.getElementById('sync-agenda'); if (a) a.checked = !!syncConfig.agenda;
   const st = JSON.parse(localStorage.getItem('lifeos_agenda_status') || 'null'); const el = document.getElementById('agenda-status');
-  if (st && el) { el.innerText = (st.estado === 'ok' ? '📆 Google Agenda ' + new Date(st.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ': ' : '📆 Google Agenda — erro: ') + st.texto; el.style.color = st.estado === 'ok' ? '#22c55e' : '#ef4444'; }
+  if (st && el) { el.innerText = (st.estado === 'ok' ? '📆 Google Agenda ' + new Date(st.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + ': ' : '📆 Google Agenda — erro: ') + st.texto; el.style.color = st.estado === 'ok' ? '#34c759' : '#ff3b30'; }
 }
 
 // Gatilhos automáticos: voltou a internet / voltou pro app (celular) / a cada 30 s com o app visível
@@ -6029,7 +6730,7 @@ renderOrcamento();
 renderViagens(); renderRede();
 redesenharLazer(); verSecaoLazer('midia');
 ['play', 'pause', 'timeupdate', 'ended', 'loadedmetadata'].forEach(ev => document.getElementById('audio-player').addEventListener(ev, atualizarMiniPlayer));
-renderEntregas();
+renderEntregas(); migrarEntregasDePedidos(); renderPrimos();
 preencherFreqs(); camposPorFrequencia(); gerarRotinas(true); renderRotinas();
 aplicarAparencia(); renderArte(); setInterval(updateMainClock, 1000); updateMainClock();
 carregarAvisosNaTela(); verificarAvisos();
@@ -6037,5 +6738,6 @@ montarPaineis(); renderConfigFlut();
 verSecaoAgenda('cal'); document.getElementById('event-type').addEventListener('change', alternarCamposReuniao);
 document.getElementById('session-date').value = hojeISO(); garantirRitual(); redesenharEstudos(); ['workout-date', 'measure-date', 'meal-date'].forEach(i => document.getElementById(i).value = hojeISO()); renderSaude(); document.getElementById('move-date').value = hojeISO(); document.getElementById('asset-current-at').value = hojeISO(); redesenharNegocios(); renderEvents(); renderCalendar();
 aplicarPerfil(); carregarPrefsNaTela(); atualizarSaudacao(); atualizarBotaoDia();
-if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStorage.setItem('lifeos_perfil_avisado', '1'); setTimeout(() => toast('👤 Bem-vindo ao Genesis! Coloque seu nome em ⚙️ Config → Perfil.', 8000), 1500); }
+if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStorage.setItem('lifeos_perfil_avisado', '1'); setTimeout(() => toast('👤 Bem-vindo ao Genesis! Coloque seu nome em Ajustes → Perfil.', 8000), 1500); }
+carregarClaudeConfigNaTela(); atualizarIndicadorClaude(); atualizarClaude(true);
 carregarSyncConfigNaTela(); setSyncStatus(syncConfigurado() ? (syncPendente ? "pendente" : "ok") : "naoconfig"); sincronizar();

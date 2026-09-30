@@ -783,6 +783,11 @@ body[data-abas="lateral"] .aba-cfg-btn { top: 14px; right: 14px; }
 .jan-sep { width: 1px; height: 18px; background: var(--borda2); margin: 0 3px; }
 
 /* ===== modais que se movem e se redimensionam ===== */
+/* Janelas .modal (anexos, lupa, ajustes da aba): escondidas até o JS abrir com display:flex.
+   Faltava esta regra na versão da Trinca — sem ela as três janelas apareciam dentro da página
+   e empurravam o conteúdo para o canto (o "dashboard deslocado"). */
+.modal { display: none; position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.55); z-index: 1000; justify-content: center; align-items: center; padding: 20px; }
+.modal > .modal-content { max-height: 88vh; overflow-y: auto; }
 .modal-grip { display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 7px 10px 7px 13px; background: var(--bg2); border-bottom: 1px solid var(--borda);
   border-radius: 14px 14px 0 0; cursor: grab; touch-action: none; user-select: none;
@@ -834,3 +839,499 @@ body[data-cores="neutro"] .pf-arte, body[data-cores="neutro"] .life-os-banner { 
   font-size: 0.75rem; padding: 4px 11px; border-radius: 8px; cursor: pointer; margin-top: 2px; }
 .ed-add:hover { color: var(--txt-forte); border-color: var(--acento); }
 @media (max-width: 800px) { .ed-tools { opacity: 0.55; } }
+
+/* ============================================================================
+   TEMA iOS (padrão deste Genesis) — branco estilo iPhone
+   1) paleta do iOS nas variáveis do sistema de temas; 2) ajustes do tema claro
+   para os componentes da versão da Trinca; 3) o visual iOS completo (cartões,
+   controles segmentados, títulos grandes, barra de abas embaixo no celular),
+   que só vale com o tema iOS escolhido (Config → Aparência).
+   ============================================================================ */
+[data-tema="ios"] {
+  --bg: #f2f2f7; --bg2: #ffffff; --card: #ffffff;
+  --borda: rgba(60, 60, 67, 0.16); --borda2: rgba(60, 60, 67, 0.22); --borda3: rgba(60, 60, 67, 0.3); --borda4: rgba(60, 60, 67, 0.45);
+  --txt: #1c1c1e; --txt2: #3a3a3c; --txt3: rgba(60, 60, 67, 0.65); --txt4: rgba(60, 60, 67, 0.5); --txt-forte: #000000;
+  --acento: #007aff; --sombra: rgba(0, 0, 0, 0.12);
+  --card2: #f2f2f7; --card3: #e5e5ea; --sep: rgba(60, 60, 67, 0.22);
+  --label: #000000; --label2: rgba(60, 60, 67, 0.65); --label3: rgba(60, 60, 67, 0.32);
+  --fill: rgba(118, 118, 128, 0.12); --fill2: rgba(118, 118, 128, 0.2);
+  --blue: #007aff; --green: #34c759; --red: #ff3b30; --orange: #ff9500;
+  --yellow: #ffcc00; --purple: #af52de; --pink: #ff2d55; --teal: #32ade6;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 10px rgba(0, 0, 0, 0.04);
+  --radius: 14px; --tabbar-h: 58px;
+}
+[data-tema="ios"] .card { box-shadow: 0 1px 3px rgba(15,23,42,0.08); }
+[data-tema="ios"] input, [data-tema="ios"] select, [data-tema="ios"] textarea { background-color: #ffffff; color: #1e293b; }
+[data-tema="ios"] .naipe { border-color: #94a3b8; }
+[data-tema="ios"] .toast { box-shadow: 0 8px 24px rgba(15,23,42,0.2); }
+[data-tema="ios"] .life-os-header h1 { color: var(--txt-forte) !important; }
+[data-tema="ios"] .aviso.p1 { color: #b91c1c; background: #fef2f2; }
+[data-tema="ios"] .aviso.p2 { color: #a16207; background: #fffbeb; }
+[data-tema="ios"] .aviso.p3 { color: var(--txt2); background: #f8fafc; }
+[data-tema="ios"] .big-clock { color: var(--txt-forte); }
+[data-tema="ios"] .timer-display { color: #b91c1c; }
+[data-tema="ios"] .habit-chip.on { background: rgba(22,163,74,0.12); }
+[data-tema="ios"] .tab-btn.active { color: #ffffff; }
+[data-tema="ios"] .toast { background: #ffffff; color: #0f172a; }
+[data-tema="ios"] .note-card { box-shadow: 0 1px 2px rgba(15,23,42,0.06); }
+[data-tema="ios"] #audio-player { filter: none; }
+/* ============================================================================
+   Genesis — visual estilo iOS (modo claro)
+   Cores e medidas seguem o iOS: fundo cinza-claro, cartões brancos agrupados,
+   cores do sistema (azul, verde, vermelho...), controles segmentados e barra
+   de abas embaixo no celular. Todas as classes antigas continuam existindo.
+   ============================================================================ */
+
+html[data-tema="ios"] { background: var(--bg); color-scheme: light; }
+[data-tema="ios"] body { background-color: var(--bg); color: var(--label); display: flex; justify-content: center; padding: calc(16px + env(safe-area-inset-top)) 16px 60px; min-height: 100vh; overflow-y: auto; overflow-x: hidden; -webkit-font-smoothing: antialiased; font-size: 15px; line-height: 1.35; }
+[data-tema="ios"] .container { width: 100%; min-width: 0; max-width: 1100px; display: flex; flex-direction: column; gap: 14px; }
+[data-tema="ios"] h1, [data-tema="ios"] h2, [data-tema="ios"] h3, [data-tema="ios"] h4 { letter-spacing: -0.01em; }
+[data-tema="ios"] a { color: var(--blue); }
+
+/* ---------- Barra de abas ---------- */
+[data-tema="ios"] .tabs { display: flex; gap: 2px; padding: 4px; overflow-x: auto; scrollbar-width: none; position: sticky; top: calc(8px + env(safe-area-inset-top)); z-index: 500; background: rgba(255, 255, 255, 0.82); -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px); border-radius: 14px; border: 0.5px solid var(--sep); }
+[data-tema="ios"] .tabs::-webkit-scrollbar { display: none; }
+[data-tema="ios"] .tab-btn { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; background: transparent; color: var(--label2); border: none; padding: 8px 6px; border-radius: 10px; font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: background 0.2s, color 0.2s; white-space: nowrap; }
+[data-tema="ios"] .tab-btn:hover { color: var(--label); }
+[data-tema="ios"] .tab-btn.active { background: var(--card2); color: var(--blue); }
+[data-tema="ios"] .tab-ico { position: relative; width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.06); }
+[data-tema="ios"] .tab-ico svg { width: 15px; height: 15px; }
+[data-tema="ios"] .tab-btn:not(.active) .tab-ico { opacity: 0.85; }
+
+
+[data-tema="ios"] .tab-content { display: none; animation: fadeIn 0.25s ease; }
+[data-tema="ios"] .tab-content.active { display: block; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+[data-tema="ios"] .page-title { font-size: 2.1rem; font-weight: 700; letter-spacing: 0.01em; margin: 10px 4px 14px; }
+[data-tema="ios"] .page-title + .card { margin-top: 0 !important; }
+
+/* ---------- Cabeçalho do Painel ---------- */
+[data-tema="ios"] .life-os-banner { display: none; }
+[data-tema="ios"] .life-os-header { display: flex; align-items: center; gap: 14px; padding: 10px 4px 6px; }
+[data-tema="ios"] .life-os-header h1 { font-size: 2.1rem; font-weight: 700; color: var(--label); line-height: 1.1; overflow-wrap: anywhere; }
+[data-tema="ios"] .avatar-placeholder { font-size: 2rem; width: 60px; height: 60px; flex-shrink: 0; display: flex; justify-content: center; align-items: center; border-radius: 50%; background: linear-gradient(145deg, #ffffff, #e5e5ea); box-shadow: 0 0 0 0.5px var(--sep); }
+[data-tema="ios"] .app-logo { width: 60px; height: 60px; flex-shrink: 0; border-radius: 13.5px; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.06); }
+[data-tema="ios"] .tabs-logo { display: flex; align-items: center; padding: 0 6px 0 4px; flex-shrink: 0; }
+[data-tema="ios"] .tabs-logo img { width: 28px; height: 28px; border-radius: 7px; display: block; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08); }
+[data-tema="ios"] .start-day-btn { background: var(--fill); color: var(--blue); border: none; padding: 6px 14px; border-radius: 16px; font-size: 0.82rem; font-weight: 600; margin-top: 6px; cursor: pointer; }
+[data-tema="ios"] .start-day-btn:hover { background: var(--fill2); }
+[data-tema="ios"] .start-day-btn.done { color: var(--green); cursor: default; }
+
+[data-tema="ios"] .life-os-grid { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; margin-top: 14px; }
+[data-tema="ios"] .life-os-grid > * { min-width: 0; }
+[data-tema="ios"] .left-col, [data-tema="ios"] .right-col { display: flex; flex-direction: column; gap: 16px; }
+
+/* ---------- Cartões ---------- */
+[data-tema="ios"] .card { background-color: var(--card); border-radius: var(--radius); border: none; padding: 18px; box-shadow: var(--shadow); }
+[data-tema="ios"] .card h2 { font-size: 1.15rem; font-weight: 600; margin-bottom: 12px; color: var(--label); }
+[data-tema="ios"] .card h4 { font-size: 0.95rem; font-weight: 600; }
+[data-tema="ios"] .hint { font-size: 0.82rem; color: var(--label2); margin-bottom: 12px; line-height: 1.45; }
+
+[data-tema="ios"] .focus-clock-card { text-align: center; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 26px 20px; background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow); }
+[data-tema="ios"] .focus-label { font-size: 0.72rem; letter-spacing: 0.25em; color: var(--label2); margin-bottom: 6px; font-weight: 600; }
+[data-tema="ios"] .big-clock { font-size: 4.6rem; font-weight: 600; color: var(--label); line-height: 1; letter-spacing: -0.02em; margin-bottom: 10px; font-variant-numeric: tabular-nums; background: none; border: none; padding: 0; box-shadow: none; }
+[data-tema="ios"] .big-date { font-size: 0.9rem; color: var(--label2); font-weight: 500; text-transform: capitalize; }
+
+[data-tema="ios"] .pomodoro-card { padding: 20px; text-align: center; }
+[data-tema="ios"] #pomodoro-input { background: var(--card2); border: none; color: var(--label); padding: 4px; width: 58px; text-align: center; border-radius: 8px; font-size: 16px; }
+[data-tema="ios"] .timer-display { font-size: 3.6rem; font-weight: 300; color: var(--label); letter-spacing: -0.01em; margin: 12px 0; font-variant-numeric: tabular-nums; }
+[data-tema="ios"] .timer-controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 14px; }
+[data-tema="ios"] .timer-controls button { padding: 10px 18px; font-size: 0.9rem; font-weight: 600; margin: 0; background: var(--fill); border: none; border-radius: 22px; color: var(--label); cursor: pointer; }
+[data-tema="ios"] #btn-start-timer { background: rgba(52, 199, 89, 0.22); color: var(--green); }
+[data-tema="ios"] #btn-pause-timer { background: rgba(255, 149, 0, 0.22); color: var(--orange); }
+[data-tema="ios"] .study-stats { font-size: 0.85rem; color: var(--label2); border-top: 0.5px solid var(--sep); padding-top: 12px; }
+[data-tema="ios"] .study-stats strong { color: var(--blue); }
+
+[data-tema="ios"] .overview-card { padding: 18px; }
+[data-tema="ios"] .progress-bar-bg { background-color: var(--fill); height: 5px; border-radius: 3px; margin-bottom: 8px; border: none; overflow: hidden; }
+[data-tema="ios"] .progress-bar-fill { background-color: var(--green); height: 100%; width: 0%; transition: width 0.4s ease; border-radius: 3px; }
+
+[data-tema="ios"] .journals-section { padding: 20px; }
+[data-tema="ios"] .journals-section > h2 { font-size: 0.78rem !important; font-weight: 600; letter-spacing: 0.06em !important; color: var(--label2) !important; text-transform: uppercase; }
+
+/* ---------- Controle segmentado (abas internas) ---------- */
+[data-tema="ios"] .focus-header-tabs { display: flex; gap: 2px; font-size: 0.8rem; background: var(--fill); border: none !important; border-radius: 9px; padding: 2px !important; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
+[data-tema="ios"] .focus-header-tabs::-webkit-scrollbar { display: none; }
+[data-tema="ios"] .focus-header-tabs span { flex: 1 0 auto; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px; padding: 6px 10px; border-radius: 7px; color: var(--label); font-weight: 500; transition: background 0.2s; white-space: nowrap; }
+[data-tema="ios"] .focus-header-tabs span:hover { background: rgba(0, 0, 0, 0.03); }
+[data-tema="ios"] .focus-header-tabs span.active { background: #ffffff; color: var(--label); font-weight: 600; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.04); }
+[data-tema="ios"] #pomodoro-modo { margin-bottom: 10px; }
+
+[data-tema="ios"] .journal-cards-container { display: flex; flex-direction: column; gap: 12px; padding-bottom: 6px; }
+[data-tema="ios"] .journal-card { min-width: 150px; background: var(--card2); border-radius: 12px; overflow: hidden; flex: 1; }
+[data-tema="ios"] .j-img { height: 80px; width: 100%; }
+[data-tema="ios"] .j-info { padding: 12px; font-size: 0.85rem; }
+[data-tema="ios"] .j-info strong { color: var(--label); display: flex; align-items: center; gap: 6px; }
+[data-tema="ios"] .j-bar { height: 4px; width: 100%; background: var(--fill); margin-top: 10px; border-radius: 2px; overflow: hidden; }
+[data-tema="ios"] .j-bar div { height: 100%; }
+
+/* ---------- Hábitos ---------- */
+[data-tema="ios"] .habit-list-main { list-style: none; display: flex; flex-direction: column; font-size: 0.95rem; font-weight: 400; margin-top: 8px; }
+[data-tema="ios"] .habit-list-main li { display: flex; align-items: center; gap: 12px; transition: opacity 0.2s; padding: 10px 0; border-bottom: 0.5px solid var(--sep); }
+[data-tema="ios"] .habit-list-main li:last-child { border-bottom: none; }
+[data-tema="ios"] .add-new-btn { color: var(--blue); font-size: 0.9rem; font-weight: 500; cursor: pointer; margin-top: 14px; display: inline-block; }
+
+/* ---------- Finanças: totais ---------- */
+[data-tema="ios"] .balance-card { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; background-color: var(--card); padding: 16px; border-radius: var(--radius); text-align: center; border: none; box-shadow: var(--shadow); }
+[data-tema="ios"] .balance-item span { font-size: 0.75rem; color: var(--label2); font-weight: 500; }
+[data-tema="ios"] .balance-item h3 { font-size: 1.05rem; margin-top: 4px; font-weight: 700; font-variant-numeric: tabular-nums; }
+[data-tema="ios"] .income { color: var(--green); } .expense { color: var(--red); }
+[data-tema="ios"] .text-blue { color: var(--blue); }
+
+/* ---------- Formulários ---------- */
+[data-tema="ios"] form { display: flex; flex-direction: column; gap: 10px; }
+[data-tema="ios"] label { font-size: 0.8rem; color: var(--label2); font-weight: 500; display: inline-block; margin-bottom: 4px; }
+[data-tema="ios"] input, [data-tema="ios"] select, [data-tema="ios"] textarea { padding: 11px 12px; border-radius: 10px; border: none; background-color: var(--card2); color: var(--label); font-size: 16px; outline: none; resize: vertical; width: 100%; min-height: 44px; -webkit-appearance: none; appearance: none; transition: box-shadow 0.15s; }
+[data-tema="ios"] textarea { min-height: 0; line-height: 1.4; }
+[data-tema="ios"] input::placeholder, [data-tema="ios"] textarea::placeholder { color: var(--label3); }
+[data-tema="ios"] input:focus, [data-tema="ios"] select:focus, [data-tema="ios"] textarea:focus { box-shadow: 0 0 0 2px var(--blue); }
+[data-tema="ios"] select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238e8e93' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+[data-tema="ios"] input[type="date"], [data-tema="ios"] input[type="time"] { display: block; }
+[data-tema="ios"] input::-webkit-date-and-time-value { text-align: left; }
+[data-tema="ios"] input[type="search"]::-webkit-search-decoration { -webkit-appearance: none; }
+[data-tema="ios"] input[type="range"] { min-height: 0; padding: 0; background: none; accent-color: var(--blue); -webkit-appearance: auto; appearance: auto; }
+[data-tema="ios"] input[type="file"] { display: none; }
+
+/* caixinhas de marcar redondas, como no app Lembretes */
+[data-tema="ios"] input[type="checkbox"] { width: 22px; height: 22px; min-height: 0; padding: 0; flex-shrink: 0; border-radius: 50%; border: 2px solid #c7c7cc; background: #fff; cursor: pointer; transition: all 0.15s; }
+[data-tema="ios"] input[type="checkbox"]:checked { background: var(--green) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='10' viewBox='0 0 12 10'%3E%3Cpath d='M1.5 5.2l3 3 6-6.4' fill='none' stroke='%23fff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/12px no-repeat; border-color: var(--green); }
+[data-tema="ios"] input[type="checkbox"]:focus { box-shadow: none; }
+
+[data-tema="ios"] button[type="submit"], [data-tema="ios"] button[onclick="exportData()"], [data-tema="ios"] button[onclick="document.getElementById('import-file').click()"] { margin-top: 8px; padding: 13px; background-color: var(--blue); color: #fff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: filter 0.15s, transform 0.1s; }
+[data-tema="ios"] button[type="submit"]:hover { filter: brightness(1.1); }
+[data-tema="ios"] button:active { transform: scale(0.98); }
+[data-tema="ios"] .btn { margin-top: 8px; padding: 13px; background-color: var(--fill); color: var(--blue); border: none; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: filter 0.15s; }
+[data-tema="ios"] .btn:hover { filter: brightness(1.15); }
+[data-tema="ios"] .check-line { display: flex; align-items: center; gap: 10px; font-size: 0.88rem; color: var(--label); margin-top: 4px; font-weight: 400; }
+
+/* ---------- Listas (linhas agrupadas) ---------- */
+[data-tema="ios"] .transaction-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+[data-tema="ios"] .transaction-list li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 12px 12px; background-color: var(--card2); border-radius: 12px; font-size: 0.92rem; border: none; border-left: 3px solid transparent; }
+[data-tema="ios"] .transaction-list li.income-item { border-left-color: var(--green); }
+[data-tema="ios"] .transaction-list li.expense-item { border-left-color: var(--red); }
+[data-tema="ios"] .transaction-list li.shift-item { border-left-color: var(--orange); }
+[data-tema="ios"] .transaction-list li.empty-row, [data-tema="ios"] .transaction-list li[style*="justify-content:center"] { background: transparent !important; justify-content: center; color: var(--label3) !important; border: none !important; font-size: 0.88rem; text-align: center; }
+[data-tema="ios"] .delete-btn { background: transparent; color: var(--label2); border: none; font-size: 1.1rem; cursor: pointer; padding: 2px 6px; margin: 0; }
+[data-tema="ios"] .category-badge { font-size: 0.7rem; font-weight: 600; color: var(--blue); background-color: rgba(0, 122, 255, 0.15); padding: 2px 7px; border-radius: 6px; margin-top: 4px; display: inline-block; width: fit-content; }
+[data-tema="ios"] .transaction-info { display: flex; flex-direction: column; min-width: 0; }
+[data-tema="ios"] .transaction-info > span { overflow-wrap: anywhere; }
+
+/* ---------- Notas ---------- */
+[data-tema="ios"] .note-grid { column-count: 3; column-gap: 12px; }
+[data-tema="ios"] .note-card { break-inside: avoid; margin-bottom: 12px; cursor: pointer; background-color: var(--card2); padding: 14px; border-radius: 14px; border: none; display: flex; flex-direction: column; gap: 8px; }
+[data-tema="ios"] .note-header { display: flex; justify-content: space-between; align-items: center; }
+[data-tema="ios"] .note-header h4 { color: var(--label); font-size: 1rem; }
+[data-tema="ios"] .note-body { color: var(--label2); font-size: 0.9rem; white-space: pre-wrap; line-height: 1.4; }
+
+/* ---------- Calendário ---------- */
+[data-tema="ios"] .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; padding: 0; }
+[data-tema="ios"] .calendar-header h2 { margin: 0 !important; font-size: 1.3rem; font-weight: 700; color: var(--label); }
+[data-tema="ios"] .calendar-header button { background: var(--fill); color: var(--blue); border: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-weight: 700; font-size: 1rem; margin: 0; }
+[data-tema="ios"] .calendar-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 0.72rem; color: var(--label2); font-weight: 600; margin-bottom: 8px; text-transform: uppercase; }
+[data-tema="ios"] .calendar-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+[data-tema="ios"] .calendar-day { background-color: transparent; padding: 10px 0 6px; text-align: center; border-radius: 12px; font-size: 1rem; color: var(--label); cursor: pointer; position: relative; border: none; transition: background 0.15s; font-variant-numeric: tabular-nums; }
+[data-tema="ios"] .calendar-day:hover { background: var(--fill); }
+[data-tema="ios"] .calendar-day.empty { background-color: transparent; border: none; cursor: default; }
+[data-tema="ios"] .calendar-day.today { background-color: var(--red); color: #fff; font-weight: 700; border: none; }
+[data-tema="ios"] .calendar-day.today .day-dot { box-shadow: 0 0 0 1.5px #fff; }
+[data-tema="ios"] .shift-dot { height: 6px; width: 6px; background-color: var(--orange); border-radius: 50%; position: absolute; bottom: 4px; left: 50%; transform: translateX(-50%); }
+
+/* ---------- Janela do dia (folha estilo iOS) ---------- */
+[data-tema="ios"] .modal-overlay { display: none; position: fixed; inset: 0; background-color: rgba(0, 0, 0, 0.28); z-index: 1000; justify-content: center; align-items: center; padding: 20px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+[data-tema="ios"] .modal-content { background-color: var(--card); width: 100%; max-width: 380px; border-radius: 16px; border: none; overflow: hidden; animation: sheetUp 0.28s cubic-bezier(0.2, 0.9, 0.3, 1); }
+@keyframes sheetUp { from { transform: translateY(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+[data-tema="ios"] .modal-header { display: flex; justify-content: space-between; align-items: center; background-color: transparent; padding: 16px 18px 12px; border-bottom: 0.5px solid var(--sep); }
+[data-tema="ios"] .modal-header h3 { font-size: 1.05rem; font-weight: 600; }
+[data-tema="ios"] #modal-date-title { text-transform: capitalize; }
+[data-tema="ios"] .close-modal { background: var(--fill); color: var(--label2); border: none; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; font-size: 0.85rem; font-weight: 700; }
+[data-tema="ios"] .modal-body { padding: 16px 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+[data-tema="ios"] .modal-body h4 { font-size: 0.78rem; color: var(--label2); text-transform: uppercase; letter-spacing: 0.04em; }
+[data-tema="ios"] .modal-actions button { width: 100%; margin-top: 4px; padding: 12px; background-color: var(--fill); color: var(--blue); border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 0.92rem; flex: 1; }
+
+/* ---------- Sincronização ---------- */
+[data-tema="ios"] .sync-form { display: flex; flex-direction: column; gap: 8px; }
+[data-tema="ios"] .sync-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #8e8e93; margin-left: 4px; vertical-align: middle; }
+[data-tema="ios"] .tab-ico .sync-dot { position: absolute; top: -3px; right: -3px; margin: 0; box-shadow: 0 0 0 1.5px #fff; }
+
+/* ---------- Painel: detalhes ---------- */
+[data-tema="ios"] .greeting-sub { font-size: 0.82rem; color: var(--label2); margin-top: 6px; line-height: 1.5; }
+[data-tema="ios"] .mini-btn { background: var(--fill); border: none; color: var(--label); border-radius: 8px; padding: 5px 9px; font-size: 0.8rem; cursor: pointer; line-height: 1.3; min-height: 28px; transition: background 0.15s; white-space: nowrap; }
+[data-tema="ios"] .mini-btn:hover { background: var(--fill2); }
+[data-tema="ios"] .mini-btn.on { color: var(--green); background: rgba(52, 199, 89, 0.18); }
+[data-tema="ios"] .habit-actions { display: flex; gap: 4px; opacity: 0.4; transition: opacity 0.2s; }
+[data-tema="ios"] .habit-list-main li:hover .habit-actions { opacity: 1; }
+[data-tema="ios"] .streak { font-size: 0.75rem; font-weight: 600; color: var(--orange); background: rgba(255, 149, 0, 0.15); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+[data-tema="ios"] .pomodoro-prefs { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 0.85rem; color: var(--label2); }
+[data-tema="ios"] .pomodoro-prefs select { width: auto; padding: 4px 28px 4px 10px; min-height: 30px; font-size: 0.85rem; background-position: right 8px center; }
+[data-tema="ios"] .pomodoro-prefs input[type="range"] { flex: 1; accent-color: var(--red); min-width: 60px; }
+[data-tema="ios"] .stat-period { font-size: 0.78rem; color: var(--label2); margin-bottom: 8px; }
+[data-tema="ios"] .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 10px; }
+[data-tema="ios"] .stat-tile { background: var(--card2); border: none; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+[data-tema="ios"] .stat-tile .stat-icon { font-size: 1.1rem; }
+[data-tema="ios"] .stat-tile strong { font-size: 1.3rem; font-weight: 700; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+[data-tema="ios"] .stat-tile small { font-size: 0.74rem; color: var(--label2); }
+[data-tema="ios"] .stat-lists { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 14px; }
+[data-tema="ios"] .stat-lists h5 { font-size: 0.75rem; color: var(--label2); margin-bottom: 6px; letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; }
+[data-tema="ios"] .stat-line { font-size: 0.88rem; color: var(--label); padding: 5px 0; border-bottom: 0.5px solid var(--sep); }
+[data-tema="ios"] .stat-line:last-child { border-bottom: none; }
+[data-tema="ios"] .stat-line.muted { color: var(--label3); }
+[data-tema="ios"] .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%) translateY(20px); background: rgba(255, 255, 255, 0.96); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); color: var(--label); border: none; border-radius: 14px; padding: 12px 18px; font-size: 0.9rem; font-weight: 500; max-width: 90vw; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.18); opacity: 0; pointer-events: none; transition: all 0.25s; z-index: 2000; }
+[data-tema="ios"] .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Agenda ---------- */
+[data-tema="ios"] .day-dots { display: flex; justify-content: center; gap: 3px; margin-top: 3px; min-height: 6px; }
+[data-tema="ios"] .day-dot { width: 5px; height: 5px; border-radius: 50%; display: inline-block; }
+[data-tema="ios"] .day-more { font-size: 0.6rem; color: var(--label2); line-height: 6px; }
+[data-tema="ios"] .calendar-day.has-items { font-weight: 600; }
+[data-tema="ios"] .calendar-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin-top: 14px; font-size: 0.75rem; color: var(--label2); }
+[data-tema="ios"] .calendar-legend span { display: inline-flex; align-items: center; gap: 5px; }
+[data-tema="ios"] .calendar-legend i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+[data-tema="ios"] .filter-row { margin-bottom: 12px; }
+[data-tema="ios"] .date-sep { background: transparent !important; border: none !important; padding: 12px 4px 2px !important; color: var(--label2); font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; justify-content: flex-start !important; gap: 8px; }
+[data-tema="ios"] .date-sep small { color: var(--label3); font-weight: 400; text-transform: none; }
+[data-tema="ios"] .event-item { border-left: 3px solid #8e8e93 !important; }
+[data-tema="ios"] .shift-item { border-left: 3px solid var(--orange) !important; }
+[data-tema="ios"] .shift-item.paid { border-left-color: var(--green) !important; }
+[data-tema="ios"] .item-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+[data-tema="ios"] .item-notes { display: block; color: var(--label2); font-size: 0.78rem; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+[data-tema="ios"] .item-date { color: var(--label2); font-size: 0.75rem; margin-left: 2px; }
+[data-tema="ios"] .badge-paid, [data-tema="ios"] .badge-unpaid, [data-tema="ios"] .badge-topay, [data-tema="ios"] .badge-swap { font-size: 0.68rem; font-weight: 600; padding: 2px 7px; border-radius: 6px; margin-left: 4px; vertical-align: middle; white-space: nowrap; }
+[data-tema="ios"] .badge-paid { color: var(--green); background: rgba(52, 199, 89, 0.15); }
+[data-tema="ios"] .badge-unpaid { color: var(--orange); background: rgba(255, 149, 0, 0.15); }
+[data-tema="ios"] .badge-topay { color: var(--red); background: rgba(255, 59, 48, 0.15); }
+[data-tema="ios"] .badge-swap { color: var(--purple); background: rgba(175, 82, 222, 0.15); }
+[data-tema="ios"] .pending-item { opacity: 0.75; }
+[data-tema="ios"] .summary-row { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 0.85rem; color: var(--label2); margin-bottom: 12px; }
+[data-tema="ios"] .balance-4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+
+/* ---------- Finanças ---------- */
+[data-tema="ios"] .fin-month-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 16px; }
+[data-tema="ios"] .fin-month-nav { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+[data-tema="ios"] .fin-month-nav h2 { font-size: 1.1rem; min-width: 150px; text-align: center; margin: 0 !important; }
+[data-tema="ios"] .fin-two-col { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; margin-top: 16px; }
+[data-tema="ios"] .cat-block { margin-bottom: 16px; }
+[data-tema="ios"] .cat-block h5 { font-size: 0.75rem; color: var(--label2); margin-bottom: 8px; letter-spacing: 0.04em; text-transform: uppercase; }
+[data-tema="ios"] .cat-row { display: grid; grid-template-columns: 110px 1fr 120px; align-items: center; gap: 8px; font-size: 0.8rem; margin-bottom: 7px; }
+[data-tema="ios"] .cat-name { color: var(--label); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-tema="ios"] .cat-bar { height: 8px; background: var(--fill); border: none; border-radius: 4px; overflow: hidden; }
+[data-tema="ios"] .cat-bar div { height: 100%; border-radius: 4px; }
+[data-tema="ios"] .cat-val { text-align: right; color: var(--label); white-space: nowrap; }
+[data-tema="ios"] .cat-val small { color: var(--label2); }
+[data-tema="ios"] .fin-meses { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; align-items: end; height: 170px; }
+[data-tema="ios"] .mes-col { display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; height: 100%; justify-content: flex-end; border-radius: 10px; padding: 4px 2px; }
+[data-tema="ios"] .mes-col:hover, [data-tema="ios"] .mes-col.atual { background: var(--card2); }
+[data-tema="ios"] .mes-col small { font-size: 0.7rem; color: var(--label2); }
+[data-tema="ios"] .mes-col .mes-saldo { font-size: 0.62rem; }
+[data-tema="ios"] .mes-bars { display: flex; align-items: flex-end; gap: 3px; height: 110px; width: 100%; justify-content: center; }
+[data-tema="ios"] .mes-bar { width: 34%; min-height: 2px; border-radius: 4px 4px 0 0; }
+[data-tema="ios"] .mes-bar.inc { background: var(--green); } .mes-bar.exp { background: var(--red); }
+
+/* ---------- Tarefas ---------- */
+[data-tema="ios"] .task-tabs { flex-wrap: wrap; background: transparent !important; padding: 0 !important; gap: 6px; }
+[data-tema="ios"] .task-tabs span { flex: 0 0 auto; background: var(--fill); border-radius: 16px; padding: 6px 12px; }
+[data-tema="ios"] .task-tabs span.active { background: var(--blue); box-shadow: none; }
+[data-tema="ios"] .task-tabs span small { color: var(--label2); font-size: 0.7rem; margin-left: 2px; }
+[data-tema="ios"] .task-tabs span.active small { color: rgba(255, 255, 255, 0.8); }
+[data-tema="ios"] .task-tabs .add-list { color: var(--blue); }
+[data-tema="ios"] .task-tools { display: flex; gap: 6px; margin-top: 8px; min-height: 22px; flex-wrap: wrap; }
+[data-tema="ios"] .task-more summary { cursor: pointer; font-size: 0.88rem; color: var(--blue); padding: 6px 0; font-weight: 500; }
+[data-tema="ios"] .task-more[open] summary { color: var(--label2); }
+[data-tema="ios"] .task-list li.task-item { flex-direction: column; align-items: stretch; gap: 6px; border-left: 3px solid var(--blue); }
+[data-tema="ios"] .task-list li.task-item.done { opacity: 0.5; }
+[data-tema="ios"] .task-list li.task-item.done .task-text { text-decoration: line-through; }
+[data-tema="ios"] .task-main { display: flex; align-items: flex-start; gap: 10px; width: 100%; }
+[data-tema="ios"] .task-main input[type="checkbox"] { margin-top: 1px; }
+[data-tema="ios"] .task-body { flex: 1; cursor: pointer; min-width: 0; }
+[data-tema="ios"] .task-text { display: block; font-size: 0.95rem; overflow-wrap: anywhere; }
+[data-tema="ios"] .task-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 4px; font-size: 0.74rem; color: var(--label2); align-items: center; }
+[data-tema="ios"] .due { padding: 1px 7px; border-radius: 6px; background: var(--fill); font-weight: 500; }
+[data-tema="ios"] .due.due-late { color: var(--red); background: rgba(255, 59, 48, 0.15); }
+[data-tema="ios"] .due.due-today { color: var(--orange); background: rgba(255, 149, 0, 0.15); }
+[data-tema="ios"] .due.due-soon { color: var(--blue); background: rgba(0, 122, 255, 0.15); }
+[data-tema="ios"] .task-list-tag { color: var(--purple); }
+[data-tema="ios"] .sub-count { color: var(--label); cursor: pointer; background: var(--fill); padding: 1px 7px; border-radius: 6px; }
+[data-tema="ios"] .task-notes { color: var(--label2); width: 100%; white-space: pre-wrap; }
+[data-tema="ios"] .subtasks { display: flex; flex-direction: column; gap: 6px; padding-left: 32px; border-top: 0.5px solid var(--sep); padding-top: 8px; }
+[data-tema="ios"] .subtask { display: flex; align-items: center; gap: 8px; font-size: 0.88rem; color: var(--label); cursor: pointer; }
+[data-tema="ios"] .subtask.done { text-decoration: line-through; color: var(--label3); }
+[data-tema="ios"] .subtask input { width: 18px; height: 18px; }
+[data-tema="ios"] .subtask input:checked { background-size: 9px; }
+[data-tema="ios"] .mini-btn.star { font-size: 0.95rem; }
+[data-tema="ios"] .mini-btn.star.on { color: var(--yellow); background: rgba(255, 204, 0, 0.15); }
+[data-tema="ios"] .toggle-done { cursor: pointer; }
+
+/* ---------- Notas (Keep) ---------- */
+[data-tema="ios"] .note-card:hover { filter: brightness(1.1); }
+[data-tema="ios"] .note-header h4 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+[data-tema="ios"] .note-header .item-actions { opacity: 0.5; }
+[data-tema="ios"] .note-card:hover .item-actions { opacity: 1; }
+[data-tema="ios"] .note-body { max-height: 220px; overflow: hidden; }
+[data-tema="ios"] .note-check { display: flex; flex-direction: column; gap: 5px; }
+[data-tema="ios"] .note-foot { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 2px; }
+[data-tema="ios"] .note-section-title { font-size: 0.75rem; color: var(--label2); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; margin: 12px 0 8px; }
+[data-tema="ios"] .note-section-title small { color: var(--label3); font-weight: 400; text-transform: none; }
+[data-tema="ios"] .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+[data-tema="ios"] .chip { font-size: 0.78rem; color: var(--label); background: var(--fill); border: none; padding: 4px 11px; border-radius: 14px; cursor: pointer; font-weight: 500; }
+[data-tema="ios"] .chip.sel { background: var(--blue); color: #fff; }
+[data-tema="ios"] .chip.small { font-size: 0.68rem; padding: 2px 8px; cursor: default; }
+[data-tema="ios"] .color-row { display: flex; align-items: center; gap: 10px; margin: 4px 0 8px; }
+[data-tema="ios"] .color-dots { display: flex; flex-wrap: wrap; gap: 8px; }
+[data-tema="ios"] .color-dot { width: 26px; height: 26px; border-radius: 50%; border: 2px solid; cursor: pointer; display: inline-block; }
+[data-tema="ios"] .color-dot.sel { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+/* ---------- Google Calendar / Config ---------- */
+[data-tema="ios"] .agenda-box { margin-top: 16px; padding-top: 14px; border-top: 0.5px solid var(--sep); }
+[data-tema="ios"] .agenda-box code { background: var(--card2); padding: 1px 5px; border-radius: 4px; font-size: 0.8rem; }
+[data-tema="ios"] .input-eye { display: flex; gap: 6px; align-items: center; }
+[data-tema="ios"] .input-eye input { flex: 1; }
+[data-tema="ios"] .input-eye .mini-btn { padding: 8px 10px; font-size: 1rem; min-height: 44px; }
+
+/* ---------- Estudos ---------- */
+[data-tema="ios"] .pomodoro-topic { width: 100%; margin: 0 0 8px; padding: 6px 30px 6px 10px; min-height: 36px; font-size: 0.88rem; }
+[data-tema="ios"] .topic-item, [data-tema="ios"] .material-item { border-left: 3px solid var(--blue) !important; }
+[data-tema="ios"] .progress-line { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+[data-tema="ios"] .progress-line input[type="range"] { flex: 1; max-width: 220px; }
+[data-tema="ios"] .progress-line small { color: var(--label2); font-size: 0.75rem; min-width: 32px; }
+[data-tema="ios"] .ritual-week { background: var(--card2); border: none; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+[data-tema="ios"] .ritual-week h5 { font-size: 0.8rem; color: var(--label2); margin-bottom: 4px; }
+
+/* ---------- Negócios ---------- */
+[data-tema="ios"] .asset-item, [data-tema="ios"] .goal-item { border-left: 3px solid var(--blue) !important; }
+[data-tema="ios"] .ind-row { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 0.8rem; color: var(--label2); margin-top: 12px; padding-top: 10px; border-top: 0.5px solid var(--sep); }
+[data-tema="ios"] .ind-row strong { color: var(--label); }
+[data-tema="ios"] .project-card { cursor: default; }
+[data-tema="ios"] .project-card:hover { filter: none; }
+[data-tema="ios"] .stage-select { width: auto; padding: 4px 28px 4px 10px; min-height: 30px; font-size: 0.8rem; background-color: var(--card3); background-position: right 8px center; }
+
+/* ---------- Uso diário ---------- */
+[data-tema="ios"] .frase-dia { font-size: 0.82rem; color: var(--label2); font-style: italic; margin-top: 8px; line-height: 1.45; }
+[data-tema="ios"] .habits-quick-card { margin-top: 14px; padding: 14px 16px; display: none; }
+[data-tema="ios"] .habits-quick-head { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--label2); letter-spacing: 0.04em; text-transform: uppercase; font-weight: 600; margin-bottom: 10px; }
+[data-tema="ios"] .habits-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+[data-tema="ios"] .habit-chip { background: var(--fill); border: none; color: var(--label); border-radius: 18px; padding: 7px 12px; font-size: 0.85rem; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+[data-tema="ios"] .habit-chip.on { color: var(--green); background: rgba(52, 199, 89, 0.16); text-decoration: line-through; }
+[data-tema="ios"] .mini-btn.xs { font-size: 0.7rem; padding: 2px 7px; min-height: 22px; }
+[data-tema="ios"] .quick-dates { display: inline-flex; gap: 4px; }
+[data-tema="ios"] .note-add { display: flex; gap: 6px; margin-top: 6px; }
+[data-tema="ios"] .note-add input { padding: 6px 10px; min-height: 34px; font-size: 16px; background: rgba(255, 255, 255, 0.6); }
+[data-tema="ios"] .note-tools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 4px; }
+[data-tema="ios"] .note-body a, [data-tema="ios"] .subtask a, [data-tema="ios"] .item-notes a { color: var(--blue); text-decoration: none; overflow-wrap: anywhere; }
+
+/* ---------- Saúde ---------- */
+[data-tema="ios"] .health-item { border-left: 3px solid var(--green) !important; }
+[data-tema="ios"] .water-box { margin-top: 14px; }
+[data-tema="ios"] .water-bar { height: 10px; background: var(--fill); border: none; border-radius: 5px; overflow: hidden; }
+[data-tema="ios"] .water-bar div { height: 100%; background: linear-gradient(90deg, var(--teal), var(--blue)); border-radius: 5px; transition: width 0.3s; }
+[data-tema="ios"] .water-btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+
+/* ---------- Primos 3D ---------- */
+[data-tema="ios"] .order-item, [data-tema="ios"] .client-item { align-items: flex-start !important; }
+[data-tema="ios"] .client-item { border-left-color: var(--purple) !important; }
+[data-tema="ios"] .order-tags { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 5px; }
+[data-tema="ios"] .order-tags > span { margin-left: 0 !important; }
+[data-tema="ios"] .status-badge { font-size: 0.7rem; font-weight: 600; padding: 2px 7px; border-radius: 6px; white-space: nowrap; }
+[data-tema="ios"] .client-contact a { color: var(--green); text-decoration: none; }
+
+/* ---------- Bolinhas flutuantes de voz ---------- */
+[data-tema="ios"] .fab-stack { position: fixed; right: 16px; bottom: 24px; z-index: 950; display: flex; flex-direction: column; gap: 10px; }
+[data-tema="ios"] .fab { width: 46px; height: 46px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; opacity: 0.88; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2); transition: transform 0.15s, opacity 0.15s; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+[data-tema="ios"] .fab:hover, [data-tema="ios"] .fab:active { opacity: 1; }
+[data-tema="ios"] .fab:active { transform: scale(0.92); }
+[data-tema="ios"] .fab-claude { background: #d97757; }
+[data-tema="ios"] .fab-mic { background: rgba(0, 122, 255, 0.95); }
+[data-tema="ios"] .voice-content { max-width: 460px; }
+[data-tema="ios"] .voice-content textarea { min-height: 84px; }
+[data-tema="ios"] .voice-status { font-size: 0.82rem; color: var(--label2); min-height: 1em; margin-top: -6px; }
+[data-tema="ios"] .voice-buttons { display: flex; gap: 8px; }
+[data-tema="ios"] .voice-buttons .btn { flex: 1; margin-top: 0; font-size: 0.95rem; padding: 12px; }
+[data-tema="ios"] .voice-buttons .btn:disabled { opacity: 0.4; }
+[data-tema="ios"] #voice-rec.on { background: rgba(255, 59, 48, 0.2); color: var(--red); animation: pulsar 1.2s ease-in-out infinite; }
+@keyframes pulsar { 50% { opacity: 0.55; } }
+[data-tema="ios"] .voice-primary { background: var(--blue) !important; color: #fff !important; }
+[data-tema="ios"] .voice-claude { background: #d97757 !important; color: #fff !important; }
+[data-tema="ios"] .voice-card { background: var(--card2); border-radius: 12px; padding: 4px 12px; }
+[data-tema="ios"] .voice-row { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 0.5px solid var(--sep); font-size: 0.88rem; }
+[data-tema="ios"] .voice-row:last-child { border-bottom: none; }
+[data-tema="ios"] .voice-row span { color: var(--label2); flex-shrink: 0; }
+[data-tema="ios"] .voice-row strong { text-align: right; font-weight: 500; overflow-wrap: anywhere; }
+[data-tema="ios"] #voice-requests { display: flex; flex-direction: column; gap: 10px; }
+[data-tema="ios"] #voice-requests h4 { margin: 4px 0 0; }
+[data-tema="ios"] .fab { position: relative; }
+[data-tema="ios"] .fab-badge { position: absolute; top: -3px; right: -3px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--red); color: #fff; font-size: 0.7rem; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 2px var(--bg); }
+[data-tema="ios"] .voice-help-box summary { cursor: pointer; font-size: 0.85rem; font-weight: 600; color: var(--blue); }
+[data-tema="ios"] .voice-help-box #voice-help { background: var(--card2); border-radius: 12px; padding: 10px 12px; margin-top: 8px; font-size: 0.85rem; line-height: 1.45; color: var(--label2); display: flex; flex-direction: column; gap: 6px; }
+[data-tema="ios"] .voice-help-box strong { color: var(--label); }
+[data-tema="ios"] .spin { display: inline-block; width: 11px; height: 11px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; vertical-align: -1px; animation: girar 0.8s linear infinite; }
+@keyframes girar { to { transform: rotate(360deg); } }
+[data-tema="ios"] .fab-claude.trabalhando::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2.5px solid #d97757; border-right-color: transparent; border-bottom-color: transparent; animation: girar 1s linear infinite; }
+[data-tema="ios"] .voice-content { max-height: 88vh; overflow-y: auto; }
+
+/* ---------- Trinca de Ases (marca do projeto em conjunto) ---------- */
+[data-tema="ios"] .trinca { display: inline-flex; align-items: center; gap: 4px; margin: 6px 0 4px; font-size: 0.8rem; letter-spacing: 0.5px; }
+[data-tema="ios"] .naipe { display: inline-block; background: #ffffff; border: 0.5px solid #c7c7cc; border-radius: 5px; padding: 1px 5px; font-weight: 700; font-size: 0.72rem; line-height: 1.3; }
+[data-tema="ios"] .naipe.preto { color: #111; } .naipe.vermelho { color: #ff3b30; }
+[data-tema="ios"] .trinca small { color: var(--label2); margin-left: 6px; font-size: 0.72rem; }
+
+/* ============================================================================
+   Celular (iPhone): barra de abas embaixo, com desfoque, como no iOS
+   ============================================================================ */
+@media (max-width: 900px) { [data-tema="ios"] .note-grid { column-count: 2; } }
+@media (max-width: 800px) {
+  [data-tema="ios"] body { padding: calc(6px + env(safe-area-inset-top)) 16px calc(var(--tabbar-h) + 30px + env(safe-area-inset-bottom)); }
+  [data-tema="ios"] .tabs { position: fixed; top: auto; left: 0; right: 0; bottom: 0; z-index: 900; gap: 0; padding: 4px 4px calc(4px + env(safe-area-inset-bottom)); border-radius: 0; border: none; border-top: 0.5px solid var(--sep); background: rgba(249, 249, 249, 0.9); justify-content: flex-start; }
+  [data-tema="ios"] .tabs-logo { display: none; }
+  [data-tema="ios"] .tab-btn { flex: 0 0 auto; min-width: 70px; flex-direction: column; gap: 3px; padding: 5px 4px; font-size: 0.64rem; font-weight: 500; border-radius: 8px; }
+  [data-tema="ios"] .tab-btn.active { background: transparent; color: var(--blue); font-weight: 600; }
+  [data-tema="ios"] .tab-ico { width: 28px; height: 28px; border-radius: 7.5px; }
+  [data-tema="ios"] .tab-ico svg { width: 19px; height: 19px; }
+  [data-tema="ios"] .tab-btn.active .tab-ico { transform: scale(1.08); box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18); }
+  [data-tema="ios"] .tab-btn:not(.active) .tab-ico { opacity: 0.9; }
+  [data-tema="ios"] .life-os-grid, [data-tema="ios"] .fin-two-col { grid-template-columns: minmax(0, 1fr); }
+  [data-tema="ios"] .habits-quick-card { display: block; }
+  [data-tema="ios"] .card { padding: 16px; }
+  [data-tema="ios"] .page-title { font-size: 2rem; margin-top: 6px; }
+  [data-tema="ios"] .modal-overlay { align-items: flex-end; padding: 0; }
+  [data-tema="ios"] .modal-content { max-width: 100%; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+  [data-tema="ios"] .toast { bottom: calc(var(--tabbar-h) + 22px + env(safe-area-inset-bottom)); }
+  [data-tema="ios"] .big-clock { font-size: 4rem; }
+  [data-tema="ios"] .fab-stack { bottom: calc(var(--tabbar-h) + 18px + env(safe-area-inset-bottom)); right: 14px; }
+  [data-tema="ios"] .fab { width: 42px; height: 42px; }
+  [data-tema="ios"] .toast { bottom: calc(var(--tabbar-h) + 22px + env(safe-area-inset-bottom)); max-width: calc(100vw - 90px); }
+}
+@media (min-width: 801px) and (max-width: 1060px) { [data-tema="ios"] .tab-lbl { display: none; }[data-tema="ios"] .tab-ico { width: 26px; height: 26px; }[data-tema="ios"] .tab-btn { padding: 9px 4px; } }
+@media (max-width: 600px) {
+  [data-tema="ios"] .stat-lists { grid-template-columns: 1fr; }
+  [data-tema="ios"] .balance-4 { grid-template-columns: 1fr 1fr; }
+  [data-tema="ios"] .cat-row { grid-template-columns: 90px 1fr 100px; }
+  [data-tema="ios"] #event-form > div[style*="grid"], [data-tema="ios"] #order-form > .row3 { grid-template-columns: 1fr 1fr !important; }
+  [data-tema="ios"] #task-form > div[style*="grid"], [data-tema="ios"] #task-more > div[style*="grid"], [data-tema="ios"] #note-form > div[style*="grid"] { grid-template-columns: 1fr !important; }
+  [data-tema="ios"] #topic-form > div[style*="grid"], [data-tema="ios"] #session-form > div[style*="grid"], [data-tema="ios"] #material-form > div[style*="grid"], [data-tema="ios"] #ritual-form > div[style*="grid"] { grid-template-columns: 1fr 1fr !important; }
+  [data-tema="ios"] #asset-form > div[style*="grid"], [data-tema="ios"] #move-form > div[style*="grid"], [data-tema="ios"] #goal-form > div[style*="grid"], [data-tema="ios"] #project-form > div[style*="grid"], [data-tema="ios"] #business details > div[style*="grid"] { grid-template-columns: 1fr 1fr !important; }
+  [data-tema="ios"] #workout-form > div[style*="grid"], [data-tema="ios"] #measure-form > div[style*="grid"], [data-tema="ios"] #meal-form > div[style*="grid"], [data-tema="ios"] #medical-form > div[style*="grid"] { grid-template-columns: 1fr 1fr !important; }
+  [data-tema="ios"] #settings .card > div[style*="grid"] { grid-template-columns: 1fr !important; }
+  [data-tema="ios"] .transaction-list li { flex-wrap: wrap; }
+  [data-tema="ios"] .transaction-list li > .item-actions { margin-left: auto; }
+  [data-tema="ios"] .order-item, [data-tema="ios"] .client-item { flex-direction: column; align-items: stretch !important; }
+  [data-tema="ios"] .order-item > .item-actions, [data-tema="ios"] .client-item > .item-actions { width: 100%; justify-content: flex-end; padding-top: 8px; border-top: 0.5px solid var(--sep); }
+}
+@media (max-width: 560px) { [data-tema="ios"] .note-grid { column-count: 1; } }
+
+/* --- iOS: ajustes da junção (15 abas, peças novas da versão da Trinca) --- */
+/* No PC as 15 abas cabem com o ícone em cima e o nome embaixo, como a barra do macOS. */
+@media (min-width: 801px) {
+  [data-tema="ios"] .tab-btn { flex-direction: column; gap: 3px; padding: 6px 2px; font-size: 0.68rem; font-weight: 500; }
+  [data-tema="ios"] .tab-btn .tab-lbl { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  [data-tema="ios"] .tab-ico { width: 26px; height: 26px; border-radius: 7px; }
+  [data-tema="ios"] .tab-ico svg { width: 17px; height: 17px; }
+}
+[data-tema="ios"] .tab-btn[hidden] { display: none; }
+[data-tema="ios"] .busca-box input { background: var(--card); box-shadow: var(--shadow); }
+[data-tema="ios"] .agenda-tabs { margin-bottom: 14px; }
+[data-tema="ios"] .aviso { border-radius: 12px; border: none; }
+[data-tema="ios"] .modal-actions { flex-wrap: wrap; }
+[data-tema="ios"] .modal { background-color: rgba(0, 0, 0, 0.28); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+@media (max-width: 800px) {
+  [data-tema="ios"] .modal { align-items: flex-end; padding: 0; }
+  [data-tema="ios"] .modal > .modal-content { max-width: 100% !important; width: 100%; border-radius: 16px 16px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+}

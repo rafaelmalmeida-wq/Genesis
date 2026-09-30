@@ -2,42 +2,55 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f2f2f7">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Genesis">
   <title>Dashboard Genesis</title>
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <script>
+    // Tema antes de desenhar a página (evita "piscar" escuro): o padrão deste Genesis é o iOS claro.
+    try { const p = JSON.parse(localStorage.getItem('lifeos_prefs') || '{}'); document.documentElement.dataset.tema = (p.aparencia && p.aparencia.tema) || 'ios'; } catch (e) { document.documentElement.dataset.tema = 'ios'; }
+  </script>
   <link rel="stylesheet" href="style.css">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
   <div class="container">
     <nav class="tabs">
-      <button class="tab-btn active" id="btn-focus" onclick="changeTab('focus')">🎯 Painel Central</button>
-      <button class="tab-btn" id="btn-home" onclick="changeTab('home')">📅 Agenda</button>
-      <button class="tab-btn" id="btn-finances" onclick="changeTab('finances')">💰 Finanças</button>
-      <button class="tab-btn" id="btn-tasks" onclick="changeTab('tasks')">✅ Tarefas</button>
-      <button class="tab-btn" id="btn-notes" onclick="changeTab('notes')">📝 Notas</button>
-      <button class="tab-btn" id="btn-studies" onclick="changeTab('studies')">📚 Estudos</button>
-      <button class="tab-btn" id="btn-business" onclick="changeTab('business')">📈 Negócios</button>
-      <button class="tab-btn" id="btn-health" onclick="changeTab('health')">🩺 Saúde</button>
-      <button class="tab-btn" id="btn-leisure" onclick="changeTab('leisure')">🎬 Lazer</button>
-      <button class="tab-btn" id="btn-trips" onclick="changeTab('trips')">✈️ Viagens</button>
-      <button class="tab-btn" id="btn-net" onclick="changeTab('net')">🤝 Rede</button>
-      <button class="tab-btn" id="btn-clinic" onclick="changeTab('clinic')">🏥 Clínica</button>
-      <button class="tab-btn" id="btn-prod" onclick="changeTab('prod')">🖨️ Produção</button>
-      <button class="tab-btn" id="btn-settings" onclick="changeTab('settings')">⚙️ Config <span id="sync-dot" class="sync-dot"></span></button>
+      <a class="tabs-logo" href="#" onclick="changeTab('focus'); return false;" title="Genesis"><img src="favicon-64.png" alt="Genesis" width="28" height="28"></a>
+      <button class="tab-btn active" id="btn-focus" onclick="changeTab('focus')"><span class="tab-ico" style="background:#007aff"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.6" fill="#fff" stroke="none"/></svg></span><span class="tab-lbl">Painel</span></button>
+      <button class="tab-btn" id="btn-primos" onclick="changeTab('primos')"><span class="tab-ico" style="background:#ff9500"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5l7.5 4.2v8.6L12 20.5l-7.5-4.2V7.7z"/><path d="M4.5 7.7L12 12l7.5-4.3M12 12v8.5"/></svg></span><span class="tab-lbl">Primos 3D</span></button>
+      <button class="tab-btn" id="btn-home" onclick="changeTab('home')"><span class="tab-ico" style="background:#ff3b30"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span><span class="tab-lbl">Agenda</span></button>
+      <button class="tab-btn" id="btn-finances" onclick="changeTab('finances')"><span class="tab-ico" style="background:#34c759"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.8 8.3c-.6-1.4-2.1-2.3-3.8-2.3-2.1 0-3.7 1.1-3.7 2.8 0 3.9 7.6 2.2 7.6 6.1 0 1.8-1.7 3-3.9 3-1.8 0-3.3-.9-3.9-2.3M12 3.5v17"/></svg></span><span class="tab-lbl">Finanças</span></button>
+      <button class="tab-btn" id="btn-tasks" onclick="changeTab('tasks')"><span class="tab-ico" style="background:#5856d6"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7l1.8 1.8L9 5.5M4 15.5l1.8 1.8L9 14M12.5 7.5H20M12.5 16H20"/></svg></span><span class="tab-lbl">Tarefas</span></button>
+      <button class="tab-btn" id="btn-notes" onclick="changeTab('notes')"><span class="tab-ico" style="background:#ffcc00"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M8.5 8.5h7M8.5 12h7M8.5 15.5h4"/></svg></span><span class="tab-lbl">Notas</span></button>
+      <button class="tab-btn" id="btn-studies" onclick="changeTab('studies')"><span class="tab-ico" style="background:#af52de"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5c2.8-1.2 5.8-1 8.5.8 2.7-1.8 5.7-2 8.5-.8v13c-2.8-1.2-5.8-1-8.5.8-2.7-1.8-5.7-2-8.5-.8z"/><path d="M12 6.3v13"/></svg></span><span class="tab-lbl">Estudos</span></button>
+      <button class="tab-btn" id="btn-business" onclick="changeTab('business')"><span class="tab-ico" style="background:#30b0c7"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l5-5 4 3 7-8"/><path d="M15 7h5v5"/></svg></span><span class="tab-lbl">Negócios</span></button>
+      <button class="tab-btn" id="btn-health" onclick="changeTab('health')"><span class="tab-ico" style="background:#ff2d55"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.2a4.2 4.2 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z" fill="#fff" stroke="none"/></svg></span><span class="tab-lbl">Saúde</span></button>
+      <button class="tab-btn" id="btn-leisure" onclick="changeTab('leisure')"><span class="tab-ico" style="background:#00c7be"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M10 9.3l5 2.7-5 2.7z" fill="#fff"/></svg></span><span class="tab-lbl">Lazer</span></button>
+      <button class="tab-btn" id="btn-trips" onclick="changeTab('trips')"><span class="tab-ico" style="background:#32ade6"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 3.5L3.5 10.8l7 2.7 2.7 7z"/><path d="M10.5 13.5l10-10"/></svg></span><span class="tab-lbl">Viagens</span></button>
+      <button class="tab-btn" id="btn-net" onclick="changeTab('net')"><span class="tab-ico" style="background:#a2845e"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="6" r="2.5"/><circle cx="5.5" cy="17" r="2.5"/><circle cx="18.5" cy="17" r="2.5"/><path d="M10.8 8.2l-4 6.6M13.2 8.2l4 6.6M8 17h8"/></svg></span><span class="tab-lbl">Rede</span></button>
+      <button class="tab-btn" id="btn-clinic" onclick="changeTab('clinic')"><span class="tab-ico" style="background:#ff6961"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 4h5v5.5H20v5h-5.5V20h-5v-5.5H4v-5h5.5z"/></svg></span><span class="tab-lbl">Clínica</span></button>
+      <button class="tab-btn" id="btn-prod" onclick="changeTab('prod')"><span class="tab-ico" style="background:#636366"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 5.5a4 4 0 0 0-5 5L4 16v4h4l5.5-5.5a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z"/></svg></span><span class="tab-lbl">Produção</span></button>
+      <button class="tab-btn" id="btn-settings" onclick="changeTab('settings')"><span class="tab-ico" style="background:#8e8e93"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.6M12 18.6v2.6M21.2 12h-2.6M5.4 12H2.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8M18.5 18.5l-1.8-1.8M7.3 7.3L5.5 5.5"/><circle cx="12" cy="12" r="6.6"/></svg><span id="sync-dot" class="sync-dot"></span></span><span class="tab-lbl">Ajustes</span></button>
     </nav>
 
     <div id="focus" class="tab-content active">
       <div class="life-os-banner"></div>
       <div class="life-os-header">
-        <div class="avatar-placeholder">🎩</div>
+        <img class="app-logo" src="icon-180.png" alt="Genesis" width="60" height="60">
         <div style="flex: 1;">
-          <h1 id="header-title" style="font-size: 1.8rem; color: #fff;">Life OS</h1>
+          <h1 id="header-title">Life OS</h1>
           <div class="trinca" title="Trinca de Ases — projeto em conjunto"><span class="naipe preto">A♠</span><span class="naipe vermelho">A♥</span><span class="naipe vermelho">A♦</span><small>Trinca de Ases</small></div>
           <button class="start-day-btn" id="btn-iniciar-dia" onclick="iniciarDia()">➔ Iniciar o Dia</button>
         </div>
       </div>
 
-      <div class="janelas-atalho" id="janelas-atalho" title="Janelas flutuantes: ligue as que quer hoje"></div>
       <div class="busca-box" id="busca-card">
         <input type="search" id="busca-global" placeholder="🔍 Buscar em tudo: tarefas, notas, agenda, plantões, finanças…  (Ctrl+K)" oninput="renderBusca(this.value)" autocomplete="off">
         <div id="busca-res" class="busca-res" hidden></div>
@@ -61,16 +74,16 @@
 
           <div class="card overview-card">
             <h4 class="text-blue" style="margin-bottom: 10px;">👤 OVERVIEW</h4>
-            <p id="greeting-text" style="color: #f8fafc; font-weight: 500;">Olá!</p>
+            <p id="greeting-text" style="color: var(--txt-forte); font-weight: 600;">Olá!</p>
             <p id="greeting-sub" class="greeting-sub"></p>
             <p id="frase-dia" class="frase-dia"></p>
             <div class="progress-bar-bg" style="margin-top:15px;"><div class="progress-bar-fill" id="progress-fill"></div></div>
-            <span id="progress-text" style="font-size: 0.75rem; color: #64748b;">0% Concluído</span>
+            <span id="progress-text" style="font-size: 0.75rem; color: #8e8e93;">0% Concluído</span>
           </div>
 
           <div class="card pomodoro-card" id="pomodoro-card">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-              <h2 id="pomodoro-title" style="color: #ef4444; font-size: 0.9rem; margin:0; letter-spacing: 1px;">⏱ POMODORO</h2>
+              <h2 id="pomodoro-title" style="color: #ff3b30; font-size: 0.9rem; margin:0; letter-spacing: 1px;">⏱ POMODORO</h2>
               <div style="display:flex; align-items:center; gap:5px;">
                 <input type="number" id="pomodoro-h" value="0" min="0" max="12" onchange="updatePomodoroTime()" title="horas" class="tempo-campo"><span class="tempo-sep">h</span><input type="number" id="pomodoro-input" value="50" min="0" max="180" onchange="updatePomodoroTime()" title="minutos" class="tempo-campo"><span class="tempo-sep">m</span><input type="number" id="pomodoro-s" value="0" min="0" max="59" onchange="updatePomodoroTime()" title="segundos" class="tempo-campo"><span class="tempo-sep">s</span>
               </div>
@@ -96,7 +109,7 @@
 
         <div class="right-col">
           <div class="card journals-section">
-            <h2 style="color: #22c55e; font-size: 1rem; margin-bottom: 15px; letter-spacing: 1px;">📔 RESUMO</h2>
+            <h2 style="color: #34c759; font-size: 1rem; margin-bottom: 15px; letter-spacing: 1px;">📔 RESUMO</h2>
             <div class="focus-header-tabs" id="journal-tabs" style="margin-bottom: 15px;">
               <span class="active" onclick="changeJournalTab('day', this)">▵ Hoje</span>
               <span onclick="changeJournalTab('week', this)">▵ Semana</span>
@@ -106,7 +119,7 @@
             </div>
             <div class="journal-cards-container" id="journal-content"></div>
             
-            <h2 style="color: #22c55e; font-size: 1rem; margin-top: 30px; margin-bottom: 15px; letter-spacing: 1px;">🎮 HÁBITOS</h2>
+            <h2 style="color: #34c759; font-size: 1rem; margin-top: 30px; margin-bottom: 15px; letter-spacing: 1px;">🎮 HÁBITOS</h2>
             <div class="focus-header-tabs" id="habit-tabs">
                <span class="active" onclick="changeHabitTab('do', this)">🔄 Do</span>
                <span onclick="changeHabitTab('todo', this)">⏹ To-do</span>
@@ -122,6 +135,7 @@
 
     <!-- Módulo 1: Calendário / Agenda geral -->
     <div id="home" class="tab-content">
+      <h1 class="page-title">Agenda</h1>
       <div class="focus-header-tabs agenda-tabs" id="agenda-secoes">
         <span class="active" onclick="verSecaoAgenda('cal', this)">📅 Calendário</span>
         <span onclick="verSecaoAgenda('compromissos', this)">🗓️ Compromissos</span>
@@ -135,7 +149,7 @@
         <div id="calendar-days" class="calendar-days"></div>
         <div class="calendar-legend">
           <button type="button" class="mini-btn" onclick="irParaHoje()">📍 Hoje</button>
-          <span><i style="background:#f59e0b"></i><span data-vt="listaTitulo">Plantão</span></span><span><i style="background:#38bdf8"></i>Trabalho</span><span><i style="background:#a78bfa"></i>Pessoal</span><span><i style="background:#22c55e"></i>Saúde</span><span><i style="background:#f472b6"></i>Estudo</span><span><i style="background:#fbbf24"></i>Negócios</span><span><i style="background:#fb923c"></i>Social</span>
+          <span><i style="background:#ff9500"></i>Entrega 3D</span><span><i style="background:#bf8700"></i><span data-vt="listaTitulo">Plantão</span></span><span><i style="background:#007aff"></i>Trabalho</span><span><i style="background:#af52de"></i>Pessoal</span><span><i style="background:#34c759"></i>Saúde</span><span><i style="background:#ff2d55"></i>Estudo</span><span><i style="background:#e0a800"></i>Negócios</span><span><i style="background:#a2845e"></i>Social</span>
         </div>
       </div>
       </div>
@@ -250,6 +264,7 @@
 
     <!-- Módulo 2: Finanças -->
     <div id="finances" class="tab-content">
+      <h1 class="page-title">Finanças</h1>
       <div class="card fin-month-bar" style="margin-top: 20px;">
         <div class="fin-month-nav"><button type="button" class="mini-btn" onclick="mudarMesFin(-1)">◀</button><h2 id="fin-month-label" style="margin:0">Mês</h2><button type="button" class="mini-btn" onclick="mudarMesFin(1)">▶</button><button type="button" class="mini-btn" onclick="irParaMesAtual()">📍 Este mês</button></div>
         <div class="focus-header-tabs" id="fin-modo" style="border:none; padding:0;"><span class="active" onclick="alternarModoFin('mes', this)">📅 Mês</span><span onclick="alternarModoFin('tudo', this)">♾️ Tudo</span></div>
@@ -258,7 +273,7 @@
         <div class="balance-item"><span>Receitas</span><h3 id="total-income" class="income">R$ 0,00</h3></div>
         <div class="balance-item"><span>Despesas</span><h3 id="total-expense" class="expense">R$ 0,00</h3></div>
         <div class="balance-item"><span>Saldo</span><h3 id="net-balance">R$ 0,00</h3></div>
-        <div class="balance-item"><span>A receber</span><h3 id="total-pending" style="color:#f59e0b">R$ 0,00</h3></div>
+        <div class="balance-item"><span>A receber</span><h3 id="total-pending" style="color:#bf8700">R$ 0,00</h3></div>
       </div>
       <div id="fin-extra" class="summary-row" style="padding: 0 6px;"></div>
       <div class="card" style="margin-top: 20px;">
@@ -330,8 +345,79 @@
       </div>
     </div>
 
+    <!-- Módulo 3: Primos 3D (pedidos e clientes) -->
+    <div id="primos" class="tab-content">
+      <h1 class="page-title">Primos 3D</h1>
+      <div class="card">
+        <div id="primos-dash"></div>
+      </div>
+      <div class="card" style="margin-top: 20px;">
+        <h2 id="order-form-title">Novo pedido</h2>
+        <form id="order-form">
+          <input type="hidden" id="order-id">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div><label for="order-client">Cliente:</label><select id="order-client"></select><input type="text" id="order-client-new" placeholder="nome do novo cliente" hidden style="margin-top:6px"></div>
+            <div><label for="order-status">Etapa:</label><select id="order-status"></select></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 3fr 1fr; gap: 10px;">
+            <div><label for="order-title">Peça / descrição:</label><input type="text" id="order-title" placeholder="Ex: Chaveiro personalizado, suporte de celular" required></div>
+            <div><label for="order-qty">Qtd.:</label><input type="number" id="order-qty" min="1" value="1"></div>
+          </div>
+          <div class="row3" style="display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 10px;">
+            <div><label for="order-material">Material:</label><select id="order-material"></select></div>
+            <div><label for="order-color">Cor(es):</label><input type="text" id="order-color" placeholder="Preto, branco..."></div>
+            <div><label for="order-printer">Impressora:</label><select id="order-printer"></select></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div><label for="order-price">Valor total (R$):</label><input type="number" id="order-price" step="0.01" min="0" inputmode="decimal" placeholder="0,00"></div>
+            <div><label for="order-due">Prazo de entrega:</label><input type="date" id="order-due"></div>
+          </div>
+          <label for="order-notes">Observações:</label><input type="text" id="order-notes" placeholder="link do modelo, medidas, forma de entrega...">
+          <p class="hint" style="margin: 2px 0 0;">Saiu do orçamento e tem valor → entra em Finanças como <em>a receber</em> (categoria Primos 3D). 💵 marca como pago; ▶ avança a etapa.</p>
+          <div style="display:flex; gap:10px;">
+            <button type="submit" id="order-submit" style="flex:1">Registrar pedido</button>
+            <button type="button" id="order-cancel" class="btn" hidden onclick="cancelarEdicaoPedido()">Cancelar</button>
+          </div>
+        </form>
+      </div>
+      <div class="card" style="margin-top: 20px;">
+        <h2>Pedidos</h2>
+        <input type="search" id="order-search" placeholder="🔍 buscar por peça, cliente, material, cor..." oninput="buscarPedidos(this.value)" style="margin-bottom: 10px;">
+        <div class="focus-header-tabs filter-row" id="order-filters">
+          <span class="active" onclick="filtrarPedidos('abertos', this)">Em produção</span>
+          <span onclick="filtrarPedidos('orcamentos', this)">Orçamentos</span>
+          <span onclick="filtrarPedidos('receber', this)">A receber</span>
+          <span onclick="filtrarPedidos('entregues', this)">Finalizados</span>
+          <span onclick="filtrarPedidos('todos', this)">Todos</span>
+        </div>
+        <ul id="order-list" class="transaction-list"></ul>
+      </div>
+      <div class="card" style="margin-top: 20px;">
+        <h2 id="client-form-title">Novo cliente</h2>
+        <form id="client-form">
+          <input type="hidden" id="client-id">
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px;">
+            <div><label for="client-name">Nome:</label><input type="text" id="client-name" placeholder="Nome ou empresa" required autocomplete="off"></div>
+            <div><label for="client-phone">WhatsApp / telefone:</label><input type="tel" id="client-phone" placeholder="(31) 9 9999-9999" autocomplete="off"></div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 10px;">
+            <div><label for="client-email">E-mail:</label><input type="email" id="client-email" placeholder="opcional" autocomplete="off"></div>
+            <div><label for="client-city">Cidade:</label><input type="text" id="client-city" placeholder="Viçosa" autocomplete="off"></div>
+          </div>
+          <label for="client-notes">Observações:</label><input type="text" id="client-notes" placeholder="como chegou até você, preferências...">
+          <div style="display:flex; gap:10px;">
+            <button type="submit" id="client-submit" style="flex:1">Cadastrar cliente</button>
+            <button type="button" id="client-cancel" class="btn" hidden onclick="cancelarEdicaoCliente()">Cancelar</button>
+          </div>
+        </form>
+        <h2 style="margin-top: 22px;">Clientes</h2>
+        <ul id="client-list" class="transaction-list"></ul>
+      </div>
+    </div>
+
     <!-- Módulo 4: Tarefas -->
     <div id="tasks" class="tab-content">
+      <h1 class="page-title">Tarefas</h1>
       <div class="card" style="margin-top: 20px;">
         <div class="focus-header-tabs task-tabs" id="task-lists"></div>
         <div id="task-list-tools" class="task-tools"></div>
@@ -391,6 +477,7 @@
 
     <!-- Módulo 5: Notas -->
     <div id="notes" class="tab-content">
+      <h1 class="page-title">Notas</h1>
       <div class="card" style="margin-top: 20px;">
         <h2 id="note-form-title">Nova Anotação</h2>
         <form id="note-form">
@@ -403,7 +490,7 @@
             <div><label for="note-labels-input">Marcadores (separados por vírgula):</label><input type="text" id="note-labels-input" placeholder="trabalho, ideias, negócios"></div>
             <label class="check-line" style="margin-bottom: 12px;"><input type="checkbox" id="note-pin"> 📌 Fixar no topo</label>
           </div>
-          <div class="color-row"><span style="font-size:0.8rem; color:#94a3b8">Cor:</span><div id="note-colors" class="color-dots"></div></div>
+          <div class="color-row"><span style="font-size:0.8rem; color:#8e8e93">Cor:</span><div id="note-colors" class="color-dots"></div></div>
           <div style="display:flex; gap:10px;">
             <button type="submit" id="note-submit" style="flex:1">Salvar Nota</button>
             <button type="button" id="note-cancel" class="btn" hidden onclick="cancelarEdicaoNota()">Cancelar</button>
@@ -437,6 +524,7 @@
 
     <!-- Módulo 7: Estudos -->
     <div id="studies" class="tab-content">
+      <h1 class="page-title">Estudos</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>📚 Estudos</h2>
         <div id="study-dash"></div>
@@ -523,6 +611,7 @@
 
     <!-- Módulo 8: Negócios & Investimentos -->
     <div id="business" class="tab-content">
+      <h1 class="page-title">Negócios</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>📈 Negócios & Investimentos</h2>
         <div id="biz-dash"></div>
@@ -625,6 +714,7 @@
 
     <!-- Módulo 9: Saúde -->
     <div id="health" class="tab-content">
+      <h1 class="page-title">Saúde</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>🩺 Saúde</h2>
         <div id="health-dash"></div>
@@ -702,6 +792,7 @@
 
     <!-- Módulo 10: Lazer -->
     <div id="leisure" class="tab-content">
+      <h1 class="page-title">Lazer</h1>
       <div class="focus-header-tabs agenda-tabs" id="lazer-secoes">
         <span class="active" onclick="verSecaoLazer('midia', this)">🎬 Filmes e séries</span>
         <span onclick="verSecaoLazer('musica', this)">🎵 Música</span>
@@ -772,6 +863,7 @@
 
     <!-- Módulo 11: Viagens -->
     <div id="trips" class="tab-content">
+      <h1 class="page-title">Viagens</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>✈️ Viagens</h2>
         <p class="hint">Cada viagem já nasce com lista de mala e de documentos. Clique na viagem para abrir, marcar itens e guardar reservas. O 📅 põe ida e volta na sua agenda.</p>
@@ -795,6 +887,7 @@
 
     <!-- Módulo 12: Rede -->
     <div id="net" class="tab-content">
+      <h1 class="page-title">Rede</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>🤝 Rede</h2>
         <p class="hint">As pessoas que você conhece do trabalho, dos negócios e da vida. O 💬 marca que você falou hoje; se passar do intervalo que você definir, ela aparece em "falar".</p>
@@ -824,6 +917,7 @@
 
     <!-- Módulo 13: Clínica -->
     <div id="clinic" class="tab-content">
+      <h1 class="page-title">Clínica</h1>
       <div class="focus-header-tabs agenda-tabs" id="clinica-secoes" style="margin-top:20px">
         <span class="active" onclick="verSecaoClinica('painel', this)">📊 Painel</span>
         <span onclick="verSecaoClinica('funil', this)">🌱 Funil</span>
@@ -909,6 +1003,7 @@
 
     <!-- Módulo 14: Produção / impressão 3D -->
     <div id="prod" class="tab-content">
+      <h1 class="page-title">Produção</h1>
       <div class="focus-header-tabs agenda-tabs" id="producao-secoes" style="margin-top:20px">
         <span class="active" onclick="verSecaoProducao('painel', this)">📊 Painel</span>
         <span onclick="verSecaoProducao('fila', this)">📋 Fila</span>
@@ -1057,6 +1152,7 @@
 
     <!-- Módulo 6: Config -->
     <div id="settings" class="tab-content">
+      <h1 class="page-title">Ajustes</h1>
       <div class="card" style="margin-top: 20px;">
         <h2>🎨 Aparência</h2>
         <p class="hint">Tema de cores, onde ficam as abas e quais aparecem. Vale <strong>só neste aparelho</strong> — o PC pode ficar com as abas na lateral e o celular no topo.</p>
@@ -1113,9 +1209,16 @@
         <button class="btn" type="button" style="width:100%" onclick="copiaManual()">🛟 Guardar uma cópia agora</button>
       </div>
       <div class="card" style="margin-top: 20px;">
-        <h2>🪟 Janelas flutuantes</h2>
-        <p class="hint">Pequenas janelas que <strong>seguem você em qualquer aba</strong> — feitas para o bloco de anotações ficar aberto enquanto você usa o resto do app. Na tela larga do PC elas ocupam as margens que ficavam vazias dos dois lados; em tela menor empilham no canto. <strong>Arraste pelo título</strong> para colocar onde quiser.</p>
-        <div id="flut-config"></div>
+        <h2>✳ Claude</h2>
+        <p class="hint">Deixa o botão ✳ mandar pedidos de mudança no app para o <strong>Claude no seu computador</strong>: o pedido passa pelo repositório do app no seu GitHub, o Claude faz a mudança, publica e o app mostra o andamento. O app só escreve nesse repositório. O token fica guardado só neste aparelho.</p>
+        <div class="sync-form">
+          <label for="claude-repo">Repositório do app (usuário/nome)</label>
+          <input type="text" id="claude-repo" placeholder="usuario/Genesis" autocomplete="off" autocapitalize="off">
+          <label for="claude-token">Token do GitHub</label>
+          <input type="password" id="claude-token" placeholder="github_pat_... (nunca é exibido)" autocomplete="off">
+        </div>
+        <button class="btn" type="button" onclick="salvarClaudeConfig()" style="width:100%; margin-top:12px">💾 Salvar e testar</button>
+        <div id="claude-status" style="font-size: 0.9rem; text-align: center; margin-top: 12px; min-height: 20px;"></div>
       </div>
       <div class="card" style="margin-top: 20px;">
         <h2>👤 Perfil</h2>
@@ -1134,11 +1237,11 @@
       <div class="card" style="margin-top: 20px;">
         <h2>Segurança e Backup</h2>
         <div style="display: flex; gap: 15px; margin-bottom: 15px;">
-          <button onclick="exportData()" style="flex: 1; background-color: #22c55e;">⬇️ Exportar Backup</button>
-          <button onclick="document.getElementById('import-file').click()" style="flex: 1; background-color: #f59e0b;">⬆️ Importar Backup</button>
+          <button onclick="exportData()" style="flex: 1; background-color: #34c759;">⬇️ Exportar Backup</button>
+          <button onclick="document.getElementById('import-file').click()" style="flex: 1; background-color: #bf8700;">⬆️ Importar Backup</button>
           <input type="file" id="import-file" accept=".json" style="display: none;" onchange="importData(event)">
         </div>
-        <div id="backup-status" style="font-size: 0.9rem; color: #38bdf8; text-align: center; height: 20px;"></div>
+        <div id="backup-status" style="font-size: 0.9rem; color: #007aff; text-align: center; height: 20px;"></div>
       </div>
       <div class="card" style="margin-top: 20px;">
         <h2>☁️ Sincronização (PC ↔ Celular)</h2>
@@ -1150,7 +1253,7 @@
           <input type="password" id="sync-token" placeholder="a frase que você definiu no Code.gs (nunca é exibida)" autocomplete="off">
         </div>
         <div style="display: flex; gap: 15px; margin-top: 15px;">
-          <button class="btn" onclick="salvarSyncConfig()" style="flex: 1; background-color: #38bdf8; color: #121212;">💾 Salvar e testar</button>
+          <button class="btn" onclick="salvarSyncConfig()" style="flex: 1; background-color: #007aff; color: #fff;">💾 Salvar e testar</button>
           <button class="btn" onclick="sincronizar()" style="flex: 1;">🔄 Sincronizar agora</button>
         </div>
         <div id="sync-status" style="font-size: 0.9rem; text-align: center; margin-top: 12px; min-height: 20px;"></div>
@@ -1158,7 +1261,7 @@
           <label class="check-line"><input type="checkbox" id="sync-agenda"> 📆 Enviar plantões e compromissos para o <strong>Google Calendar</strong> (agenda "Genesis")</label>
           <p class="hint" style="margin: 6px 0 8px;">Precisa do <code>Code.gs</code> versão 2 implantado no Apps Script. Depois de marcar, clique em "Salvar e testar". Cada plantão/compromisso vira um evento; mudou no app, muda na agenda.</p>
           <button class="btn" type="button" onclick="enviarAgendaAgora()" style="width:100%">📆 Enviar agenda agora</button>
-          <div id="agenda-status" style="font-size: 0.85rem; text-align: center; margin-top: 10px; min-height: 18px; color:#64748b;"></div>
+          <div id="agenda-status" style="font-size: 0.85rem; text-align: center; margin-top: 10px; min-height: 18px; color:#8e8e93;"></div>
         </div>
       </div>
     </div>
@@ -1215,20 +1318,36 @@
       </div>
     </div>
   </div>
-  <div id="paineis" hidden></div>
-  <div id="mini-player" class="mini-player" hidden>
-    <button class="mp-btn" onclick="faixaAnterior()" title="Anterior">⏮</button>
-    <button class="mp-btn" id="mp-play" onclick="mpPlayPause()" title="Tocar/pausar">▶️</button>
-    <button class="mp-btn" onclick="faixaProxima()" title="Próxima">⏭</button>
-    <div class="mp-info" onclick="mpIrParaMusica()" title="Abrir a aba de música">
-      <span id="mp-nome"></span>
-      <div class="mp-barra"><div id="mp-prog"></div></div>
-    </div>
-    <small id="mp-tempo" class="mp-tempo"></small>
-    <input type="range" min="0" max="100" value="100" class="mp-vol" oninput="mpVolume(this.value)" title="Volume">
-    <button class="mp-btn" onclick="mpVirarJanela()" title="Virar janela flutuante">🪟</button>
-    <button class="mp-btn" onclick="mpFechar()" title="Fechar">✕</button>
+  <!-- Bolinhas flutuantes: ✳ Claude (mudanças no app) e 🎤 ditado (lançar dados) -->
+  <div class="fab-stack">
+    <button type="button" class="fab fab-claude" onclick="abrirVoz('claude')" title="Pedir mudança no app ao Claude" aria-label="Pedir mudança no app ao Claude">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g stroke="#fff" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></g></svg>
+    </button>
+    <button type="button" class="fab fab-mic" onclick="abrirVoz('dados')" title="Ditado: lançar pedido, tarefa, gasto..." aria-label="Ditado">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
   </div>
+
+  <div id="voice-sheet" class="modal-overlay">
+    <div class="modal-content voice-content">
+      <div class="modal-header"><h3 id="voice-title">🎤 Ditado</h3><button class="close-modal" onclick="fecharVoz()">✕</button></div>
+      <div class="modal-body">
+        <p id="voice-context" class="hint" style="margin:0"></p>
+        <details class="voice-help-box"><summary>❓ Como usar</summary><div id="voice-help"></div></details>
+        <textarea id="voice-text" rows="3"></textarea>
+        <div id="voice-status" class="voice-status"></div>
+        <div class="voice-buttons">
+          <button type="button" id="voice-rec" class="btn" onclick="alternarGravacao()">🎙 Falar</button>
+          <button type="button" id="voice-interpret" class="btn voice-primary" onclick="interpretarVoz()">Entender</button>
+          <button type="button" id="voice-send" class="btn voice-claude" onclick="enviarPedidoClaude()" hidden>✳ Enviar</button>
+        </div>
+        <div id="voice-preview"></div>
+        <div id="voice-actions" class="voice-buttons"></div>
+        <div id="voice-requests"></div>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast"></div>
 
   <div id="day-modal" class="modal-overlay">
@@ -1236,7 +1355,7 @@
       <div class="modal-header"><h3 id="modal-date-title">Data</h3><button class="close-modal" onclick="closeModal()">✕</button></div>
       <div class="modal-body">
         <h4>📅 Neste dia:</h4><ul id="modal-shift-list" class="transaction-list"></ul>
-        <div class="modal-actions" style="display:flex; gap:10px;"><button onclick="goToAddShift()" id="modal-add-shift">🚑 + Plantão</button><button onclick="goToAddEvent()">📅 + Compromisso</button></div>
+        <div class="modal-actions" style="display:flex; gap:10px;"><button onclick="goToAddOrder()">📦 + Entrega</button><button onclick="goToAddShift()" id="modal-add-shift">🚑 + Plantão</button><button onclick="goToAddEvent()">📅 + Compromisso</button></div>
       </div>
     </div>
   </div>
