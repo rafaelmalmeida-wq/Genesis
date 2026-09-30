@@ -5551,7 +5551,7 @@ function addFotoFamilia(input) {
 //   ⟦ABRIR: destino⟧ leva a uma página do app.
 // ============================================================================
 const IA_BASE = 'https://generativelanguage.googleapis.com/v1beta';
-const IA_MODELOS_PADRAO = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
+const IA_MODELOS_PADRAO = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash', 'gemini-3.5-flash-lite', 'gemini-2.5-flash-lite'];
 const IA_SITE_CHAVE = 'https://aistudio.google.com/apikey';
 const TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new?name=JARVIS&description=Conexao+do+app+J.A.R.V.I.S.+com+o+cofre+privado&target_name=rafaelmalmeida-wq&expires_in=365&contents=write&issues=write';
 // chave clássica (AIza…) ou a nova "chave de autenticação" que o AI Studio passou a gerar em 2026 (AQ.…)
@@ -5563,16 +5563,22 @@ function escRegex(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
 
 /** Erro da API do Gemini → tipo + mensagem em português simples. */
 async function erroGemini(r) {
-  let msg = '', status = '';
-  try { const j = await r.json(); msg = (j.error && j.error.message) || ''; status = (j.error && j.error.status) || ''; } catch (e) { }
+  let msg = '', status = '', detalhes = [];
+  try { const j = await r.json(); msg = (j.error && j.error.message) || ''; status = (j.error && j.error.status) || ''; detalhes = (j.error && j.error.details) || []; } catch (e) { }
   const e = new Error(msg || String(r.status)); e.status = r.status;
   const m = msg.toLowerCase();
+  // o Google diz quanto esperar (RetryInfo) e se a cota daquele modelo no plano grátis é zero ("limit: 0")
+  const retry = detalhes.find(d => /RetryInfo/.test(d['@type'] || '')); if (retry && retry.retryDelay) e.espera = Math.ceil(parseFloat(retry.retryDelay)) || 0;
+  const cota = detalhes.find(d => /QuotaFailure/.test(d['@type'] || '')); const viol = cota && (cota.violations || [])[0];
+  e.semCota = /limit:\s*0\b/.test(msg) || !!(viol && /free_tier/i.test(viol.quotaId || viol.quotaMetric || '') && /limit:\s*0\b/.test(msg));
+  e.porDia = /per.?day|perday|daily/i.test(msg + ' ' + ((viol && (viol.quotaId || viol.quotaMetric)) || ''));
+  e.bruto = `${r.status}${status ? ' ' + status : ''}: ${msg.replace(/\s+/g, ' ').slice(0, 200)}`;
   if (/api key|api_key|key not valid|invalid.*key|access_token_type_unsupported|unauthenticated|invalid authentication|credential/.test(m) || /UNAUTHENTICATED|ACCESS_TOKEN_TYPE_UNSUPPORTED/.test(status) || r.status === 401 || (r.status === 400 && status === 'INVALID_ARGUMENT' && /key/.test(m))) {
     e.tipo = 'chave'; e.amigavel = /^AQ\./.test(jvConfig.iaChave || '') ? 'O Google recusou esta chave nova (AQ.). Crie uma chave clássica, que começa com AIza — o passo a passo está em Ajustes → Cérebro → "Se a chave não funcionar".' : 'A chave não é válida. Copie de novo no Google AI Studio.';
   }
   else if (r.status === 403) { e.tipo = 'chave'; e.amigavel = 'A chave não tem permissão para o Gemini (a "Generative Language API" precisa estar ativa no projeto). Veja em Ajustes → Cérebro.'; }
   else if (/google_search|googlesearch|grounding|search tool|tool/.test(m) && r.status !== 429) { e.tipo = 'busca'; }
-  else if (r.status === 429) { e.tipo = /grounding|search/.test(m) ? 'busca' : 'limite'; e.amigavel = 'O limite grátis deste minuto acabou. Tente de novo em 1 minuto.'; }
+  else if (r.status === 429) { e.tipo = /grounding|search/.test(m) ? 'busca' : 'limite'; e.amigavel = e.semCota ? 'Este modelo não está no plano grátis da sua conta.' : e.porDia ? 'O limite grátis de hoje acabou. Volta amanhã (ou tente outro modelo).' : 'O limite grátis deste minuto acabou. Tente de novo em 1 minuto.'; }
   else if (r.status === 404) { e.tipo = 'modelo'; }
   else if (r.status >= 500) { e.tipo = 'servidor'; e.amigavel = 'O Google está instável agora. Tente de novo daqui a pouco.'; }
   else { e.tipo = 'outro'; e.amigavel = 'O Gemini recusou o pedido (' + r.status + '). ' + msg.slice(0, 140); }
@@ -5593,8 +5599,10 @@ async function modelosGemini(chave) {
   const versao = n => { const v = n.match(/gemini-(\d+(?:\.\d+)?)/); return v ? parseFloat(v[1]) : 0; };
   const estaveis = nomes.filter(n => /^gemini-\d+(\.\d+)?-flash$/.test(n)).sort((a, b) => versao(b) - versao(a));
   const reserva = nomes.filter(n => /flash/.test(n) && !/lite|image|tts|audio|live|embed|thinking|exp|native/.test(n) && !estaveis.includes(n)).sort((a, b) => versao(b) - versao(a));
-  const lista = [...estaveis, ...(nomes.includes('gemini-flash-latest') ? ['gemini-flash-latest'] : []), ...reserva.filter(n => n !== 'gemini-flash-latest')];
-  return lista.length ? lista.slice(0, 6) : IA_MODELOS_PADRAO;
+  // reserva final: os "flash-lite" (mais simples, mas com a maior cota grátis)
+  const leves = nomes.filter(n => /^gemini-\d+(\.\d+)?-flash-lite$/.test(n)).sort((a, b) => versao(b) - versao(a));
+  const lista = [...estaveis.slice(0, 4), ...(nomes.includes('gemini-flash-latest') ? ['gemini-flash-latest'] : []), ...reserva.filter(n => n !== 'gemini-flash-latest').slice(0, 2), ...leves.slice(0, 2)];
+  return lista.length ? lista : IA_MODELOS_PADRAO;
 }
 /** Uma chamada ao Gemini (com streaming: o texto vai aparecendo). Devolve { texto, fontes }. */
 async function chamarGemini(modelo, sistema, conteudos, comBusca, aoEscrever, sinal) {
@@ -5630,20 +5638,25 @@ async function gerarGemini({ sistema, conteudos, busca, aoEscrever, sinal }) {
   if (!iaLigada()) { const e = new Error('IA desligada'); e.tipo = 'desligada'; throw e; }
   const lista = jvConfig.iaModelos && jvConfig.iaModelos.length ? jvConfig.iaModelos : IA_MODELOS_PADRAO;
   const ordem = jvConfig.iaModelo ? [jvConfig.iaModelo, ...lista.filter(m => m !== jvConfig.iaModelo)] : lista;
-  let ultimo = null;
+  const semCota = jv.iaSemCota || (jv.iaSemCota = new Set()); // modelos que não estão no plano grátis desta conta (nesta sessão)
+  let ultimo = null; jv.iaDiag = [];
   for (const modelo of ordem) {
-    const tentativas = busca && jvConfig.iaBusca !== false ? [true, false] : [false];
-    for (const comBusca of tentativas) {
+    if (semCota.has(modelo)) continue;
+    let comBusca = !!busca && jvConfig.iaBusca !== false, esperou = false;
+    for (let t = 0; t < 4; t++) {
       try {
         const r = await chamarGemini(modelo, sistema, conteudos, comBusca, aoEscrever, sinal);
-        if (jvConfig.iaModelo !== modelo) { jvConfig.iaModelo = modelo; salvarJvConfig(); }
-        if (comBusca && jvConfig.iaBusca !== true) { jvConfig.iaBusca = true; salvarJvConfig(); }
+        if (jvConfig.iaModelo !== modelo) jvConfig.iaModelo = modelo;
+        if (comBusca) jvConfig.iaBusca = true; else if (busca && jvConfig.iaBusca === null && t > 0) jvConfig.iaBusca = false; // a busca falhou e sem ela deu certo
+        salvarJvConfig();
         return r;
       } catch (e) {
-        ultimo = e;
+        ultimo = e; jv.iaDiag.push(`${modelo}${comBusca ? ' + busca' : ''} → ${e.bruto || e.message}`);
         if (e.abortado || e.tipo === 'chave' || e.tipo === 'rede' || e.tipo === 'bloqueio') throw e;
-        if (e.tipo === 'busca') { jvConfig.iaBusca = false; salvarJvConfig(); continue; }
-        break; // modelo / limite / servidor / vazio → tenta o próximo modelo
+        if (comBusca) { comBusca = false; continue; }                        // qualquer falha com a busca: tenta o mesmo modelo sem ela
+        if (e.tipo === 'limite' && e.semCota) { semCota.add(modelo); break; } // modelo fora do plano grátis → próximo
+        if (e.tipo === 'limite' && !e.porDia && !esperou && (e.espera || 0) <= 20) { esperou = true; await new Promise(ok => setTimeout(ok, Math.max(2, e.espera || 8) * 1000)); continue; } // limite do minuto: espera e tenta de novo
+        break; // modelo / limite do dia / servidor / vazio → tenta o próximo modelo
       }
     }
   }
@@ -6280,14 +6293,16 @@ async function ligarCerebroJarvis() {
   const antes = { ...jvConfig };
   try {
     jvConfig.iaChave = chave; jvConfig.iaProvedor = 'gemini';
-    jvConfig.iaModelos = await modelosGemini(chave); jvConfig.iaModelo = jvConfig.iaModelos[0]; jvConfig.iaBusca = null; salvarJvConfig();
-    st.innerText = '🔄 Chave boa. Fazendo a primeira pergunta…';
-    const r = await gerarGemini({ sistema: 'Você é o J.A.R.V.I.S. Responda em português, uma frase curta e elegante, confirmando que está online.', conteudos: [{ role: 'user', parts: [{ text: 'Status?' }] }], busca: true });
-    st.innerHTML = `🟢 Cérebro ligado (${esc(r.modelo)}${jvConfig.iaBusca ? ', com busca no Google' : ''}). Ele disse: <i>${esc(r.texto.slice(0, 140))}</i>`;
-    renderChatJarvis(); setTimeout(renderAjustesJarvis, 2500);
+    jvConfig.iaModelos = await modelosGemini(chave); jvConfig.iaModelo = jvConfig.iaModelos[0]; jvConfig.iaBusca = null; jv.iaSemCota = new Set(); salvarJvConfig();
+    st.innerText = '🔄 Chave aceita. Fazendo a primeira pergunta (pode levar alguns segundos)…';
+    // teste simples, sem a busca no Google (ela é testada sozinha na primeira pergunta de verdade)
+    const r = await gerarGemini({ sistema: 'Você é o J.A.R.V.I.S. Responda em português, uma frase curta e elegante, confirmando que está online.', conteudos: [{ role: 'user', parts: [{ text: 'Status?' }] }], busca: false });
+    st.innerHTML = `🟢 Cérebro ligado (${esc(r.modelo)}). Ele disse: <i>${esc(r.texto.slice(0, 140))}</i>`;
+    renderChatJarvis(); setTimeout(renderAjustesJarvis, 4000);
   } catch (e) {
     if (e.tipo === 'chave' || e.tipo === 'rede') { jvConfig.iaChave = antes.iaChave || ''; jvConfig.iaModelos = antes.iaModelos; jvConfig.iaModelo = antes.iaModelo; jvConfig.iaAuth = antes.iaAuth; salvarJvConfig(); }
-    st.innerText = '🔴 ' + (e.amigavel || ('Não ligou: ' + e.message));
+    const diag = (jv.iaDiag || []).slice(-6);
+    st.innerHTML = '🔴 ' + esc(e.amigavel || ('Não ligou: ' + e.message)) + (diag.length ? `<details class="jva-plano-b"><summary>Detalhes (mande um print disto se precisar de ajuda)</summary><p class="jva-mini">${diag.map(esc).join('<br>')}</p></details>` : '');
   }
 }
 function desligarCerebroJarvis() { if (!confirm('Desligar o cérebro neste aparelho? (a chave é apagada daqui)')) return; jvConfig.iaChave = ''; jvConfig.iaModelo = ''; jvConfig.iaModelos = []; salvarJvConfig(); renderAjustesJarvis(); renderChatJarvis(); }
