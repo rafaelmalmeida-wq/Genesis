@@ -1,6 +1,6 @@
 // ============================================================================
 // EXPOSITOR 3D — a torre giratória de chaveiros da Primos 3D, igual à dos vídeos: base em estrela, coluna,
-// 2 andares de 8 braços com ranhuras e a placa do PIX no topo (andar de cima R$ 15, de baixo R$ 10).
+// 2 andares de 8 braços com 7 ranhuras cada (112 chaveiros) e a placa do PIX no topo (andar de cima R$ 15, de baixo R$ 10).
 // Desenhada aqui mesmo, peça por peça (não é o arquivo do autor do MakerWorld). Cada ranhura mostra um chaveiro do
 // ESTOQUE, na cor do modelo; vendeu → o gancho esvazia. Arrastar gira (com inércia), pinça/roda aproxima, tocar num
 // chaveiro diz qual é. Um só visualizador (um só WebGL): o app "anexa" o mesmo canvas de novo quando redesenha a aba.
@@ -9,7 +9,7 @@
 // ============================================================================
 import * as THREE from './vendor/three.module.min.js';
 
-const BRACOS = 8, RANHURAS = 6, PASSO = 1.45, RAIO_COL = 1.3, INICIO = RAIO_COL + 1.1;
+const BRACOS = 8, RANHURAS = 7, PASSO = 1.3, RAIO_COL = 1.3, INICIO = RAIO_COL + 1.1; // 16 hastes × 7 = 112 chaveiros, como o original
 const COMP = INICIO + PASSO * RANHURAS + 0.9 - RAIO_COL; // comprimento do braço (da coluna até a ponta)
 const Y_CIMA = 30, Y_BAIXO = 14.5, TOPO = 35.5;
 
