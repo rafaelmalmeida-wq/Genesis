@@ -2238,3 +2238,97 @@ body.jv-pensando #cerebro .jv-marca::before, #cerebro.pensando .jv-marca::before
   .jvv-palco { padding: 16px 14px 12px; border-radius: 26px; }
   .jvv-legenda { max-height: 24vh; }
 }
+
+/* ============================================================================
+   PRIMOS · aba CHAVEIROS (fase 5): o expositor em 3D com o estoque, números de cada expositor, vídeos da loja,
+   o próximo expositor e as licenças — minimalista, com o laranja da Primos
+   ============================================================================ */
+.jvk-resumo { display: flex; align-items: center; gap: 16px; margin: 14px 0 12px; }
+.jvk-anel { --p: 0; position: relative; width: 84px; height: 84px; flex-shrink: 0; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(#c2682c calc(var(--p) * 1%), rgba(60, 50, 35, 0.1) 0); }
+.jvk-anel::before { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: #fffefb; }
+.jvk-anel > div { position: relative; text-align: center; line-height: 1.05; }
+.jvk-anel strong { display: block; font-size: 1.5rem; color: #1d1d1f; }
+.jvk-anel small { font-size: 0.7rem; color: #8f897f; }
+.jvk-resumo-txt small { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: #8f897f; }
+.jvk-resumo-txt h3 { margin: 3px 0 2px; font-size: 1.45rem; letter-spacing: -0.02em; color: #1d1d1f; }
+.jvk-resumo-txt p { margin: 0; font-size: 0.86rem; line-height: 1.4; color: #4a4640; }
+.jvk-exps { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 4px; scrollbar-width: none; }
+.jvk-exps::-webkit-scrollbar { display: none; }
+.jvk-exps button { position: relative; flex: 1 0 auto; min-width: 150px; margin: 0; padding: 10px 12px 12px; overflow: hidden; border: none; border-radius: 14px; text-align: left; cursor: pointer; color: #1d1d1f; background: rgba(60, 50, 35, 0.05); box-shadow: inset 0 0 0 0.5px rgba(60, 50, 35, 0.12); }
+.jvk-exps button.on { background: #2d3137; color: #fff; box-shadow: none; }
+.jvk-exps strong { display: block; font-size: 0.9rem; }
+.jvk-exps small { font-size: 0.74rem; opacity: 0.7; }
+.jvk-exps i { position: absolute; left: 0; bottom: 0; width: var(--p); height: 3px; background: #c2682c; }
+.jvk-palco { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 14px; align-items: stretch; }
+.jvk-3d { position: relative; min-height: 430px; overflow: hidden; border-radius: 22px; background: radial-gradient(ellipse 70% 60% at 50% 42%, #ffffff, #efe9df 70%, #e4dccf); box-shadow: inset 0 0 0 0.5px rgba(60, 50, 35, 0.12); }
+.jvk-3d .jvk-gl { position: absolute; inset: 0; display: block; width: 100%; height: 100%; cursor: grab; }
+.jvk-3d .jvk-gl:active { cursor: grabbing; }
+.jvk-carregando { position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.85rem; color: #8f897f; }
+.jvk-dica { position: absolute; left: 12px; bottom: 10px; font-size: 0.72rem; color: #8f897f; pointer-events: none; }
+.jvk-legenda { position: absolute; top: 10px; left: 12px; line-height: 1.35; padding: 4px 8px; border-radius: 10px; font-size: 0.7rem; color: #4a4640; background: rgba(255, 255, 255, 0.72); pointer-events: none; }
+.jvk-tip { position: absolute; z-index: 2; width: 180px; padding: 9px 11px; border-radius: 14px; color: #fff; background: rgba(29, 29, 31, 0.92); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2); pointer-events: none; animation: jvHeroi 0.2s ease; }
+.jvk-tip[hidden] { display: none; }
+.jvk-tip strong { display: block; font-size: 0.86rem; }
+.jvk-tip small { display: block; margin: 2px 0 6px; font-size: 0.74rem; opacity: 0.75; }
+.jvk-info { display: flex; flex-direction: column; gap: 8px; padding: 4px 2px; }
+.jvk-info h4 { margin: 0; font-size: 1.25rem; letter-spacing: -0.01em; color: #1d1d1f; }
+.jvk-info > small { font-size: 0.78rem; color: #8f897f; }
+.jvk-barra { height: 8px; overflow: hidden; border-radius: 4px; background: rgba(60, 50, 35, 0.1); }
+.jvk-barra i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #c2682c, #e3a36f); }
+.jvk-vend { margin: 0; font-size: 0.9rem; color: #1d1d1f; }
+.jvk-obs { font-size: 0.78rem; color: #8f897f; }
+.jvk-num { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.jvk-num > div { padding: 10px 12px; border-radius: 14px; background: rgba(60, 50, 35, 0.045); box-shadow: inset 0 0 0 0.5px rgba(60, 50, 35, 0.1); }
+.jvk-num small { display: block; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #8f897f; }
+.jvk-num strong { display: block; margin: 2px 0; font-size: 1.12rem; color: #1d1d1f; }
+.jvk-num em { font-style: normal; font-size: 0.72rem; color: #8f897f; }
+.jvk-num .pos strong { color: #1f8a4c; }
+.jvk-num .neg strong { color: #c2682c; }
+.jvk-ritmo { margin: 0; font-size: 0.85rem; line-height: 1.4; color: #4a4640; }
+#cerebro .jvk-info .jv-abrir { margin-top: auto !important; }
+.jvk-midias { display: flex; gap: 10px; margin: 14px 0 4px; overflow-x: auto; scrollbar-width: none; }
+.jvk-midias::-webkit-scrollbar { display: none; }
+.jvk-midias figure { flex: 0 0 auto; height: 240px; margin: 0; overflow: hidden; border-radius: 18px; background: #1d1d1f; box-shadow: 0 6px 18px rgba(60, 45, 25, 0.15); }
+.jvk-midias video, .jvk-midias img { display: block; width: auto; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.3s; }
+.jvk-midias .ok { opacity: 1; }
+.jvk-sem-midia { margin: 12px 0; }
+.jvk-bolinha { display: inline-block; flex-shrink: 0; width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.2), inset 0 2px 3px rgba(255, 255, 255, 0.45); }
+.jvk-bolinha.metal { background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0) 60%); }
+.jvk-modelos { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.jvk-modelo { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 14px; background: rgba(60, 50, 35, 0.04); box-shadow: inset 0 0 0 0.5px rgba(60, 50, 35, 0.1); }
+.jvk-modelo > div { flex: 1; min-width: 0; }
+.jvk-modelo strong { display: block; overflow: hidden; font-size: 0.85rem; white-space: nowrap; text-overflow: ellipsis; color: #1d1d1f; }
+.jvk-modelo small { font-size: 0.72rem; color: #8f897f; }
+.jvk-modelo i { display: block; height: 3px; margin-top: 5px; border-radius: 2px; background: linear-gradient(90deg, #c2682c var(--p), rgba(60, 50, 35, 0.1) var(--p)); }
+.jvk-selo { flex-shrink: 0; padding: 3px 7px; border-radius: 8px; font-size: 0.66rem; font-weight: 700; white-space: nowrap; }
+.jvk-selo.ok { background: rgba(48, 209, 88, 0.14); color: #1f8a4c; }
+.jvk-selo.conferir { background: rgba(255, 159, 10, 0.16); color: #b86e00; }
+.jvk-selo.risco { background: rgba(255, 69, 58, 0.13); color: #d12a1f; }
+.jvk-selo.novo { background: rgba(10, 132, 255, 0.12); color: #0a6fd6; }
+.jvk-perfil { margin: 0 0 6px; font-size: 0.86rem; line-height: 1.4; color: #4a4640; }
+.jvk-plano { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.jvk-plano > div { padding: 9px 10px; border-radius: 13px; color: #fff; background: #2d3137; }
+.jvk-plano strong { display: block; font-size: 1.02rem; }
+.jvk-plano small { font-size: 0.7rem; opacity: 0.7; }
+.jvk-sugs { display: flex; flex-direction: column; gap: 6px; }
+.jvk-sug { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 9px 11px; border-radius: 14px; background: rgba(60, 50, 35, 0.04); box-shadow: inset 0 0 0 0.5px rgba(60, 50, 35, 0.1); }
+.jvk-sug > div { flex: 1 1 55%; min-width: 0; }
+.jvk-sug strong { display: block; font-size: 0.86rem; color: #1d1d1f; }
+.jvk-sug small { font-size: 0.74rem; line-height: 1.35; color: #4a4640; }
+.jvk-sug em { font-style: normal; font-size: 0.78rem; font-weight: 600; white-space: nowrap; color: #2d3137; }
+.jvk-lic-grupo { display: flex; align-items: flex-start; gap: 10px; margin: 8px 0; }
+.jvk-lic-grupo ul { flex: 1; margin: 0; padding: 0; list-style: none; }
+.jvk-lic-grupo li { padding: 3px 0; font-size: 0.84rem; color: #1d1d1f; }
+.jvk-lic-grupo small { color: #8f897f; }
+.jvk-lic-grupo .jvk-selo { min-width: 110px; margin-top: 3px; text-align: center; }
+.jvp-passo .jvk-bolinha { width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+@media (max-width: 800px) {
+  .jvk-palco { grid-template-columns: 1fr; }
+  .jvk-3d { min-height: 390px; }
+  .jvk-plano { grid-template-columns: 1fr 1fr; }
+  .jvk-midias figure { height: 210px; }
+  .jvk-lic-grupo { flex-direction: column; gap: 4px; }
+  .jvk-lic-grupo .jvk-selo { min-width: 0; }
+  .jvk-anel { width: 72px; height: 72px; }
+  .jvk-resumo-txt h3 { font-size: 1.25rem; }
+}

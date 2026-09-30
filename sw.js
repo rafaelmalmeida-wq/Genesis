@@ -1,10 +1,11 @@
-const CACHE_NAME = 'genesis-cache-v19';
+const CACHE_NAME = 'genesis-cache-v20';
 const urlsToCache = [
   './',
   './index.html',
   './style.css',
   './app.js',
   './jarvis3d.js',
+  './expositor3d.js',
   './vendor/three.module.min.js',
   './img/primos-p.png',
   './img/primos-logo.jpg',

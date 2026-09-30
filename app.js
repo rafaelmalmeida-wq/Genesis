@@ -5120,8 +5120,9 @@ function datasComerciaisPrimos() {
   return datas.map(([d, t]) => [diasEntre(hoje, d), t]).filter(([f]) => f >= 0 && f <= 45);
 }
 
-const ABAS_PRIMOS = [['jarvis', 'J.A.R.V.I.S.'], ['analise', 'Análise'], ['contabil', 'Contabilidade'], ['vendas', 'Vendas'], ['expositores', 'Expositores'], ['producao', 'Produção'], ['marketing', 'Marketing'], ['central', 'Central']];
+const ABAS_PRIMOS = [['jarvis', 'J.A.R.V.I.S.'], ['analise', 'Análise'], ['contabil', 'Contabilidade'], ['vendas', 'Vendas'], ['chaveiros', 'Chaveiros'], ['producao', 'Produção'], ['marketing', 'Marketing'], ['central', 'Central']];
 function abrirPrimos(aba) {
+  if (aba === 'expositores') aba = 'chaveiros'; // a aba Expositores virou Chaveiros (fase 5)
   jv.aba = aba || (ABAS_PRIMOS.some(a => a[0] === jv.aba) ? jv.aba : 'jarvis'); jv.area = 'primos';
   if ($j('jv-primos').hidden) { empilharCamada('primos', fecharPrimos); jv.primosEntrando = true; }
   $j('jv-primos').hidden = false; renderPrimosPagina(); renderAreasJarvis(); sincronizarCofre(false);
@@ -5153,6 +5154,7 @@ function renderPrimosPagina() {
   recolherBlocosPrimos(); ajustarBriefingPrimos();
   const c = $j('jv-primos-corpo'); if (c) c.scrollTop = y;
   if (jv.aba === 'producao') carregarFotosPrimos();
+  if (jv.aba === 'chaveiros') { montarExpositor3D(); carregarMidiasChaveiros(); } else if (jv.expo3d) jv.expo3d.renderer.domElement.remove(); // o 3D só anda com a aba aberta
   if (jv.aba === 'central') carregarCatalogo();
   if (jv.aba === 'jarvis') carregarBriefingPrimos(false);
 }
@@ -5190,7 +5192,7 @@ function htmlAbaPrimos(aba, pc) {
   if (aba === 'analise') return primosAnalise(pc);
   if (aba === 'contabil') return primosContabil(pc);
   if (aba === 'vendas') return primosVendas(pc);
-  if (aba === 'expositores') return primosExpositores(pc);
+  if (aba === 'chaveiros' || aba === 'expositores') return primosChaveiros(pc);
   if (aba === 'producao') return primosProducao(pc);
   if (aba === 'marketing') return primosMarketing(pc);
   if (aba === 'central') return primosArquivos(pc);
@@ -5530,24 +5532,142 @@ function primosVendas(pc) {
 }
 
 // --- EXPOSITORES: acompanhamento + registrar visita (vai para o computador atualizar a planilha) ---
-function primosExpositores(pc) {
-  const ex = pc.expositores || {}, t = totaisExpositores(pc), hoje = hojeISO();
-  const dias = ex.inicio ? diasEntre(ex.inicio, hoje) : null;
-  let h = falaHTML(t.vendidos ? `${t.vendidos} de ${t.colocados} chaveiros vendidos. Os campeões merecem reposição; os parados, troca.` : `${t.colocados} chaveiros nos expositores${dias !== null ? ` há ${plural(dias, 'dia', 'dias')}` : ''}, nenhum vendido ainda (normal no começo). Se vender tudo, sobram <b>${formatCurrency(t.potencial)}</b> líquidos para a Primos.`);
-  h += indicadoresHTML([[t.colocados, 'colocados'], [t.vendidos, 'vendidos'], [formatCurrency(t.potencial), 'potencial líquido'], [dias !== null ? `${15 - (dias % 15)} dias` : '—', 'até a próxima visita']]);
-  const vis = jv.visita;
-  if (vis) {
-    const itens = (ex.itens || []).map((i, k) => ({ ...i, k })).filter(i => i.local === vis.local);
-    h += `<div class="jv-bloco jvp-visita"><h5>Visita · ${esc(vis.local)} · ${isoParaBR(hoje)}</h5><p class="jv-dica">Quantos de cada saíram desde a última visita?</p>
-      ${itens.map(i => `<div class="jvp-passo"><span>${esc(i.chaveiro)}<small>${i.vendidos || 0}/${i.qtd} vendidos · resta ${Math.max(0, (i.qtd || 0) - (i.vendidos || 0))}</small></span><button type="button" onclick="mudarVisita(${i.k}, -1)" aria-label="menos">−</button><b>${vis.qtd[i.k] || 0}</b><button type="button" onclick="mudarVisita(${i.k}, 1)" aria-label="mais">＋</button></div>`).join('')}
-      <label class="jvp-obs">Observação (reposição, troca de modelos…)<input id="jvp-visita-obs" value="${esc(vis.obs || '')}" oninput="jv.visita.obs=this.value" placeholder="opcional"></label>
-      <div class="jvp-botoes"><button type="button" class="btn jv-abrir" onclick="enviarVisita()">Registrar visita</button><button type="button" class="btn jv-mais" onclick="jv.visita=null; renderPrimosPagina()">Cancelar</button></div></div>`;
-  } else if ((ex.resumo || []).length) h += `<div class="jvp-botoes">${(ex.resumo || []).filter(r => r.qtd).map(r => `<button type="button" class="btn jv-abrir" onclick="jv.visita={ local: ${JSON.stringify(r.local).replace(/"/g, '&quot;')}, qtd: {}, obs: '' }; renderPrimosPagina()">Registrar visita · ${esc(r.local)}</button>`).join('')}</div>`;
-  (ex.resumo || []).forEach(r => {
-    const itens = (ex.itens || []).filter(i => i.local === r.local);
-    h += `<div class="jv-bloco"><h5>${esc(r.local)} · ${r.vendidos || 0}/${r.qtd || 0} vendidos · potencial ${reais(r.potencial)}</h5>${itens.length ? tabelaHTML(itens.sort((a, b) => (b.vendidos || 0) - (a.vendidos || 0)).map(i => linhaTab(esc(i.chaveiro), `${i.vendidos || 0}/${i.qtd || 0}`, `${reais(i.preco)} · argola ${esc(i.argola || '—')} · custo ${reais(i.custo)}${i.pendente ? ' · ⏳ atualizando a planilha' : ''}`))) : '<p class="jv-dica">Ainda sem chaveiros cadastrados.</p>'}</div>`;
-  });
+// --- CHAVEIROS (fase 5): os expositores como vitrine — o expositor em 3D com o estoque de verdade, custo × retorno × lucro
+// de cada um, os vídeos da loja, o próximo expositor (Gomides Barber) e as licenças de cada modelo (analise-chaveiros.json).
+// Os números vêm da planilha pelo cofre: a aba Vendas é o dinheiro; a aba Expositores é o estoque por modelo.
+const LICENCA_CHAVEIRO = { ok: ['Pode vender', 'ok'], verificar: ['Conferir licença', 'conferir'], nao: ['Não pode vender', 'risco'], marca: ['Marca registrada', 'risco'], novo: ['Desenho novo (seu)', 'novo'] };
+/** Cor do chaveiro pelo nome do modelo (a mesma no 3D e nos cartões). */
+function corChaveiro(nome) {
+  const n = semAcentoCer(nome);
+  const regras = [[/dourad|ouro/, '#d4a53c', true], [/rosa|pink|magenta|porquinho/, '#e0418f'], [/colorido/, '#e0418f', false, true], [/vermelh|galaozinho|h8|disco de freio|ferrari|f1/, '#d3263f'], [/laranja|catalisador/, '#ff8a1d'], [/amarel/, '#f2c21f'], [/verde/, '#1fa65a'], [/azul/, '#2f6fd6'],
+    [/preto|preta|banguela \(todo preto\)|turbina|volante|bulldog|mustang/, '#232427'], [/branco|branca|maria|ballet|acrobata|estrelar|estrelinha/, '#f1f1f3'], [/cinza|motor|engrenagem|chave de fenda|rodinha/, '#a4a8ae'], [/porsche/, '#7a4fe0', false, true]];
+  const r = regras.find(([re]) => re.test(n)); return r ? { cor: r[1], metal: !!r[2], multi: !!r[3] } : { cor: ['#e0418f', '#2f6fd6', '#1fa65a', '#ff8a1d', '#7a4fe0'][[...n].reduce((s, c) => s + c.charCodeAt(0), 0) % 5], metal: false };
+}
+/** Licença de um modelo: regra da análise (palavras do nome) ou "conferir". */
+function licencaChaveiro(pc, nome) {
+  const an = (pc && pc.chaveiros) || {}, n = semAcentoCer(nome);
+  const r = (an.licencas || []).find(l => (l.busca || []).some(b => n.includes(semAcentoCer(b))));
+  return r || an.licencaPadrao || { status: 'verificar', motivo: 'Licença não conferida.' };
+}
+function seloLicenca(st) { const s = LICENCA_CHAVEIRO[st] || LICENCA_CHAVEIRO.verificar; return `<span class="jvk-selo ${s[1]}">${s[0]}</span>`; }
+function mesmoLocal(a, b) { const x = semAcentoCer(a).replace(/^expositor\s*·\s*/, ''), y = semAcentoCer(b).replace(/^expositor\s*·\s*/, ''); return !!x && !!y && (x.includes(y) || y.includes(x)); }
+/** Tudo de um expositor: estoque por modelo, vendidos, investido, o que voltou, lucro, ritmo e previsão. */
+function expositorPC(pc, local) {
+  const ex = pc.expositores || {}, itens = (ex.itens || []).filter(i => i.local === local), res = (ex.resumo || []).find(r => r.local === local) || { local, qtd: 0 };
+  const com = (pc.parametros || {}).comissaoExpositor || 0.3, vendas = vendasExpositorPlanilha(pc).filter(v => mesmoLocal(v.cliente || '', local));
+  const colocados = itens.reduce((s, i) => s + (i.qtd || 0), 0), porModelo = itens.reduce((s, i) => s + (i.vendidos || 0), 0);
+  const naPlanilha = vendas.reduce((s, v) => s + (Number(v.qtd) || 0), 0), vendidos = Math.max(porModelo, naPlanilha);
+  // vendas já lançadas sem dizer o modelo (ex.: PIX antes da visita): saem do estoque do andar do preço delas
+  const semModelo = {}; [15, 10].forEach(p => { const plan = vendas.filter(v => Number(v.preco || (v.bruto / (v.qtd || 1))) === p).reduce((s, v) => s + (Number(v.qtd) || 0), 0); const mod = itens.filter(i => i.preco === p).reduce((s, i) => s + (i.vendidos || 0), 0); semModelo[p] = Math.max(0, plan - mod); });
+  const liquidoPlan = vendas.reduce((s, v) => s + (v.liquido || v.bruto * (1 - com) || 0), 0);
+  const liquidoModelo = itens.reduce((s, i) => s + (i.vendidos || 0) * (i.preco || 0) * (1 - com), 0);
+  const voltou = Math.max(liquidoPlan, liquidoModelo);
+  const custoMedio = colocados ? itens.reduce((s, i) => s + (i.qtd || 0) * (i.custo || 0), 0) / colocados : 0;
+  const pecas = itens.reduce((s, i) => s + (i.qtd || 0) * (i.custo || 0), 0), estrutura = colocados ? Number(((pc.chaveiros || {}).estrutura || {}).custoEstimado) || 0 : 0;
+  const lucroVendas = voltou - vendidos * custoMedio, investido = pecas + estrutura;
+  const dias = ex.inicio ? Math.max(1, diasEntre(ex.inicio, hojeISO())) : null, ritmo = dias && vendidos ? vendidos / dias : 0, resta = Math.max(0, colocados - vendidos);
+  const potencial = res.potencial || itens.reduce((s, i) => s + (i.potencial || 0), 0);
+  const andares = [15, 10].map(p => ({ preco: p, itens: itens.filter(i => i.preco === p).map(i => ({ nome: i.chaveiro, restante: Math.max(0, (i.qtd || 0) - (i.vendidos || 0)), vendidos: i.vendidos || 0, ...corChaveiro(i.chaveiro), licenca: licencaChaveiro(pc, i.chaveiro).status })) }));
+  andares.forEach(a => { let tirar = semModelo[a.preco] || 0; for (let k = a.itens.length - 1; k >= 0 && tirar > 0; k--) { const t = Math.min(tirar, a.itens[k].restante); a.itens[k].restante -= t; tirar -= t; } });
+  return { local, itens, colocados, vendidos, semModelo: (semModelo[15] || 0) + (semModelo[10] || 0), voltou, lucroVendas, pecas, estrutura, investido, saldo: voltou - investido, potencial, dias, ritmo, resta, fim: ritmo ? Math.ceil(resta / ritmo) : null, aneis: itens.some(i => /dourad/i.test(i.argola || '')) ? 'ouro' : 'prata', andares };
+}
+function listaExpositores(pc) { return ((pc.expositores || {}).resumo || []).map(r => r.local); }
+function escolherExpositor(local) { jv.expoSel = local; jv.visita = null; renderPrimosPagina(); }
+function primosChaveiros(pc) {
+  const ex = pc.expositores || {}, an = pc.chaveiros || {}, locais = listaExpositores(pc), ativos = locais.filter(l => expositorPC(pc, l).colocados);
+  if (!locais.length) return falaHTML('Nenhum expositor na planilha ainda. Quando você cadastrar um na aba Expositores da planilha, ele aparece aqui.');
+  if (!locais.includes(jv.expoSel)) jv.expoSel = ativos[0] || locais[0];
+  const tudo = ativos.map(l => expositorPC(pc, l)), T = k => tudo.reduce((s, e) => s + (e[k] || 0), 0);
+  const col = T('colocados'), vend = T('vendidos'), pct = col ? vend / col : 0, e = expositorPC(pc, jv.expoSel), hoje = hojeISO();
+  const diasEx = ex.inicio ? diasEntre(ex.inicio, hoje) : null, proxVisita = diasEx !== null ? 15 - (diasEx % 15) : null;
+  let h = `<div class="jvk-resumo"><div class="jvk-anel" style="--p:${(pct * 100).toFixed(1)}"><div><strong>${vend}</strong><small>de ${col}</small></div></div>
+    <div class="jvk-resumo-txt"><small>Chaveiros · ${plural(ativos.length, 'expositor', 'expositores')}${diasEx !== null ? ` · há ${plural(diasEx, 'dia', 'dias')}` : ''}</small><h3>${reais(T('voltou'))} já voltaram</h3>
+    <p>${vend ? `lucro nas vendas <b>${reais(T('lucroVendas'))}</b> · ` : ''}se vender tudo, <b>${reais(T('potencial'))}</b> de lucro${proxVisita !== null ? ` · próxima visita em ${plural(proxVisita, 'dia', 'dias')}` : ''}</p></div></div>`;
+  h += `<nav class="jvk-exps">${locais.map(l => { const x = expositorPC(pc, l), p = x.colocados ? x.vendidos / x.colocados : 0; return `<button type="button" class="${l === jv.expoSel ? 'on' : ''}" onclick='escolherExpositor(${JSON.stringify(l).replace(/'/g, '&#39;')})'><strong>${esc(l)}</strong><small>${x.colocados ? `${x.vendidos} de ${x.colocados} · ${(p * 100).toFixed(0)}%` : 'em produção'}</small><i style="--p:${(p * 100).toFixed(1)}%"></i></button>`; }).join('')}</nav>`;
+  if (e.colocados) {
+    const pctE = e.vendidos / e.colocados;
+    h += `<div class="jvk-palco"><div class="jvk-3d" id="jvk-3d"><span class="jvk-carregando">montando o expositor…</span><span class="jvk-dica">arraste para girar · toque num chaveiro</span><span class="jvk-legenda">R$ 15 em cima<br>R$ 10 embaixo</span><div id="jvk-tip" class="jvk-tip" hidden></div></div>
+      <div class="jvk-info"><h4>${esc(e.local)}</h4><small>${ex.inicio ? `desde ${isoParaBR(ex.inicio).slice(0, 5)}` : ''}${e.dias ? ` · ${plural(e.dias, 'dia', 'dias')}` : ''} · argolas ${e.aneis === 'ouro' ? 'douradas' : 'prateadas'}</small>
+        <div class="jvk-barra"><i style="width:${Math.max(1, pctE * 100).toFixed(1)}%"></i></div><p class="jvk-vend"><b>${e.vendidos} de ${e.colocados}</b> vendidos · ${(pctE * 100).toFixed(1).replace('.', ',')}%${e.semModelo ? ` <span class="jvk-obs">(${e.semModelo} ainda sem modelo — confira na visita)</span>` : ''}</p>
+        <div class="jvk-num"><div><small>Investido</small><strong>${reais(e.investido)}</strong><em>peças ${reais(e.pecas)}${e.estrutura ? ` + expositor ≈ ${reais(e.estrutura)}` : ''}</em></div>
+          <div><small>Voltou</small><strong>${reais(e.voltou)}</strong><em>líquido, depois dos 30%</em></div>
+          <div class="${e.saldo >= 0 ? 'pos' : 'neg'}"><small>${e.saldo >= 0 ? 'Já se pagou' : 'Falta para se pagar'}</small><strong>${reais(Math.abs(e.saldo))}</strong><em>lucro nas vendas ${reais(e.lucroVendas)}</em></div>
+          <div class="pos"><small>Se vender tudo</small><strong>${reais(e.potencial)}</strong><em>de lucro${e.estrutura ? ` (${reais(e.potencial - e.estrutura)} tirando o expositor)` : ''}</em></div></div>
+        <p class="jvk-ritmo">${e.ritmo ? `Ritmo: <b>${e.ritmo.toFixed(1).replace('.', ',')} por dia</b> → os ${e.resta} que restam duram ~${plural(e.fim, 'dia', 'dias')}.` : `Nenhuma venda registrada ainda${e.dias ? ` em ${plural(e.dias, 'dia', 'dias')}` : ''}. Normal no começo: a primeira quinzena mostra quais modelos giram.`}</p>
+        ${jv.visita ? '' : `<button type="button" class="btn jv-abrir" onclick='jv.visita={ local: ${JSON.stringify(e.local).replace(/'/g, '&#39;')}, qtd: {}, obs: "" }; renderPrimosPagina()'>Registrar visita · ${esc(e.local)}</button>`}</div></div>`;
+    if (jv.visita) h += htmlVisitaPrimos(pc);
+  } else h += falaHTML(`<b>${esc(e.local)}</b> ainda não tem chaveiros no expositor. ${an.proximo && mesmoLocal(an.proximo.local, e.local) ? 'Veja abaixo o que eu sugiro imprimir para ele.' : ''}`);
+  // vídeos e fotos da loja (pasta "05 Expositores de Chaveiros\Fotos e vídeos" do PC → cofre)
+  const mid = Object.entries(ex.midias || {}).find(([l]) => mesmoLocal(l, e.local));
+  h += mid ? `<div class="jvk-midias">${mid[1].map(m => m.tipo === 'video' ? `<figure><video data-cofre="${esc(m.arq)}"${m.poster ? ` data-poster="${esc(m.poster)}"` : ''} muted loop playsinline autoplay preload="metadata"></video></figure>` : `<figure><img data-cofre="${esc(m.arq)}" alt="${esc(m.nome || e.local)}"></figure>`).join('')}</div>`
+    : `<p class="jv-dica jvk-sem-midia">📹 Sem vídeo deste expositor ainda. No PC, coloque fotos e vídeos em <b>Primos 3D Central › 05 Expositores de Chaveiros › Fotos e vídeos › ${esc(e.local)}</b> e peça "atualiza a Primos".</p>`;
+  // próximo expositor
+  const px = an.proximo;
+  if (px && (px.sugestoes || []).length) {
+    const cp = pc.custoPeca || [], lote = p => cp.find(c => /expositor/i.test(c.produto || '') && Number(c.preco) === p) || {}, com = (pc.parametros || {}).comissaoExpositor || 0.3;
+    const pecas = px.sugestoes.reduce((s, x) => s + (x.qtd || 0), 0), custo = px.sugestoes.reduce((s, x) => s + (x.qtd || 0) * (lote(x.preco).custo || 0), 0);
+    const horas = px.sugestoes.reduce((s, x) => { const l = lote(x.preco); return s + (x.qtd || 0) * ((l.horasLote || 0) / (l.pecasLote || 10)); }, 0), lucro = px.sugestoes.reduce((s, x) => s + (x.qtd || 0) * ((x.preco || 0) * (1 - com) - (lote(x.preco).custo || 0)), 0);
+    h += `<div class="jv-bloco jvk-proximo"><h5>Próximo expositor · ${esc(px.local)}${px.pessoa ? ` (${esc(px.pessoa)})` : ''}</h5><p class="jvk-perfil">${esc(px.perfil || '')}</p>${px.leitura ? falaHTML(esc(px.leitura)) : ''}
+      <div class="jvk-plano"><div><strong>${pecas}</strong><small>peças</small></div><div><strong>${reais(custo + (Number((an.estrutura || {}).custoEstimado) || 0))}</strong><small>material + expositor</small></div><div><strong>~${Math.round(horas)} h</strong><small>de impressão</small></div><div><strong>${reais(lucro)}</strong><small>lucro se vender tudo</small></div></div>
+      <div class="jvk-sugs">${px.sugestoes.map(s => { const c = corChaveiro(s.modelo); return `<div class="jvk-sug"><span class="jvk-bolinha" style="background:${c.cor}"></span><div><strong>${esc(s.modelo)}</strong><small>${esc(s.porque || '')}</small></div><em>${s.qtd} × ${reais(s.preco)}</em>${seloLicenca(s.licenca)}</div>`; }).join('')}</div>
+      ${(px.evitar || []).length ? `<p class="jv-dica">Evite: ${px.evitar.map(esc).join(' · ')}.</p>` : ''}
+      <button type="button" class="btn jv-mais" onclick="perguntarPrimos(null, ${JSON.stringify(`Monte comigo o expositor da ${px.local}${px.pessoa ? ' (' + px.pessoa + ')' : ''}: quais chaveiros imprimir, quantos de cada e em que ordem.`).replace(/"/g, '&quot;')})">Montar com o J.A.R.V.I.S. ›</button></div>`;
+  }
+  // estoque por modelo (cartões com a cor, e não tabela)
+  if (e.itens.length) h += `<div class="jv-bloco"><h5>Estoque por modelo · ${e.itens.length}</h5><div class="jvk-modelos">${e.andares.map(a => a.itens.map(i => { const p = (i.vendidos || 0) / Math.max(1, i.restante + i.vendidos); return `<div class="jvk-modelo"><span class="jvk-bolinha${i.metal ? ' metal' : ''}" style="background:${i.cor}"></span><div><strong>${esc(i.nome)}</strong><small>${reais(a.preco)} · ${i.restante} no expositor${i.vendidos ? ` · ${i.vendidos} vendidos` : ''}</small><i style="--p:${(p * 100).toFixed(0)}%"></i></div>${i.licenca !== 'ok' ? seloLicenca(i.licenca) : ''}</div>`; }).join('')).join('')}</div></div>`;
+  // licenças
+  const todos = (ex.itens || []).filter(i => (i.qtd || 0) > 0), porSt = {}; todos.forEach(i => { const st = licencaChaveiro(pc, i.chaveiro).status; (porSt[st] = porSt[st] || []).push(i); });
+  const n = st => (porSt[st] || []).length, risco = n('nao') + n('marca');
+  h += `<div class="jv-bloco jvk-lic"><h5>Licenças · ${risco ? `${risco} com risco · ` : ''}${n('verificar')} para conferir · ${n('ok')} ok</h5>
+    ${['nao', 'marca', 'verificar', 'ok'].filter(st => n(st)).map(st => `<div class="jvk-lic-grupo">${seloLicenca(st)}<ul>${porSt[st].map(i => `<li><b>${esc(i.chaveiro)}</b> <small>${esc(i.local)}${st !== 'verificar' ? ' · ' + esc(licencaChaveiro(pc, i.chaveiro).motivo) : ''}</small></li>`).join('')}</ul></div>`).join('')}
+    ${(an.licencas || []).filter(l => l.status === 'nao' && (l.busca || []).includes('suporte de celular')).map(l => `<div class="jvk-lic-grupo">${seloLicenca('nao')}<ul><li><b>Venda direta</b> <small>${esc(l.motivo)}</small></li></ul></div>`).join('')}
+    ${(an.comoResolver || []).length ? `<ol class="jv-passos">${an.comoResolver.map(t => `<li>${esc(t)}</li>`).join('')}</ol>` : ''}</div>`;
+  if (an.manchete) h += `<div class="jv-bloco"><h5>Leitura do J.A.R.V.I.S. · ${esc(an.geradaEm ? isoParaBR(an.geradaEm).slice(0, 5) : '')}</h5><p class="jvp-manchete">${negritoSeguro(an.manchete)}</p>${an.estrutura && an.estrutura.base ? `<p class="jv-dica">Expositor: ${esc(an.estrutura.base)}</p>` : ''}${an.regraPrecos ? `<p class="jv-dica">${esc(an.regraPrecos)}</p>` : ''}</div>`;
   return h;
+}
+/** O bloco de registrar a visita (quantos de cada modelo saíram) — mesmo fluxo de antes, dentro da aba Chaveiros. */
+function htmlVisitaPrimos(pc) {
+  const vis = jv.visita, ex = pc.expositores || {}, hoje = hojeISO(); if (!vis) return '';
+  const itens = (ex.itens || []).map((i, k) => ({ ...i, k })).filter(i => i.local === vis.local);
+  return `<div class="jv-bloco jvp-visita"><h5>Visita · ${esc(vis.local)} · ${isoParaBR(hoje)}</h5><p class="jv-dica">Quantos de cada saíram desde a última visita?</p>
+    ${itens.map(i => `<div class="jvp-passo"><span><i class="jvk-bolinha" style="background:${corChaveiro(i.chaveiro).cor}"></i>${esc(i.chaveiro)}<small>${i.vendidos || 0}/${i.qtd} vendidos · resta ${Math.max(0, (i.qtd || 0) - (i.vendidos || 0))}</small></span><button type="button" onclick="mudarVisita(${i.k}, -1)" aria-label="menos">−</button><b>${vis.qtd[i.k] || 0}</b><button type="button" onclick="mudarVisita(${i.k}, 1)" aria-label="mais">＋</button></div>`).join('')}
+    <label class="jvp-obs">Observação (reposição, troca de modelos…)<input id="jvp-visita-obs" value="${esc(vis.obs || '')}" oninput="jv.visita.obs=this.value" placeholder="opcional"></label>
+    <div class="jvp-botoes"><button type="button" class="btn jv-abrir" onclick="enviarVisita()">Registrar visita</button><button type="button" class="btn jv-mais" onclick="jv.visita=null; renderPrimosPagina()">Cancelar</button></div></div>`;
+}
+/** O expositor 3D: um só visualizador, reaproveitado a cada redesenho da aba (o canvas muda de lugar, não recria o WebGL). */
+function montarExpositor3D() {
+  const host = $j('jvk-3d'), pc = primosCentral; if (!host || !pc) return;
+  const e = expositorPC(pc, jv.expoSel), dados = { nome: e.local, aneis: e.aneis, andares: e.andares, angulo: jv.expo3d ? jv.expo3d.angulo : undefined };
+  const pronto = () => { const c = host.querySelector('.jvk-carregando'); if (c) c.remove(); };
+  if (jv.expo3d) { jv.expo3d.anexar(host); jv.expo3d.atualizar(dados); pronto(); return; }
+  if (!window.Expositor3D) {
+    if (!jv.expo3dCarregando) { jv.expo3dCarregando = true; import('./expositor3d.js').then(() => { jv.expo3dCarregando = false; if (jv.aba === 'chaveiros') montarExpositor3D(); }).catch(() => { jv.expo3dCarregando = false; const c = host.querySelector('.jvk-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }); }
+    return;
+  }
+  try { jv.expo3d = window.Expositor3D.montar(host, dados, tocarChaveiro3D); pronto(); } catch (err) { const c = host.querySelector('.jvk-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }
+}
+/** Tocou num chaveiro do 3D: um balãozinho com o modelo, o preço, quantos restam e a licença. */
+function tocarChaveiro3D(info, x, y) {
+  const t = $j('jvk-tip'); if (!t) return;
+  if (!info) { t.hidden = true; return; }
+  const L = LICENCA_CHAVEIRO[info.licenca] || LICENCA_CHAVEIRO.verificar;
+  t.innerHTML = `<strong>${esc(info.nome)}</strong><small>${reais(info.preco)} · ${info.restante} no expositor${info.vendidos ? ` · ${info.vendidos} vendidos` : ''}</small><span class="jvk-selo ${L[1]}">${L[0]}</span>`;
+  const host = $j('jvk-3d'), w = host ? host.clientWidth : 300; t.style.left = Math.max(8, Math.min(w - 190, x - 90)) + 'px'; t.style.top = Math.max(8, y - 86) + 'px'; t.hidden = false;
+  clearTimeout(jv.tipTimer); jv.tipTimer = setTimeout(() => { t.hidden = true; }, 4000);
+}
+/** Vídeos e fotos da loja vêm do cofre privado (o vídeo precisa do tipo certo para tocar no iPhone). */
+async function videoCofre(caminho) {
+  const k = 'v:' + caminho;
+  if (!jv.fotos.has(k)) jv.fotos.set(k, cofreBruto(caminho).then(r => r.blob()).then(b => URL.createObjectURL(new Blob([b], { type: 'video/mp4' }))).catch(() => ''));
+  return jv.fotos.get(k);
+}
+function carregarMidiasChaveiros() {
+  const local = window.__midiaLocal; if (!claudeConfigurado() && !local) return; // (testes no PC: __midiaLocal = pasta da saída)
+  document.querySelectorAll('#jv-primos .jvk-midias img[data-cofre]').forEach(async img => { const u = local ? local + img.dataset.cofre : await fotoCofre(img.dataset.cofre); if (u) { img.src = u; img.classList.add('ok'); } });
+  document.querySelectorAll('#jv-primos .jvk-midias video[data-cofre]').forEach(async v => {
+    if (v.dataset.poster) { const p = local ? local + v.dataset.poster : await fotoCofre(v.dataset.poster); if (p) v.poster = p; }
+    const u = local ? local + v.dataset.cofre : await videoCofre(v.dataset.cofre); if (u) { v.muted = true; v.defaultMuted = true; v.playsInline = true; v.src = u; v.addEventListener('loadeddata', () => v.play().catch(() => { }), { once: true }); v.play().catch(() => { }); v.classList.add('ok'); }
+  });
 }
 function mudarVisita(k, d) { const v = jv.visita; if (!v) return; const it = ((primosCentral.expositores || {}).itens || [])[k]; if (!it) return; const resta = Math.max(0, (it.qtd || 0) - (it.vendidos || 0)); v.qtd[k] = Math.max(0, Math.min(resta, (v.qtd[k] || 0) + d)); renderPrimosPagina(); }
 async function enviarVisita() {
@@ -6014,7 +6134,7 @@ ESTILO: curto e escaneável (até ~150 palavras, a menos que ele peça detalhe),
 LIMITES: você conversa pelo app. Você não envia e-mails, não posta em redes, não faz pagamentos nem compras. Quem mexe no computador — planilha "Primos 3D - Gestão Financeira.xlsx", pasta "Primos 3D Central", código do app — é o Claude, no PC do ${nome}.
 QUANDO PRECISAR DO COMPUTADOR (lançar ou corrigir algo na planilha, guardar print/nota fiscal na Central, ler um arquivo da Central, mudar o app): responda normalmente e termine com a linha exata ⟦PC: <o que o Claude deve fazer, em 1 frase objetiva>⟧. Só use quando for mesmo necessário.
 PRINTS/FOTOS de compra ou venda: leia loja, data, itens, quantidades, valores, frete e total; mostre um resumo em lista e termine com ⟦PC: lançar ... na aba Filamentos/Despesas/Vendas⟧ (filamento → Filamentos; outras compras → Despesas; venda → Vendas). Se algo estiver ilegível, pergunte antes.
-NAVEGAR: se ajudar, termine com ⟦ABRIR: destino⟧, destino entre: primos, primos/analise, primos/contabilidade, primos/vendas, primos/expositores, primos/producao, primos/marketing, primos/central, engenharia, seguranca, mercado, academia, familia, diaadia, financas, agenda, tarefas, notas, saude, negocios, ajustes.
+NAVEGAR: se ajudar, termine com ⟦ABRIR: destino⟧, destino entre: primos, primos/analise, primos/contabilidade, primos/vendas, primos/chaveiros, primos/producao, primos/marketing, primos/central, engenharia, seguranca, mercado, academia, familia, diaadia, financas, agenda, tarefas, notas, saude, negocios, ajustes.
 BUSCA: para fatos atuais, preços, concorrentes, tendências, datas comemorativas e normas, use a busca do Google e diga de onde veio.
 DESABAFO: acolha primeiro, sem julgar; no máximo uma pergunta; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); use os códigos como estão. Nunca peça senhas ou dados bancários.
@@ -6223,7 +6343,7 @@ async function conversarJarvis(texto, anexos = []) {
 }
 const DESTINOS_JARVIS = {
   primos: ['Abrir Primos 3D', () => abrirPrimos('jarvis')], 'primos/analise': ['Abrir Análise', () => abrirPrimos('analise')], 'primos/contabilidade': ['Abrir Contabilidade', () => abrirPrimos('contabil')],
-  'primos/vendas': ['Abrir Vendas', () => abrirPrimos('vendas')], 'primos/expositores': ['Abrir Expositores', () => abrirPrimos('expositores')], 'primos/producao': ['Abrir Produção', () => abrirPrimos('producao')],
+  'primos/vendas': ['Abrir Vendas', () => abrirPrimos('vendas')], 'primos/expositores': ['Abrir Chaveiros', () => abrirPrimos('chaveiros')], 'primos/chaveiros': ['Abrir Chaveiros', () => abrirPrimos('chaveiros')], 'primos/producao': ['Abrir Produção', () => abrirPrimos('producao')],
   'primos/marketing': ['Abrir Marketing', () => abrirPrimos('marketing')], 'primos/central': ['Abrir a Central', () => abrirPrimos('central')],
   financas: ['Abrir Finanças', () => changeTab('finances')], agenda: ['Abrir Agenda', () => changeTab('home')], tarefas: ['Abrir Tarefas', () => changeTab('tasks')], notas: ['Abrir Notas', () => changeTab('notes')],
   saude: ['Abrir Saúde', () => changeTab('health')], negocios: ['Abrir Negócios', () => changeTab('business')], ajustes: ['Ajustes do J.A.R.V.I.S.', () => abrirAjustesJarvis()],
