@@ -45,6 +45,7 @@ let claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || []
 let primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; // JARVIS: retrato da "Primos 3D Central" — CACHE do que vem do cofre privado (não sincroniza pela planilha)
 let familia = JSON.parse(localStorage.getItem('lifeos_familia')) || [];     // JARVIS: área Família (fotos, datas especiais, recados)
 let memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || [];   // JARVIS: o "subplano" (curiosidades, desabafos, conversas)
+let primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; // Primos: ações do plano do J.A.R.V.I.S. marcadas como feitas (✓) — { id, chave, texto, prazo, feito }
 let jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; // J.A.R.V.I.S.: a conversa do chat (curta: as mais recentes, sincroniza)
 let media = JSON.parse(localStorage.getItem('lifeos_media')) || [];         // filmes, séries, docs
 let playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || []; // atalhos de música
@@ -5095,7 +5096,6 @@ function reais(v) { return v === null || v === undefined || isNaN(v) ? '—' : f
 function milhar(n) { return n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-BR'); }
 function alertasPrimos(pc) {
   const hoje = hojeISO(), a = []; if (!pc) return a;
-  const [y] = hoje.split('-').map(Number);
   if (!(pc.vendas || []).length && !orders.some(o => o.paid)) a.push(['alto', 'Nenhuma venda registrada. Sem isso eu não calculo lucro real nem acompanho o limite do MEI.']);
   if ((pc.caixa || {}).saldo < 0) a.push(['alto', `Caixa estimado negativo (${reais(pc.caixa.saldo)}): parte dos gastos saiu do seu CPF e da conta do MEI. Registre como aporte na aba Aportes e Caixa.`]);
   const ex = pc.expositores || {};
@@ -5108,10 +5108,15 @@ function alertasPrimos(pc) {
   ((pc.marketing || {}).email || {}).alertas && pc.marketing.email.alertas.slice(0, 1).forEach(t => a.push(['medio', esc(t)]));
   const semPreco = (pc.custoPeca || []).filter(p => p.canal === 'Shopee' && !p.preco).length;
   if (semPreco) a.push(['medio', `${plural(semPreco, 'produto da Shopee', 'produtos da Shopee')} sem tempo, gramas e preço: fatie no Bambu Studio e use a calculadora da Análise.`]);
-  const datas = [[`${y}-10-12`, 'Dia das Crianças e N. Sra. Aparecida (12/10): destaque a linha religiosa e brinquedos.'], [`${y}-10-15`, 'Dia do Professor (15/10): brindes para escolas e cursos.'], [`${y}-11-27`, 'Black Friday (27/11): kits e combos rendem mais que desconto.'], [`${y}-12-25`, 'Natal: anuncie Feliz Natal e porta-guardanapo até o fim de outubro; brindes corporativos fecham em novembro.']];
-  datas.forEach(([d, t]) => { const f = diasEntre(hoje, d); if (f >= 0 && f <= 45) a.push(['medio', `Em ${plural(f, 'dia', 'dias')} — ${t}`]); });
   if (diasEntre(pc.geradoEm.slice(0, 10), hoje) > 7) a.push(['baixo', `Dados da Central de ${isoParaBR(pc.geradoEm.slice(0, 10))}. Peça ao J.A.R.V.I.S.: "atualiza a Primos".`]);
   return a;
+}
+
+/** Datas comerciais dos próximos 45 dias (vão para o cartão "Para crescer"): [dias, texto]. */
+function datasComerciaisPrimos() {
+  const hoje = hojeISO(), y = Number(hoje.slice(0, 4));
+  const datas = [[`${y}-10-12`, 'Dia das Crianças e N. Sra. Aparecida (12/10): destaque a linha religiosa e brinquedos.'], [`${y}-10-15`, 'Dia do Professor (15/10): brindes para escolas e cursos.'], [`${y}-11-27`, 'Black Friday (27/11): kits e combos rendem mais que desconto.'], [`${y}-12-25`, 'Natal: anuncie Feliz Natal e porta-guardanapo até o fim de outubro; brindes corporativos fecham em novembro.']];
+  return datas.map(([d, t]) => [diasEntre(hoje, d), t]).filter(([f]) => f >= 0 && f <= 45);
 }
 
 const ABAS_PRIMOS = [['jarvis', 'J.A.R.V.I.S.'], ['analise', 'Análise'], ['contabil', 'Contabilidade'], ['vendas', 'Vendas'], ['expositores', 'Expositores'], ['producao', 'Produção'], ['marketing', 'Marketing'], ['central', 'Central']];
@@ -5144,10 +5149,32 @@ function renderPrimosPagina() {
     <div class="jvp-corpo" id="jv-primos-corpo">${corpo}</div>
     <footer class="jvp-rodape">${pc ? `Central de ${isoParaBR(pc.geradoEm.slice(0, 10))} às ${pc.geradoEm.slice(11, 16)}` : 'Central ainda não conectada'} · ${claudeConfigurado() ? `<a href="#" onclick="sincronizarCofre(true); return false">buscar atualização</a>` : `<a href="#" onclick="abrirAjustesJarvis('pc'); return false">conectar ao computador</a>`}</footer>
   </div>`;
+  recolherBlocosPrimos(); ajustarBriefingPrimos();
   const c = $j('jv-primos-corpo'); if (c) c.scrollTop = y;
   if (jv.aba === 'producao') carregarFotosPrimos();
   if (jv.aba === 'central') carregarCatalogo();
   if (jv.aba === 'jarvis') carregarBriefingPrimos(false);
+}
+/** Seções das abas da Primos (menos a J.A.R.V.I.S.): só a 1ª aberta; tocar no título abre/fecha (decisão do Rafael, fase 5).
+ *  O que ele abriu fica aberto enquanto estiver na mesma aba (os dados podem redesenhar a página); trocar de aba volta ao padrão. */
+function recolherBlocosPrimos() {
+  const corpo = $j('jv-primos-corpo'); if (!corpo || jv.aba === 'jarvis') return;
+  const chave = jv.aba + ':' + (jv.aba === 'contabil' ? jv.subContabil : '');
+  if (jv.blocosChave !== chave) { jv.blocosChave = chave; jv.blocosAbertos = new Set([0]); }
+  const blocos = [...corpo.querySelectorAll('div.jv-bloco')].filter(b => !b.parentElement.closest('.jv-bloco') && b.querySelector(':scope > h5'));
+  if (blocos.length < 2) return;
+  blocos.forEach((b, i) => {
+    const h = b.querySelector(':scope > h5'), aberto = jv.blocosAbertos.has(i) || b.classList.contains('jvp-visita'); // a visita em andamento nunca fecha
+    b.classList.add('jvp-recolhe'); b.classList.toggle('fechado', !aberto);
+    h.setAttribute('role', 'button'); h.tabIndex = 0; h.setAttribute('aria-expanded', String(aberto));
+    const alternar = () => { const f = b.classList.toggle('fechado'); h.setAttribute('aria-expanded', String(!f)); if (f) jv.blocosAbertos.delete(i); else jv.blocosAbertos.add(i); };
+    h.onclick = alternar; h.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); alternar(); } };
+  });
+}
+/** "Ler tudo" só aparece quando o briefing passa do tamanho resumido. */
+function ajustarBriefingPrimos() {
+  const b = $j('jvp-briefing'), bt = $j('jvp-ler'); if (!b || !bt) return;
+  bt.hidden = !jv.briefingAberto && b.scrollHeight <= b.clientHeight + 4;
 }
 function htmlSemCentral() {
   return falaHTML('Para eu analisar a Primos de verdade, preciso da <b>Primos 3D Central</b> (a planilha e as pastas do seu PC). Ela chega sozinha quando o app está <b>conectado ao computador</b> — é uma vez só, uns 3 minutos, e eu te guio.')
@@ -5181,19 +5208,71 @@ function primosJarvis(pc) {
   const nome = String(profile.name || '').trim().split(/\s+/)[0], h = new Date().getHours();
   const saud = (h < 5 ? 'Boa madrugada' : h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite') + (nome ? `, ${esc(nome)}` : '') + '.';
   let x = `<div class="jvp-oi"><span class="jvp-orbe"></span><div><small>J.A.R.V.I.S. · analista da Primos 3D</small><h3>${saud}</h3></div></div>`;
-  x += `<div id="jvp-briefing" class="jvp-briefing">${htmlBriefing(pc)}</div>`;
+  x += `<div id="jvp-briefing" class="jvp-briefing${jv.briefingAberto ? ' aberto' : ''}">${htmlBriefing(pc)}</div><button type="button" id="jvp-ler" class="jvp-ler" onclick="jv.briefingAberto = !jv.briefingAberto; renderPrimosPagina()">${jv.briefingAberto ? 'Resumir ↑' : 'Ler tudo ↓'}</button>`;
+  if (pc) x += cartoesPrimos(pc);
   x += `<form class="jvp-pergunta" onsubmit="perguntarPrimos(event)"><input id="jvp-perg" placeholder="Pergunte sobre a Primos…" autocomplete="off" enterkeyhint="send"><button type="button" class="jvp-mic" onclick="abrirVozJarvis('Primos 3D', 'primos')" aria-label="Falar com o J.A.R.V.I.S.">${HALO}</button><button type="submit" class="jvp-env" aria-label="Perguntar">↑</button></form>`;
   x += `<div class="jvp-chips">${['Como está o caixa?', 'O que faço hoje para vender mais?', 'Quanto cobrar num chaveiro personalizado?', 'Analise meus expositores', 'Plano de Natal (brindes corporativos)', 'Estou dentro do limite do MEI?'].map(s => `<button type="button" onclick="perguntarPrimos(null, ${JSON.stringify(s).replace(/"/g, '&quot;')})">${esc(s)}</button>`).join('')}</div>`;
   if (!pc) return x + htmlSemCentral();
-  const an = pc.analise || {}, cx = pc.caixa || {}, ex = totaisExpositores(pc), vl = vendasLiquidasPrimos(pc);
+  const cx = pc.caixa || {}, ex = totaisExpositores(pc), vl = vendasLiquidasPrimos(pc);
   x += indicadoresHTML([[formatCurrency(cx.totalGasto), 'investido até agora'], [formatCurrency(vl.total), `recuperado · ${pct(cx.totalGasto ? vl.total / cx.totalGasto : 0)}`], [formatCurrency(cx.saldo), 'caixa estimado'], [`${ex.vendidos}/${ex.colocados}`, 'chaveiros vendidos nos expositores']]);
-  const al = alertasPrimos(pc);
-  if (al.length) x += `<div class="jv-bloco"><h5>Atenção</h5><ul class="jv-alertas">${al.map(([n, t]) => `<li class="${n}">${t}</li>`).join('')}</ul></div>`;
-  if ((an.acoes || []).length) x += `<div class="jv-bloco"><h5>Recomendações do J.A.R.V.I.S.</h5><ol class="jv-passos">${an.acoes.map(p => `<li><b>${esc(p.prazo || '')}</b> ${esc(p.texto)}</li>`).join('')}</ol></div>`;
-  if ((an.oportunidades || []).length) x += `<div class="jv-bloco"><h5>Oportunidades</h5><div class="jvp-oport">${an.oportunidades.map(o => `<button type="button" onclick="perguntarPrimos(null, ${JSON.stringify('Me detalhe a oportunidade: ' + o.titulo).replace(/"/g, '&quot;')})"><strong>${esc(o.titulo)}</strong><small>${esc(o.texto)}</small><em>perguntar →</em></button>`).join('')}</div></div>`;
   const conv = jarvisChat.filter(m => m.de === 'eu' && /primos/i.test(m.ctx || '')).slice(-3).reverse();
   if (conv.length) x += `<div class="jv-bloco"><h5>Últimas perguntas sobre a Primos</h5>${tabelaHTML(conv.map(m => linhaTab(esc(m.t.slice(0, 90)), `<button type="button" class="jvp-pedir" onclick="abrirChatJarvis({contexto:'Primos 3D', area:'primos'})">abrir</button>`, isoParaBR(m.q.slice(0, 10)).slice(0, 5))))}</div>`;
   return x;
+}
+// --- os 4 CARTÕES da aba J.A.R.V.I.S. (fase 5): grade 2×2; tocar abre a lista completa logo abaixo da grade ---
+const CARTOES_PRIMOS = [['atencao', 'Atenção agora'], ['plano', 'Siga o plano'], ['crescer', 'Para crescer'], ['estrategia', 'Estratégia']];
+const ICONE_CARTAO = {
+  atencao: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4.5M12 17.4v.1"/></svg>',
+  plano: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M8.5 12.2l2.4 2.4 4.8-5"/></svg>',
+  crescer: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 17l5-5 4 3 7-8"/><path d="M15 7h5v5"/></svg>',
+  estrategia: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r=".6" fill="currentColor"/></svg>'
+};
+/** Chave de uma ação do plano (o texto normalizado): é assim que o ✓ reconhece a ação, no iPhone e no PC. */
+function chavePlano(t) { return semAcentoCer(t).replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 120); }
+function planoFeito(acao) { const k = chavePlano(acao.texto); return primosPlano.find(p => p.chave === k) || null; }
+/** ✓ numa ação do plano (tocar de novo desfaz). Guarda no módulo `primosplano` (sincroniza). */
+function marcarPlanoPrimos(i) {
+  const a = ((primosCentral && primosCentral.analise) || {}).acoes?.[i]; if (!a) return;
+  const f = planoFeito(a);
+  if (f) primosPlano = primosPlano.filter(p => p !== f);
+  else { primosPlano.push({ id: novoId(), chave: chavePlano(a.texto), texto: a.texto, prazo: a.prazo || '', feito: hojeISO() }); primosPlano = primosPlano.slice(-80); }
+  salvar('primosplano', primosPlano); renderPrimosPagina();
+  toast(f ? 'Voltou para a lista.' : '✓ Feito! Tirei da lista.', 2200);
+}
+function abrirCartaoPrimos(k) {
+  jv.cartaoPrimos = jv.cartaoPrimos === k ? null : k; renderPrimosPagina();
+  const el = document.querySelector('#jv-primos .jvp-cartao-aberto'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function cartoesPrimos(pc) {
+  const an = pc.analise || {}, al = alertasPrimos(pc).sort((a, b) => ['alto', 'medio', 'baixo'].indexOf(a[0]) - ['alto', 'medio', 'baixo'].indexOf(b[0]));
+  const acoes = (an.acoes || []).map((a, i) => ({ ...a, i, feito: planoFeito(a) })), pend = acoes.filter(a => !a.feito), feitas = acoes.filter(a => a.feito);
+  const datas = datasComerciaisPrimos(), pontos = an.pontos || [];
+  const oport = (an.oportunidades || []).filter(o => !(datas.length && /^datas/i.test(semAcentoCer(o.titulo)))); // as datas já aparecem em lista no próprio cartão
+  const tirarTags = s => String(s || '').replace(/<[^>]*>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&'); // texto puro (a prévia passa por esc() de novo)
+  const info = {
+    atencao: [al.length, al.length ? tirarTags(al[0][1]) : 'Nada urgente agora.', al.some(a => a[0] === 'alto') ? 'alto' : al.length ? 'medio' : 'ok'],
+    plano: [pend.length, pend.length ? `${pend[0].prazo ? pend[0].prazo + ' · ' : ''}${pend[0].texto}` : acoes.length ? 'Tudo feito ✓ Peça uma análise nova quando quiser.' : 'O plano chega com a análise do computador.', pend.length ? '' : 'ok'],
+    crescer: [oport.length + datas.length, datas.length ? `Em ${plural(datas[0][0], 'dia', 'dias')}: ${datas[0][1]}` : oport.length ? `${oport[0].titulo}: ${oport[0].texto}` : 'As oportunidades chegam com a análise do computador.', ''],
+    estrategia: [pontos.length, an.manchete ? tirarTags(an.manchete) : 'A leitura completa do analista chega com a análise do computador.', '']
+  };
+  const aberto = CARTOES_PRIMOS.some(([k]) => k === jv.cartaoPrimos) ? jv.cartaoPrimos : null;
+  let x = `<div class="jvp-cartoes">${CARTOES_PRIMOS.map(([k, nome]) => { const [n, prev, tom] = info[k]; return `<button type="button" class="jvp-cartao c-${k}${aberto === k ? ' on' : ''}${tom ? ' t-' + tom : ''}" onclick="abrirCartaoPrimos('${k}')" aria-expanded="${aberto === k}">
+      <span class="jvp-cartao-topo"><span class="jvp-cartao-ico">${ICONE_CARTAO[k]}</span>${n ? `<em>${n}</em>` : ''}</span><strong>${nome}</strong><small>${esc(prev)}</small></button>`; }).join('')}</div>`;
+  if (!aberto) return x;
+  let corpo = '';
+  if (aberto === 'atencao') corpo = al.length ? `<ul class="jv-alertas">${al.map(([n, t]) => `<li class="${n}">${t}</li>`).join('')}</ul>` : '<p class="jv-dica">Nada urgente agora. Bom momento para adiantar o plano.</p>';
+  if (aberto === 'plano') {
+    corpo = pend.length ? `<ul class="jvp-plano">${pend.map(a => `<li><button type="button" class="jvp-check" onclick="marcarPlanoPrimos(${a.i})" aria-label="Marcar como feito"></button><span><b>${esc(a.prazo || '')}</b> ${esc(a.texto)}</span></li>`).join('')}</ul>` : '<p class="jv-dica">Tudo feito ✓ Quando quiser, peça ao J.A.R.V.I.S. uma análise nova da Primos.</p>';
+    if (feitas.length) corpo += `<details class="jvp-feitas"><summary>Feitos · ${feitas.length}</summary><ul class="jvp-plano">${feitas.map(a => `<li class="feito"><button type="button" class="jvp-check on" onclick="marcarPlanoPrimos(${a.i})" aria-label="Desfazer">✓</button><span><b>${esc(a.prazo || '')}</b> ${esc(a.texto)} <small>· ${isoParaBR(a.feito.feito).slice(0, 5)}</small></span></li>`).join('')}</ul></details>`;
+    corpo += '<p class="jv-dica">Toque no quadradinho quando fizer. Marcou errado? Toque de novo. O J.A.R.V.I.S. fica sabendo o que já foi feito.</p>';
+  }
+  if (aberto === 'crescer') corpo = (datas.length ? `<ul class="jv-alertas">${datas.map(([d, t]) => `<li class="medio">Em ${plural(d, 'dia', 'dias')} — ${esc(t)}</li>`).join('')}</ul>` : '')
+    + (oport.length ? `<div class="jvp-oport">${oport.map(o => `<button type="button" onclick="perguntarPrimos(null, ${JSON.stringify('Me detalhe a oportunidade: ' + o.titulo).replace(/"/g, '&quot;')})"><strong>${esc(o.titulo)}</strong><small>${esc(o.texto)}</small><em>perguntar →</em></button>`).join('')}</div>` : '');
+  if (aberto === 'estrategia') corpo = (an.manchete && iaLigada() ? `<p class="jvp-manchete">${negritoSeguro(an.manchete)}</p>` : '')
+    + (pontos.length ? `<ul class="jv-lista">${pontos.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : '<p class="jv-dica">A leitura completa do analista chega com a análise do computador.</p>')
+    + `<button type="button" class="btn jv-mais" onclick="perguntarPrimos(null, 'Qual deve ser a estratégia da Primos para os próximos 3 meses?')">Perguntar sobre a estratégia ›</button>`;
+  const nome = CARTOES_PRIMOS.find(([k]) => k === aberto)[1];
+  return x + `<div class="jvp-cartao-aberto c-${aberto}"><div class="jvp-cartao-cab"><span class="jvp-cartao-ico">${ICONE_CARTAO[aberto]}</span><strong>${nome}</strong><button type="button" class="jv-x" onclick="abrirCartaoPrimos('${aberto}')" aria-label="Fechar">✕</button></div>${corpo}</div>`;
 }
 function perguntarPrimos(ev, texto) {
   if (ev) ev.preventDefault();
@@ -5220,7 +5299,7 @@ async function carregarBriefingPrimos(forcar) {
       aoEscrever: t => { const e = $j('jvp-briefing'); if (e) e.innerHTML = `<div class="jvp-brief-topo"><small>Briefing de hoje</small></div><div class="jvc-texto">${mdJarvis(desanonimizar(t.replace(/⟦[^⟧]*(⟧|$)/g, '')))}</div>`; } });
     localStorage.setItem('lifeos_jarvis_briefing', JSON.stringify({ dia: hojeISO(), base: pc.geradoEm, texto: r.texto.replace(/⟦[^⟧]*⟧/g, '').trim() }));
   } catch (e) { const el2 = $j('jvp-briefing'); if (el2) el2.innerHTML = `<p>${negritoSeguro((pc.analise || {}).manchete || '')}</p><p class="jvp-brief-dica">Não consegui gerar o briefing agora (${esc(e.amigavel || e.message)}).</p>`; jv.gerandoBriefing = false; return; }
-  jv.gerandoBriefing = false; const el3 = $j('jvp-briefing'); if (el3) el3.innerHTML = htmlBriefing(pc);
+  jv.gerandoBriefing = false; const el3 = $j('jvp-briefing'); if (el3) el3.innerHTML = htmlBriefing(pc); ajustarBriefingPrimos();
 }
 
 // --- aba ANÁLISE: payback, calculadora de preço (interativa), rentabilidade por produto e por canal ---
@@ -5860,7 +5939,7 @@ function dadosPrimosIA() {
   const mk = pc.marketing || {}, tk = mk.tiktok || {}, p7 = tk.periodo7d || {};
   if (mk.manchete) L.push(`MARKETING: ${String(mk.manchete).replace(/<\/?b>/g, '')} TikTok @primos3dltda: ${(pc.tiktokPerfil || {}).seguidores || '?'} seguidores, ${(pc.tiktokPerfil || {}).curtidas || '?'} curtidas; últimos 7 dias ${p7.views || '?'} visualizações (${p7.varViews || ''}). Temas: ${(tk.temas || []).map(t => `${t.tema} ${t.views} views, ${t.taxa}% curtidas`).join('; ')}. E-mail: ${(mk.email || {}).resumo || '—'}`);
   const an = pc.analise || {};
-  if (an.manchete) L.push(`ANÁLISE DO CLAUDE (analista no PC, ${an.geradaEm || ''}): ${String(an.manchete).replace(/<\/?b>/g, '')} Pontos: ${(an.pontos || []).join(' | ')} Ações: ${(an.acoes || []).map(a => `[${a.prazo}] ${a.texto}`).join(' | ')} Oportunidades: ${(an.oportunidades || []).map(o => `${o.titulo}: ${o.texto}`).join(' | ')}`);
+  if (an.manchete) L.push(`ANÁLISE DO CLAUDE (analista no PC, ${an.geradaEm || ''}): ${String(an.manchete).replace(/<\/?b>/g, '')} Pontos: ${(an.pontos || []).join(' | ')} Ações (o Rafael marca ✓ no app quando faz): ${(an.acoes || []).map(a => { const f = planoFeito(a); return `[${a.prazo}] ${a.texto}${f ? ` (JÁ FEITO em ${isoParaBR(f.feito).slice(0, 5)})` : ""}`; }).join(' | ')} Oportunidades: ${(an.oportunidades || []).map(o => `${o.titulo}: ${o.texto}`).join(' | ')}`);
   const txt = L.join('\n');
   return anonimizar(txt.length > 14000 ? txt.slice(0, 14000) + '…' : txt);
 }
@@ -6556,8 +6635,8 @@ function migrarEntregasDePedidos() {
 }
 
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -8770,7 +8849,7 @@ if (_vndProd) _vndProd.addEventListener('change', previaVenda);
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -8902,7 +8981,7 @@ function redesenharTudo() {
   entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || [];
   orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
   claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || [];
-  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; if (typeof renderChatJarvis === 'function') renderChatJarvis();
+  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; if (typeof renderChatJarvis === 'function') renderChatJarvis();
   media = JSON.parse(localStorage.getItem('lifeos_media')) || []; playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || [];
   trips = JSON.parse(localStorage.getItem('lifeos_trips')) || []; contacts = JSON.parse(localStorage.getItem('lifeos_contacts')) || [];
   devnotes = JSON.parse(localStorage.getItem('lifeos_devnotes')) || {};
