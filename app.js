@@ -4737,11 +4737,13 @@ function iconeAreaSVG(id, cor) { return `<svg viewBox="0 0 64 64" fill="none" st
 /** TEMAS do J.A.R.V.I.S. (Ajustes → Aparência). Cada um muda o 3D (jarvis3d.js), a página inicial e o chat. */
 const TEMAS_JARVIS = {
   perola: { nome: 'Pérola', desc: 'Branco-pérola quente, luz dourada. O padrão.', escuro: false, bola: 'radial-gradient(circle at 35% 30%, #ffffff, #f1e8da 45%, #d8cab4 78%, #b9a98f)', fundo: '#f2f0eb', luz: '#f2c27a' },
+  vidro: { nome: 'Holograma de vidro', desc: 'Escuro, esfera de vidro e áreas em órbita.', escuro: true, bola: 'radial-gradient(circle at 34% 28%, rgba(255,255,255,.9) 0 4%, rgba(127,212,255,.35) 12%, rgba(13,27,42,.9) 48%, #03060b 72%), radial-gradient(circle, transparent 60%, rgba(127,212,255,.8) 71%, transparent 74%)', fundo: '#03060b', luz: '#7fd4ff' },
   cristal: { nome: 'Cristal', desc: 'Vidro frio e limpo, luz azul-gelo.', escuro: false, bola: 'radial-gradient(circle at 35% 30%, #ffffff, #e9f0f8 45%, #c6d3e2 78%, #9fb0c4)', fundo: '#edf1f5', luz: '#86bfff' },
   grafite: { nome: 'Grafite', desc: 'Titânio escuro acetinado, luz âmbar.', escuro: true, bola: 'radial-gradient(circle at 35% 30%, #8a9098, #4d5259 45%, #2b2e33 78%, #17191c)', fundo: '#1d1f23', luz: '#f2c27a' },
   escuro: { nome: 'Holograma', desc: 'Preto com HUD luminoso, estilo filme.', escuro: true, bola: 'radial-gradient(circle at 50% 50%, #ffffff 0 8%, rgba(200,210,230,.5) 20%, rgba(30,34,42,.9) 55%, #050608)', fundo: '#050608', luz: '#ffffff' }
 };
-/** Tema atual do J.A.R.V.I.S. (preferência do aparelho). Quem estava no escuro antigo volta ao pérola uma vez. */
+/** Tema atual do J.A.R.V.I.S. (preferência do aparelho). Quem estava no escuro antigo volta ao pérola uma vez.
+ *  O Holograma de vidro (fase 5) é uma opção em Ajustes → Aparência; o padrão continua o pérola (decisão do Rafael). */
 function visualJarvis() { if (typeof prefs === 'undefined') return 'perola'; if (!prefs.jvPerolaAplicado) { prefs.jvPerolaAplicado = true; prefs.jarvisVisual = 'perola'; salvarPrefsJarvis(); } return TEMAS_JARVIS[prefs.jarvisVisual] ? prefs.jarvisVisual : 'perola'; }
 function temaEscuroJarvis() { return !!(TEMAS_JARVIS[visualJarvis()] || {}).escuro; }
 function salvarPrefsJarvis() { try { localStorage.setItem('lifeos_prefs', JSON.stringify(prefs)); } catch (e) { } } // preferência do aparelho, como a câmera do cérebro

@@ -2051,3 +2051,14 @@ body.jv-pensando .jvp-orbe { animation: jvPensa 0.9s ease-in-out infinite; }
 #cerebro .jvp-env { background: #2d3137; color: #fff; }
 .jvp-seg-sub { top: -4px; background: #fffefb; box-shadow: 0 6px 10px -8px rgba(60, 50, 35, 0.25); }
 .jva-plano-b { margin-top: 10px; } .jva-plano-b summary { cursor: pointer; font-size: 0.84rem; font-weight: 600; color: #007aff; }
+
+/* ============================================================================
+   J.A.R.V.I.S. — fase 5: tema HOLOGRAMA DE VIDRO (padrão): fundo azul-noite, vidro escuro e luz ciano
+   ============================================================================ */
+#cerebro.jv-vidro { --jv-bg1: #0c1622; --jv-bg2: #020409; --jv-txt: #eaf7ff; --jv-txt2: rgba(214, 236, 250, 0.72); --jv-txt3: rgba(190, 220, 240, 0.46);
+  --jv-vidro: rgba(14, 26, 40, 0.55); --jv-vidro2: rgba(10, 20, 32, 0.82); --jv-borda: rgba(127, 212, 255, 0.18); --jv-chip: rgba(127, 212, 255, 0.07);
+  --jv-sombra: 0 14px 44px rgba(0, 0, 0, 0.55); --jv-realce: #eaf7ff; --jv-contra: #04101b; --jv-luz: rgba(127, 212, 255, 0.95); }
+#cerebro.jv-vidro .jv-rotulo.jv-area { background: rgba(8, 18, 30, 0.72); color: #e6f8ff; box-shadow: inset 0 0 0 0.5px rgba(127, 212, 255, 0.35), 0 0 14px rgba(127, 212, 255, 0.12); letter-spacing: 0.06em; text-transform: uppercase; font-size: 10.5px; }
+#cerebro.jv-vidro .jv-rotulo.jv-area[data-area="mercado"] { color: #ffe39a; box-shadow: inset 0 0 0 0.5px rgba(255, 201, 77, 0.45), 0 0 14px rgba(255, 201, 77, 0.15); }
+#cerebro.jv-vidro .jv-marca::before { background: #9fe3ff; box-shadow: 0 0 12px #7fd4ff; }
+#cerebro.jv-vidro .jv-halo-btn { box-shadow: 0 0 0 1px rgba(127, 212, 255, 0.35), 0 0 18px rgba(127, 212, 255, 0.35); }
