@@ -1,4 +1,4 @@
-const CACHE_NAME = 'genesis-cache-v7';
+const CACHE_NAME = 'genesis-cache-v8';
 const urlsToCache = [
   './',
   './index.html',
@@ -6,6 +6,7 @@ const urlsToCache = [
   './app.js',
   './jarvis3d.js',
   './vendor/three.module.min.js',
+  './img/primos-p.png',
   './manifest.json',
   './icon-180.png',
   './icon-192.png',

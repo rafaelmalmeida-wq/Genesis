@@ -47,21 +47,25 @@
       <div class="cer-palco">
         <div id="jv-3d" class="jv-3d"><div id="jv-rotulos" class="jv-rotulos"></div></div>
         <header class="jv-topo">
-          <div class="jv-marca">J.A.R.V.I.S.</div>
+          <button type="button" class="jv-marca" onclick="abrirNucleoJarvis()" title="Status do JARVIS">J.A.R.V.I.S.<span id="jv-pensando" class="jv-pensando" hidden>pensando…</span></button>
           <button type="button" id="jv-voltar" class="jv-voltar" onclick="voltarJarvis()">‹ Visão geral</button>
           <h1 id="jv-saudacao" class="jv-saudacao"></h1>
           <p id="jv-resumo" class="jv-resumo"></p>
+          <div id="jv-resposta" class="jv-resposta" hidden></div>
         </header>
         <button type="button" class="jv-menu" onclick="abrirBaseJarvis()" aria-label="Abrir a base (todas as abas)" title="Base"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="6" cy="6" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="12" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+        <nav id="jv-areas" class="jv-areas" aria-label="Áreas e nível de informação do JARVIS"></nav>
         <div id="jv-painel" class="jv-painel" hidden></div>
         <div class="jv-rodape">
           <div id="jv-sugestoes" class="jv-sugestoes" hidden></div>
           <form class="jv-barra" onsubmit="comandoJarvis(event)" autocomplete="off">
             <span class="jv-glifo" aria-hidden="true"></span>
-            <input type="text" id="jv-cmd" placeholder="Como vamos atuar hoje?" oninput="sugerirJarvis(this.value)" enterkeyhint="go" aria-label="Como vamos atuar hoje?">
-            <button type="button" class="jv-mic" onclick="abrirVoz('ditado')" aria-label="Falar" title="Falar"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+            <input type="text" id="jv-cmd" placeholder="Como vamos atuar hoje?" oninput="sugerirJarvis(this.value)" enterkeyhint="send" aria-label="Como vamos atuar hoje?">
+            <button type="submit" class="jv-enviar" aria-label="Enviar ao JARVIS" title="Enviar ao JARVIS">↑</button>
+            <button type="button" class="jv-mic" onclick="alternarMicJarvis()" aria-label="Falar com o JARVIS (toque de novo para enviar)" title="Falar (toque de novo para enviar)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
           </form>
         </div>
+        <input type="file" id="jv-import" accept=".json,application/json" hidden onchange="importarCentral(this)">
         <canvas id="cer-canvas" aria-label="Cérebro: mapa de tudo no Genesis. Toque numa bolinha para ver as ligações."></canvas>
         <div class="cer-topo">
           <div class="cer-titulo"><h1 class="page-title">Cérebro</h1><small id="cer-info"></small></div>
@@ -1385,6 +1389,14 @@
     <div class="modal-content jv-base-conteudo">
       <div class="modal-header"><h3>Base</h3><button class="close-modal" onclick="fecharBaseJarvis()">✕</button></div>
       <div id="jv-base-grade" class="jv-base-grade"></div>
+      <div id="jv-base-extra" class="jv-base-extra"></div>
+    </div>
+  </div>
+
+  <div id="jv-ajustes" class="modal-overlay">
+    <div class="modal-content jv-base-conteudo">
+      <div class="modal-header"><h3>Ajustes do JARVIS</h3><button class="close-modal" onclick="fecharAjustesJarvis()">✕</button></div>
+      <div id="jv-ajustes-corpo" class="modal-body jv-ajustes-corpo"></div>
     </div>
   </div>
 

@@ -42,6 +42,9 @@ let entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || []; // com
 let orders = JSON.parse(localStorage.getItem('lifeos_orders')) || [];   // Primos 3D: pedidos (atenção: "entregas" é outro módulo)
 let clients = JSON.parse(localStorage.getItem('lifeos_clients')) || []; // Primos 3D: clientes
 let claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || []; // ✳ pedidos de mudança no app ditados para o Claude
+let primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; // JARVIS: retrato da "Primos 3D Central" (arquivo gerado no PC e importado aqui)
+let familia = JSON.parse(localStorage.getItem('lifeos_familia')) || [];     // JARVIS: área Família (fotos, datas especiais, recados)
+let memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || [];   // JARVIS: o "subplano" (curiosidades, desabafos, conversas)
 let media = JSON.parse(localStorage.getItem('lifeos_media')) || [];         // filmes, séries, docs
 let playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || []; // atalhos de música
 let trips = JSON.parse(localStorage.getItem('lifeos_trips')) || [];         // viagens
@@ -4160,7 +4163,8 @@ const STATUS_PEDIDO_CLAUDE = {
   trabalhando: ['', 'Claude trabalhando no computador…', '#ff9500', true],
   publicado:   ['🚀', 'publicado — feche e reabra o app', '#34c759', false],
   duvida:      ['💬', 'o Claude precisa de mais detalhes', '#af52de', false],
-  erro:        ['⚠️', 'deu erro — peça de novo', '#ff3b30', false]
+  erro:        ['⚠️', 'deu erro — peça de novo', '#ff3b30', false],
+  respondido:  ['✅', 'o JARVIS respondeu', '#34c759', false]   // resposta a uma pergunta da barra do JARVIS (comentário que começa com ✅)
 };
 const AJUDA_DITADO = `<p><strong>1.</strong> Toque em <strong>🎙 Falar</strong>, fale tudo com calma e toque em <strong>■ Parar</strong>.</p>
 <p><strong>2.</strong> O app mostra o que entendeu. <strong>✓ Salvar</strong> cria na hora; <strong>✎ Revisar</strong> abre o formulário preenchido.</p>
@@ -4195,9 +4199,10 @@ async function enviarPedidoClaude() {
 async function enviarUmPedido(req) {
   try {
     const resumo = req.text.replace(/\s+/g, ' ');
-    const issue = await gh('/issues', { method: 'POST', body: JSON.stringify({ title: '✳ ' + resumo.slice(0, 70) + (resumo.length > 70 ? '…' : ''), body: `**Página do app:** ${req.page}\n\n**Pedido (ditado no app):**\n${req.text}` }) });
+    const jarvis = req.canal === 'jarvis'; // mensagem da barra do JARVIS (página inicial)
+    const issue = await gh('/issues', { method: 'POST', body: JSON.stringify({ title: (jarvis ? '✳ JARVIS: ' : '✳ ') + resumo.slice(0, 70) + (resumo.length > 70 ? '…' : ''), body: `**Página do app:** ${req.page}${jarvis ? ' (barra \"Como vamos atuar hoje?\")' : ''}\n\n**${jarvis ? 'Mensagem para o JARVIS' : 'Pedido'} (ditado no app):**\n${req.text}` }) });
     req.issue = issue.number; req.status = 'enviado'; salvar('clauderequests', claudeReqs);
-    toast('✳ Enviado para o computador! Pode sair desta tela — o ✳ gira enquanto o Claude trabalha.', 6000);
+    toast(req.canal === 'jarvis' ? 'Enviado ao JARVIS no computador. O núcleo pisca enquanto ele pensa.' : '✳ Enviado para o computador! Pode sair desta tela — o ✳ gira enquanto o Claude trabalha.', 6000);
   } catch (e) { toast(`Não consegui enviar agora (${e.message}). O pedido ficou guardado.`, 6000); }
 }
 async function enviarPendentesClaude() { for (const r of claudeReqs.filter(x => x.status === 'fila')) await enviarUmPedido(r); renderPedidosClaude(); atualizarIndicadorClaude(); }
@@ -4210,19 +4215,21 @@ async function atualizarClaude(silencioso) {
   claudeUltimaConsulta = Date.now();
   let mudou = false, publicou = false;
   try {
-    for (const r of claudeReqs.filter(x => x.issue && x.status !== 'publicado').slice(0, 8)) {
+    for (const r of claudeReqs.filter(x => x.issue && x.status !== 'publicado' && x.status !== 'respondido').slice(0, 8)) {
       const is = await gh(`/issues/${r.issue}`);
       let ultimo = '';
       if (is.comments > 0) { const coms = await gh(`/issues/${r.issue}/comments?per_page=100`); ultimo = ((coms[coms.length - 1] || {}).body || '').trim(); }
       const semEmoji = s => s.replace(/^\S+\s*/, '').trim();
       let novo = 'enviado', nota = '';
-      if (ultimo.startsWith('🚀')) { novo = 'publicado'; nota = semEmoji(ultimo); }
+      if (ultimo.startsWith('✅')) { novo = 'respondido'; nota = semEmoji(ultimo); }
+      else if (ultimo.startsWith('🚀')) { novo = 'publicado'; nota = semEmoji(ultimo); }
       else if (is.state === 'closed') novo = 'publicado';
       else if (ultimo.startsWith('💬')) { novo = 'duvida'; nota = semEmoji(ultimo); }
       else if (ultimo.startsWith('⚠️')) { novo = 'erro'; nota = semEmoji(ultimo); }
       else if (ultimo.startsWith('⏳')) novo = 'trabalhando';
       if (novo !== r.status || nota !== (r.nota || '')) {
         if (novo === 'publicado' && !r.avisado) { r.avisado = true; publicou = true; }
+        if (r.canal === 'jarvis' && nota) registrarRespostaNaMemoria({ ...r, nota });
         r.status = novo; r.nota = nota; mudou = true;
       }
     }
@@ -4235,6 +4242,7 @@ async function atualizarClaude(silencioso) {
 /** O botão ✳ gira enquanto houver pedido em andamento; ganha um "!" se o Claude pediu detalhes. */
 function atualizarIndicadorClaude() {
   const b = document.querySelector('.fab-claude'); if (!b) return;
+  if (typeof atualizarPensandoJarvis === 'function') atualizarPensandoJarvis(); // o núcleo do JARVIS pisca rápido enquanto o computador trabalha
   b.classList.toggle('trabalhando', emAndamentoClaude());
   let el = b.querySelector('.fab-badge'); const duvida = claudeReqs.some(r => r.status === 'duvida');
   if (!duvida) { if (el) el.remove(); return; }
@@ -4292,13 +4300,15 @@ document.getElementById('voice-sheet').addEventListener('click', (e) => { if (e.
 // ============================================================================
 const AREAS_CEREBRO = [
   { id: 'primos', nome: 'Primos 3D', cor: '#ff9500', marcador: 'primos 3d', palavras: ['primos', 'impressao 3d', 'impressão 3d', 'filamento', '3d', 'pla', 'petg', 'impressora', 'bambu', 'kobra', 'orcamento peca'],
-    secoes: [['Pedidos', { tab: 'primos' }], ['Clientes', { tab: 'primos', rolar: 'client-list' }], ['Produção', { tab: 'prod' }], ['Custos e preços', { tab: 'prod' }]] },
-  { id: 'eng', nome: 'Engenharia Civil', cor: '#007aff', marcador: 'engenharia', palavras: ['engenharia', 'obra', 'projeto', 'estrutura', 'nbr', 'calculo', 'cálculo'],
-    secoes: [['Projetos'], ['Obras'], ['Normas técnicas'], ['Cálculos'], ['Clientes da engenharia'], ['Trabalhos na agenda', { tab: 'home', sec: 'plantoes' }]] },
-  { id: 'sst', nome: 'Segurança do Trabalho', cor: '#e0a800', marcador: 'sst', palavras: ['sst', 'seguranca do trabalho', 'segurança do trabalho', 'nr', 'epi', 'inspecao', 'inspeção', 'treinamento'],
-    secoes: [['NRs'], ['Inspeções'], ['Treinamentos'], ['EPIs'], ['Documentos e laudos']] },
-  { id: 'mercado', nome: 'Mercado', cor: '#34c759', marcador: 'mercado', palavras: ['mercado', 'bitcoin', 'btc', 'cripto', 'investimento'],
-    secoes: [['Bitcoin'], ['Carteira', { tab: 'business' }], ['Metas', { tab: 'business' }], ['Patrimônio', { tab: 'business' }]] },
+    secoes: [['Pedidos', { tab: 'primos' }], ['Clientes', { tab: 'primos', rolar: 'client-list' }], ['Expositores'], ['Shopee'], ['Filamentos'], ['Produção', { tab: 'prod' }], ['Custos e preços', { tab: 'prod' }]] },
+  { id: 'eng', nome: 'Engenharia Civil', cor: '#007aff', marcador: 'engenharia', palavras: ['engenharia', 'obra', 'projeto', 'estrutura', 'nbr', 'calculo', 'cálculo', 'autocad', 'bim', 'osbim'],
+    secoes: [['Projetos'], ['Obras'], ['Normas técnicas'], ['Cálculos'], ['Softwares'], ['Clientes da engenharia'], ['Trabalhos na agenda', { tab: 'home', sec: 'plantoes' }]] },
+  { id: 'sst', nome: 'Segurança do Trabalho', cor: '#e0a800', marcador: 'sst', palavras: ['sst', 'seguranca do trabalho', 'segurança do trabalho', 'nr', 'epi', 'inspecao', 'inspeção', 'treinamento', 'pgr', 'pcmso'],
+    secoes: [['NRs'], ['Inspeções'], ['Treinamentos'], ['EPIs'], ['PGR e PCMSO'], ['Documentos e laudos']] },
+  { id: 'mercado', nome: 'Mercado', cor: '#34c759', marcador: 'mercado', palavras: ['mercado', 'bitcoin', 'btc', 'cripto', 'investimento', 'ações', 'acoes', 'bolsa', 'dólar', 'dolar'],
+    secoes: [['Bitcoin'], ['Ações Brasil'], ['Ações EUA'], ['Dólar'], ['Carteira', { tab: 'business' }], ['Metas', { tab: 'business' }], ['Patrimônio', { tab: 'business' }]] },
+  { id: 'familia', nome: 'Família', cor: '#a2845e', marcador: 'família', palavras: ['familia', 'família', 'mãe', 'pai', 'irmão', 'irmã', 'filho', 'filha', 'esposa', 'namorada', 'avó', 'avô'],
+    secoes: [['Fotos'], ['Datas especiais'], ['Recados']] },
   { id: 'academia', nome: 'Academia', cor: '#ff2d55', marcador: 'academia', palavras: ['academia', 'treino', 'musculacao', 'musculação', 'dieta'],
     secoes: [['Treinos', { tab: 'health' }], ['Medidas', { tab: 'health' }], ['Alimentação', { tab: 'health' }], ['Hidratação', { tab: 'health' }]] },
   { id: 'dia', nome: 'Dia a dia', cor: '#5856d6', marcador: 'dia a dia', palavras: [],
@@ -4336,6 +4346,16 @@ function montarGrafoCerebro() {
   (typeof maquinas !== 'undefined' ? maquinas : []).forEach(m => item('maq-' + m.id, rotuloDoItem(m), 'primos', sec('primos', 'Produção'), { tab: 'prod', fn: 'editarMaquina', id: m.id }));
   (typeof produtos !== 'undefined' ? produtos : []).forEach(p => item('prod-' + p.id, rotuloDoItem(p), 'primos', sec('primos', 'Custos e preços'), { tab: 'prod', fn: 'editarProduto', id: p.id }));
   (typeof filamentos !== 'undefined' ? filamentos : []).slice(0, 40).forEach(f => item('fil-' + f.id, rotuloDoItem(f), 'primos', sec('primos', 'Produção'), { tab: 'prod', fn: 'editarFilamento', id: f.id }));
+  // Primos 3D Central (arquivo gerado no PC e importado): expositores, produtos da Shopee, rolos de filamento, clientes
+  if (primosCentral) {
+    ((primosCentral.expositores || {}).resumo || []).forEach((e, i) => item('pcx-' + i, e.local, 'primos', sec('primos', 'Expositores'), null));
+    (primosCentral.shopee || []).forEach((p, i) => item('pcs-' + i, p.produto, 'primos', sec('primos', 'Shopee'), null));
+    const kgPorCor = {}; (primosCentral.filamentos || []).forEach(f => { const k = `${f.material} ${f.cor}`; kgPorCor[k] = (kgPorCor[k] || 0) + (f.kg || 0); });
+    Object.keys(kgPorCor).slice(0, 30).forEach((k, i) => item('pcf-' + i, `${k} · ${kgPorCor[k]} kg`, 'primos', sec('primos', 'Filamentos'), null));
+    (primosCentral.clientes || []).forEach((c, i) => { const n = semAcentoCer(c.nome); if (!clients.some(x => n.startsWith(semAcentoCer(x.name)))) item('pcc-' + i, c.nome, 'primos', sec('primos', 'Clientes'), null); });
+  }
+  // Família
+  familia.forEach(f => item('fam-' + f.id, f.texto || (f.tipo === 'foto' ? 'Foto' : 'Família'), 'familia', sec('familia', f.tipo === 'foto' ? 'Fotos' : f.tipo === 'data' ? 'Datas especiais' : 'Recados'), null));
   // Engenharia: trabalhos (plantões/turnos) que vêm por aí
   (typeof shifts !== 'undefined' ? shifts : []).filter(s => s.date >= hoje).slice(0, 30).forEach(s => item('tur-' + s.id, `${s.desc || 'Trabalho'} ${isoParaBR(s.date).slice(0, 5)}`, 'eng', sec('eng', 'Trabalhos na agenda'), { tab: 'home', sec: 'plantoes', fn: 'editarPlantao', id: s.id }));
   // Mercado
@@ -4600,7 +4620,7 @@ function mostrarCartaoCerebro(n) {
 }
 function esconderCartaoCerebro() {
   const el = document.getElementById('cer-cartao'); if (el) el.hidden = true;
-  if (jv.modo === '3d') { JarvisBrain.selecionar(null); if (jv.area) document.getElementById('jv-painel').hidden = false; ajustarDeslocamentoJarvis(); }
+  if (jv.modo === '3d') { JarvisBrain.selecionar(null); if (jv.painel) document.getElementById('jv-painel').hidden = false; ajustarDeslocamentoJarvis(); }
 }
 /** "Abrir": vai para a aba (e seção) do item e, se houver, abre o formulário dele. */
 function abrirNoCerebro(n) {
@@ -4666,14 +4686,42 @@ function abrirCerebro() {
 
 // ============================================================================
 // JARVIS — a página inicial: o cérebro em 3D (jarvis3d.js + Three.js local em vendor/)
-// e a barra "Como vamos atuar hoje?". Usa o MESMO grafo do cérebro 2D (montarGrafoCerebro).
-// Tocar numa área: ela vem para a frente, mostra a ramificação (setores) e o JARVIS abre
-// uma janelinha com um resumo curto e o próximo passo. Nada disso grava dados.
+// Usa o MESMO grafo do cérebro 2D (montarGrafoCerebro). Visual preto/branco/cinza ("holograma"),
+// com o NÚCLEO (o JARVIS) no centro — pisca mais rápido quando está pensando num pedido.
+// • Selos das áreas (canto direito): cada um com a bolinha do NÍVEL DE INFORMAÇÃO que o JARVIS tem
+//   daquela área — vermelho (quase nada) · laranja (parcial) · verde (bom para analisar).
+// • Tocar numa área: ela vem para a frente, mostra a ramificação e o JARVIS abre a janelinha dela
+//   (Primos 3D: dossiê com os dados da "Primos 3D Central"; Mercado: cotações; Família: fotos e datas).
+// • Barra "Como vamos atuar hoje?": 🎤 fica ouvindo até você tocar de novo; ao parar, a mensagem vai
+//   para o JARVIS no computador (Claude, pelo mesmo caminho do ✳). Enquanto isso o núcleo "pensa".
+// • SUBPLANO (a nuvenzinha afastada do cérebro): curiosidades, desabafos e conversas guardadas em
+//   `memorias`; respondidas na hora por uma IA gratuita (chave do próprio Rafael, só neste aparelho)
+//   para não gastar o plano do Claude. Discreto de propósito.
+// Configurações só deste aparelho (não sincronizam): lifeos_jarvis_config (chaves), lifeos_mercado_cache.
 // Se o aparelho não tiver WebGL (ou o 3D não carregar), fica o cérebro 2D com as abas normais.
 // ============================================================================
-const jv = { modo: null, esperando: false, area: null, assinatura: '', fundo: '' };
+const jv = { modo: null, esperando: false, area: null, painel: null, assinatura: '', expandido: false, ouvindo: false, rec: null, religar: 0, enviarAoParar: false, iaPensando: false };
+const $j = id => document.getElementById(id);
+let jvConfig = JSON.parse(localStorage.getItem('lifeos_jarvis_config')) || { iaProvedor: 'gemini', iaChave: '', iaModelo: '', brapi: '' };
+const COR_NIVEL = ['#ff453a', '#ff9f0a', '#30d158'];
+const NOME_NIVEL = ['pouca informação', 'informação parcial', 'bem informado'];
 
-function corFundoJarvis() { return getComputedStyle(document.documentElement).getPropertyValue('--bg').trim() || '#f2f2f7'; }
+// símbolos das áreas (traço fino, cor do texto) — nos selos e, bem transparentes, dentro das bolhas do 3D
+const ICONES_AREA = {
+  eng: '<path d="M6 46H58M10 46L18 28L26 46L34 28L42 46L50 28L58 46M18 28H50M14 52H50"/>',
+  sst: '<path d="M10 42H54M14 42C14 27 22 18 32 18S50 27 50 42M28 18V29M36 18V29M8 46.5H56"/><path d="M32 30v8M28 34h8"/>',
+  mercado: '<path d="M23 16H38C46 16 46 30 38 31H23M23 31H40C49 31 49 48 40 48H23M26 16V48M29 10V16M37 10V16M29 48V54M37 48V54"/>',
+  academia: '<path d="M12 25V39M18 20V44M46 20V44M52 25V39M18 32H46M7 32H12M52 32H57"/>',
+  dia: '<circle cx="32" cy="32" r="20"/><path d="M32 20V32L41 38"/>',
+  familia: '<path d="M12 30L32 13L52 30M18 25V51H46V25"/><path d="M32 45C25 40 23 36 26 33C28 31 31 32 32 34C33 32 36 31 38 33C41 36 39 40 32 45Z"/>'
+};
+const IMG_AREA = { primos: 'img/primos-p.png' };
+function iconeAreaSVG(id, cor) { return `<svg viewBox="0 0 64 64" fill="none" stroke="${cor || 'currentColor'}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES_AREA[id] || ICONES_AREA.dia}</svg>`; }
+
+function visualJarvis() { return (typeof prefs !== 'undefined' && prefs.jarvisVisual) || 'escuro'; }
+function salvarPrefsJarvis() { try { localStorage.setItem('lifeos_prefs', JSON.stringify(prefs)); } catch (e) { } } // preferência do aparelho, como a câmera do cérebro
+function salvarJvConfig() { localStorage.setItem('lifeos_jarvis_config', JSON.stringify(jvConfig)); } // chaves só deste aparelho (não sincroniza)
+
 /** Liga o 3D (quando o jarvis3d.js terminar de carregar). Devolve false enquanto ainda está carregando. */
 function iniciarJarvis() {
   if (jv.modo) return true;
@@ -4685,38 +4733,50 @@ function iniciarJarvis() {
     }
     return false;
   }
-  const ok = JarvisBrain.iniciar(document.getElementById('jv-3d'), { rotulos: document.getElementById('jv-rotulos'), fundo: corFundoJarvis(), onArea: abrirAreaJarvis, onNo: escolherNoJarvis, onToqueVazio: toqueVazioJarvis });
-  jv.modo = ok ? '3d' : '2d'; jv.fundo = corFundoJarvis();
-  document.getElementById('cerebro').classList.add(ok ? 'modo-3d' : 'modo-2d');
+  const ok = JarvisBrain.iniciar($j('jv-3d'), { rotulos: $j('jv-rotulos'), visual: visualJarvis(), icones: iconesPara3D(), onArea: abrirAreaJarvis, onNo: escolherNoJarvis, onNucleo: abrirNucleoJarvis, onSubplano: abrirSubplano, onToqueVazio: toqueVazioJarvis });
+  jv.modo = ok ? '3d' : '2d';
+  $j('cerebro').classList.add(ok ? 'modo-3d' : 'modo-2d');
+  aplicarVisualJarvis();
   atualizarCasaJarvis(abaAtual());
   return true;
 }
 /** O 3D não carregou (sem internet na primeira vez, aparelho sem WebGL...): fica o cérebro 2D. */
-function falhouJarvis3d() { if (jv.modo) return; jv.modo = '2d'; document.getElementById('cerebro').classList.add('modo-2d'); renderCerebro(); }
+function falhouJarvis3d() { if (jv.modo) return; jv.modo = '2d'; $j('cerebro').classList.add('modo-2d'); renderCerebro(); }
 /** Na página inicial (3D) somem a barra de abas e as bolinhas flutuantes: fica só o cérebro e a barra do JARVIS. */
 function atualizarCasaJarvis(tabId) {
-  document.body.classList.toggle('jarvis-home', tabId === 'cerebro' && jv.modo === '3d');
-  if (jv.modo === '3d' && tabId !== 'cerebro') { JarvisBrain.pausar(); fecharBaseJarvis(); }
+  const casa = tabId === 'cerebro' && jv.modo === '3d';
+  document.body.classList.toggle('jarvis-home', casa);
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.content = casa && visualJarvis() === 'escuro' ? '#050608' : '#f2f2f7';
+  if (jv.modo === '3d' && tabId !== 'cerebro') { JarvisBrain.pausar(); fecharBaseJarvis(); if (jv.ouvindo) pararMicJarvis(false); }
 }
+function aplicarVisualJarvis() {
+  const v = visualJarvis(); const c = $j('cerebro');
+  c.classList.toggle('jv-escuro', v === 'escuro'); c.classList.toggle('jv-claro', v !== 'escuro');
+  if (jv.modo === '3d' && JarvisBrain.visual !== v) JarvisBrain.definirVisual(v);
+  atualizarCasaJarvis(abaAtual());
+}
+function trocarVisualJarvis() { prefs.jarvisVisual = visualJarvis() === 'escuro' ? 'claro' : 'escuro'; salvarPrefsJarvis(); aplicarVisualJarvis(); abrirBaseJarvis(); }
+/** Símbolos das áreas para o 3D: SVG (desenhado em branco lá dentro) ou imagem (logo da Primos). */
+function iconesPara3D() { const m = {}; AREAS_CEREBRO.forEach(a => { m[a.id] = IMG_AREA[a.id] ? { img: IMG_AREA[a.id] } : { svg: iconeAreaSVG(a.id, '#ffffff') }; }); return m; }
+
 function renderJarvis() {
   const g = montarGrafoCerebro();
   cer.nos = g.nos; cer.mapa = g.mapa; cer.links = g.links; // o cartão, a busca e as ligações usam estes
   const assinatura = g.nos.map(n => n.id + ':' + n.nome).join('|') + '#' + g.links.length;
   if (assinatura !== jv.assinatura) { jv.assinatura = assinatura; JarvisBrain.carregar({ nos: g.nos, links: g.links }); } // só redesenha se algo mudou
-  const fundo = corFundoJarvis(); if (fundo !== jv.fundo) { jv.fundo = fundo; JarvisBrain.definirFundo(fundo); }
   if (cer.sel) { cer.sel = cer.mapa[cer.sel.id] || null; if (!cer.sel) esconderCartaoCerebro(); }
-  renderTopoJarvis();
-  if (jv.area) renderPainelArea(jv.area);
+  renderTopoJarvis(); renderAreasJarvis(); renderFalaJarvis(); atualizarSubplano(); atualizarPensandoJarvis();
+  if (jv.painel) renderPainelJarvis();
   if (abaAtual() === 'cerebro') JarvisBrain.retomar();
 }
 
-// --- o que o JARVIS diz no topo: saudação + o essencial do dia numa linha ---
+// --- topo: saudação + o essencial do dia numa linha ---
 function renderTopoJarvis() {
   const h = new Date().getHours();
   const saud = h < 5 ? 'Boa madrugada' : h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite';
   const nome = String(profile.name || '').trim().split(/\s+/)[0];
-  document.getElementById('jv-saudacao').innerText = nome ? `${saud}, ${nome}.` : `${saud}.`;
-  document.getElementById('jv-resumo').innerText = resumoJarvis();
+  $j('jv-saudacao').innerText = nome ? `${saud}, ${nome}.` : `${saud}.`;
+  $j('jv-resumo').innerText = resumoJarvis();
 }
 function resumoJarvis() {
   const hoje = hojeISO(); const partes = [];
@@ -4730,149 +4790,564 @@ function resumoJarvis() {
   if (orc) partes.push(plural(orc, 'orçamento esperando', 'orçamentos esperando'));
   if (evHoje) partes.push(plural(evHoje, 'compromisso hoje', 'compromissos hoje'));
   if (tarHoje) partes.push(plural(tarHoje, 'tarefa para hoje', 'tarefas para hoje'));
-  return partes.length ? partes.slice(0, 3).join(' · ') : 'Tudo em ordem por aqui. Por onde começamos?';
+  return partes.length ? partes.slice(0, 3).join(' · ') : 'Todos os sistemas em ordem. Por onde começamos?';
 }
 
-// --- a janelinha do JARVIS de cada área: resumo, indicadores e o próximo passo (regras simples, tudo local) ---
-function analiseAreaJarvis(area) {
-  const hoje = hojeISO(), mes = hoje.slice(0, 7);
-  const notasDaArea = cer.nos.filter(n => n.nota && n.area === area).length;
+// --- NÍVEL DE INFORMAÇÃO por área (a bolinha dos selos): 0 vermelho · 1 laranja · 2 verde ---
+function diasEntre(a, b) { const d = s => { const [y, m, dd] = s.split('-').map(Number); return new Date(y, m - 1, dd); }; return Math.round((d(b) - d(a)) / 86400000); }
+function nivelArea(area) {
+  const hoje = hojeISO(); const tem = [], falta = [];
+  const itens = cer.nos.filter(n => n.tipo === 'item' && n.area === area && !n.categoria).length;
+  const porQtd = (n, pouco, bom) => n >= bom ? 2 : n >= pouco ? 1 : 0;
   if (area === 'primos') {
-    const prod = orders.filter(o => pedidoAberto(o) && o.status !== 'orcamento');
-    const atrasados = prod.filter(o => o.due && o.due < hoje).sort((a, b) => a.due.localeCompare(b.due));
-    const proximos = prod.filter(o => o.due && o.due >= hoje).sort((a, b) => a.due.localeCompare(b.due));
-    const orc = orders.filter(o => o.status === 'orcamento');
-    const aReceber = orders.filter(o => pedidoGeraLancamento(o) && !o.paid); const totalReceber = aReceber.reduce((a, o) => a + (Number(o.price) || 0), 0);
-    const entreguesSemPagar = aReceber.filter(o => o.status === 'entregue').reduce((a, o) => a + (Number(o.price) || 0), 0);
-    const recebidoMes = orders.filter(o => o.paid && (o.paidAt || '').startsWith(mes)).reduce((a, o) => a + (Number(o.price) || 0), 0);
-    const cli = o => { const c = clienteNome(o.clientId); return c ? ` (${esc(c)})` : ''; };
-    let fala;
-    if (!orders.length) fala = 'Ainda não há pedidos registrados. Cadastre o primeiro e eu passo a vigiar prazos, o que cobrar e para onde vai o dinheiro.';
-    else if (atrasados.length) fala = `<b>${plural(atrasados.length, 'pedido atrasado', 'pedidos atrasados')}</b>. Eu começaria por <b>${esc(atrasados[0].title)}</b>${cli(atrasados[0])}, prazo era ${isoParaBR(atrasados[0].due).slice(0, 5)}. Um aviso ao cliente agora vale mais que um pedido de desculpas depois.`;
-    else if (proximos.length && proximos[0].due <= somarDiasCer(hoje, 1)) fala = `Foco ${proximos[0].due === hoje ? 'de hoje' : 'até amanhã'}: entregar <b>${esc(proximos[0].title)}</b>${cli(proximos[0])}.${proximos.length > 1 ? ` Depois vem ${plural(proximos.length - 1, 'outro', 'outros')} na fila.` : ''}`;
-    else if (entreguesSemPagar > 0) fala = `Há <b>${formatCurrency(entreguesSemPagar)}</b> em peças já entregues esperando pagamento. É o dinheiro mais fácil do mês: eu começaria cobrando.`;
-    else if (orc.length) fala = `<b>${plural(orc.length, 'orçamento esperando', 'orçamentos esperando')}</b> resposta. Um lembrete gentil hoje costuma virar pedido amanhã.`;
-    else if (prod.length) fala = `Produção andando: ${plural(prod.length, 'pedido', 'pedidos')} em curso e nenhum atrasado. Bom momento para prospectar o próximo cliente.`;
-    else fala = 'Fila vazia e nada para receber. Ótima hora para prospectar, fotografar peças ou testar um produto novo.';
-    return { fala, ind: [[prod.length, 'em produção', '#007aff'], [orc.length, orc.length === 1 ? 'orçamento' : 'orçamentos', '#8e8e93'], [formatCurrency(totalReceber), 'a receber', '#ff9500'], [formatCurrency(recebidoMes), 'recebido no mês', '#34c759']], abrir: ['primos', 'Primos 3D'] };
+    const pc = primosCentral;
+    if (pc) { tem.push(`Central importada em ${isoParaBR(pc.geradoEm.slice(0, 10))}`); if (diasEntre(pc.geradoEm.slice(0, 10), hoje) > 7) falta.push('atualizar os dados da Central (mais de 7 dias)'); }
+    else falta.push('importar a Primos 3D Central (arquivo do PC)');
+    if (orders.length) tem.push(plural(orders.length, 'pedido no app', 'pedidos no app')); else falta.push('lançar os pedidos no app');
+    if (pc && !(pc.vendas || []).length && !orders.some(o => o.paid)) falta.push('registrar as vendas');
+    if (pc && pc.projetos3mf && !pc.projetos3mf.fatiados) falta.push('salvar os projetos do Bambu Studio já fatiados');
+    return { n: pc ? (falta.length <= 1 ? 2 : 1) : (orders.length || clients.length ? 1 : 0), tem, falta };
   }
+  if (area === 'mercado') {
+    const mc = cacheMercado();
+    if (mc && mc.btc) tem.push('cotações ao vivo'); else falta.push('abrir o Mercado com internet para buscar as cotações');
+    if (assets.length) tem.push(plural(assets.length, 'ativo na carteira', 'ativos na carteira')); else falta.push('cadastrar sua carteira em Negócios');
+    if (!jvConfig.brapi) falta.push('chave grátis da brapi (Ibovespa e ações dos EUA)');
+    return { n: (mc && mc.btc ? 1 : 0) + (assets.length ? 1 : 0), tem, falta };
+  }
+  if (area === 'academia') {
+    const tr = workouts.filter(w => w.date >= somarDiasCer(hoje, -13)).length;
+    if (tr) tem.push(plural(tr, 'treino em 14 dias', 'treinos em 14 dias')); else falta.push('registrar os treinos em Saúde');
+    return { n: tr >= 4 ? 2 : tr ? 1 : 0, tem, falta };
+  }
+  if (area === 'dia') {
+    if (tasks.length) tem.push(plural(tasks.filter(t => !t.done).length, 'tarefa aberta', 'tarefas abertas'));
+    if (events.length) tem.push(plural(events.length, 'compromisso', 'compromissos'));
+    if (!habits.length) falta.push('definir hábitos no Painel');
+    return { n: (tasks.length ? 1 : 0) + (events.length || habits.length ? 1 : 0), tem, falta };
+  }
+  if (area === 'familia') {
+    const fotos = familia.filter(f => f.tipo === 'foto').length, datas = familia.filter(f => f.tipo === 'data').length;
+    if (fotos) tem.push(plural(fotos, 'foto', 'fotos')); else falta.push('adicionar fotos');
+    if (datas) tem.push(plural(datas, 'data especial', 'datas especiais')); else falta.push('cadastrar aniversários e datas especiais');
+    return { n: fotos && datas ? 2 : fotos || datas ? 1 : 0, tem, falta };
+  }
+  // Engenharia e Segurança do Trabalho: crescem com notas, trabalhos e projetos
+  if (itens) tem.push(plural(itens, 'item ligado', 'itens ligados')); else falta.push('criar notas nos setores (projetos, obras, normas...)');
+  return { n: porQtd(itens, 1, 10), tem, falta };
+}
+function renderAreasJarvis() {
+  const el = $j('jv-areas'); if (!el) return; const status = {};
+  el.innerHTML = AREAS_CEREBRO.map(a => {
+    const nv = nivelArea(a.id); status[a.id] = COR_NIVEL[nv.n];
+    const ico = IMG_AREA[a.id] ? `<img src="${IMG_AREA[a.id]}" alt="">` : iconeAreaSVG(a.id);
+    return `<button type="button" class="jv-selo${jv.area === a.id ? ' ativo' : ''}" onclick="irParaNoJarvis('a-${a.id}')" title="${esc(a.nome)} — ${NOME_NIVEL[nv.n]}" aria-label="${esc(a.nome)}: ${NOME_NIVEL[nv.n]}">${ico}<i style="background:${COR_NIVEL[nv.n]}"></i></button>`;
+  }).join('');
+  if (jv.modo === '3d') JarvisBrain.definirStatus(status);
+}
+function linhaNivel(area) {
+  const nv = nivelArea(area);
+  return `<div class="jv-nivel"><i style="background:${COR_NIVEL[nv.n]}"></i><span><b>${NOME_NIVEL[nv.n][0].toUpperCase() + NOME_NIVEL[nv.n].slice(1)}.</b> ${nv.falta.length ? 'Para eu entender melhor: ' + esc(nv.falta.join('; ')) + '.' : 'Tenho o que preciso para analisar.'}</span></div>`;
+}
+
+// --- a janelinha do JARVIS: área, núcleo (status + conversas) ou subplano ---
+function abrirPainelJarvis(painel) { jv.painel = painel; jv.expandido = false; renderPainelJarvis(); ajustarDeslocamentoJarvis(); }
+function renderPainelJarvis() {
+  const el = $j('jv-painel'); if (!el || !jv.painel) return;
+  let html = '';
+  if (jv.painel === 'nucleo') html = htmlNucleo();
+  else if (jv.painel === 'subplano') html = htmlSubplano();
+  else html = htmlArea(jv.painel);
+  el.innerHTML = html;
+  el.classList.toggle('expandido', jv.expandido);
+  el.hidden = !$j('cer-cartao').hidden;
+  if (jv.painel === 'mercado') atualizarMercado(false);
+}
+function cabecalhoPainel(titulo, sub, iconeHTML) {
+  return `<div class="jv-painel-topo">${iconeHTML || ''}<div class="jv-painel-nome"><strong>${titulo}</strong><small>${sub}</small></div><button type="button" class="jv-x" onclick="voltarJarvis()" aria-label="Fechar">✕</button></div>`;
+}
+function falaHTML(texto) { return `<div class="jv-fala"><span class="jv-glifo"></span><p>${texto}</p></div>`; }
+function indicadoresHTML(ind) { return ind.length ? `<div class="jv-ind">${ind.map(([v, r]) => `<div><strong>${esc(v)}</strong><small>${esc(r)}</small></div>`).join('')}</div>` : ''; }
+function setoresHTML(area) {
+  const setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === area);
+  return `<div class="jv-setores">${setores.map(s => `<button type="button" class="chip" onclick="irParaNoJarvis('${esc(s.id)}')">${esc(s.nome)}</button>`).join('')}</div>`;
+}
+function htmlArea(area) {
+  const a = AREAS_CEREBRO.find(x => x.id === area); if (!a) return '';
+  const itens = cer.nos.filter(n => n.tipo === 'item' && n.area === area).length;
+  const ico = `<span class="jv-selo mini">${IMG_AREA[area] ? `<img src="${IMG_AREA[area]}" alt="">` : iconeAreaSVG(area)}</span>`;
+  const topo = cabecalhoPainel(esc(a.nome), plural(itens, 'item ligado', 'itens ligados'), ico);
+  if (area === 'primos') return topo + htmlPrimos();
+  if (area === 'mercado') return topo + htmlMercado();
+  if (area === 'familia') return topo + htmlFamilia();
+  const an = analiseAreaJarvis(area);
+  return topo + falaHTML(an.fala) + linhaNivel(area) + indicadoresHTML(an.ind) + setoresHTML(area)
+    + (an.abrir ? `<button type="button" class="btn jv-abrir" onclick="changeTab('${an.abrir[0]}')">Abrir ${esc(an.abrir[1])} ›</button>` : '');
+}
+/** Resumo das áreas simples (regras locais). */
+function analiseAreaJarvis(area) {
+  const hoje = hojeISO();
+  const notasDaArea = cer.nos.filter(n => n.nota && n.area === area).length;
   if (area === 'eng') {
     const trab = shifts.filter(s => s.date >= hoje).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
     const fala = trab.length ? `Próximo trabalho na agenda: <b>${esc(trab[0].desc || 'Trabalho')}</b> em ${isoParaBR(trab[0].date).slice(0, 5)}.`
-      : notasDaArea ? `${plural(notasDaArea, 'nota ligada', 'notas ligadas')} a esta área. Toque num setor para ver ou criar mais.`
-        : 'Esta área cresce com suas notas de projetos, obras, normas e cálculos. Toque num setor e crie a primeira: ela vira uma bolinha aqui.';
-    return { fala, ind: [[notasDaArea, 'notas', '#007aff'], [trab.length, 'na agenda', '#5856d6']], abrir: null };
+      : 'Área criada e pronta. Aqui vão entrar seus projetos, obras, normas (NBR), cálculos e softwares (AutoCAD, BIM, OSBIM). Quando quiser, me diga por onde começar: organizo tudo sem mexer nos seus arquivos.';
+    return { fala, ind: [[notasDaArea, 'notas'], [trab.length, 'na agenda']], abrir: null };
   }
   if (area === 'sst') {
-    const fala = notasDaArea ? `${plural(notasDaArea, 'nota ligada', 'notas ligadas')} à Segurança do Trabalho. Toque num setor para abrir ou criar mais.`
-      : 'Aqui entram NRs, inspeções, treinamentos e EPIs. Toque num setor e crie uma nota (ou use o marcador “sst”): eu organizo tudo por aqui.';
-    return { fala, ind: [[notasDaArea, 'notas', '#e0a800']], abrir: null };
-  }
-  if (area === 'mercado') {
-    const fala = (assets.length ? `Carteira com ${plural(assets.length, 'ativo', 'ativos')}${goals.length ? ` e ${plural(goals.length, 'meta', 'metas')}` : ''}.` : 'Nenhum ativo cadastrado ainda.')
-      + ' Em breve acompanho o Bitcoin por aqui; só preciso do seu OK para buscar a cotação numa fonte pública.';
-    return { fala, ind: [[assets.length, 'ativos', '#34c759'], [goals.length, 'metas', '#30b0c7']], abrir: ['business', 'Negócios'] };
+    const fala = notasDaArea ? `${plural(notasDaArea, 'nota ligada', 'notas ligadas')} à Segurança do Trabalho.`
+      : 'Área pronta para NRs, inspeções, treinamentos, EPIs, PGR/PCMSO e laudos. Toque num setor e crie a primeira nota: ela vira uma bolinha aqui.';
+    return { fala, ind: [[notasDaArea, 'notas']], abrir: null };
   }
   if (area === 'academia') {
     const tr = workouts.filter(w => w.date >= somarDiasCer(hoje, -6)); const min = tr.reduce((a, w) => a + (Number(w.minutes) || 0), 0);
     const fala = tr.length ? `${plural(tr.length, 'treino', 'treinos')} nos últimos 7 dias. ${tr.length >= 3 ? 'Constância boa, é ela que dá resultado.' : 'Dá para encaixar mais um: até 20 minutos contam.'}`
       : 'Nenhum treino registrado nos últimos 7 dias. Que tal um leve hoje? Até 20 minutos contam.';
-    return { fala, ind: [[tr.length, 'treinos (7 dias)', '#ff2d55'], [`${min} min`, 'de treino', '#ff9500']], abrir: ['health', 'Saúde'] };
+    return { fala, ind: [[tr.length, 'treinos (7 dias)'], [`${min} min`, 'de treino']], abrir: ['health', 'Saúde'] };
   }
   const abertas = tasks.filter(t => !t.done), paraHoje = abertas.filter(t => t.due && t.due <= hoje);
   const evHoje = events.filter(e => e.date === hoje && !e.done).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
   const fala = paraHoje.length ? `Para hoje: <b>${esc(paraHoje[0].text)}</b>${paraHoje.length > 1 ? ` e mais ${paraHoje.length - 1}` : ''}.`
     : evHoje.length ? `Hoje tem <b>${esc(evHoje[0].title)}</b>${evHoje[0].time ? ' às ' + esc(evHoje[0].time) : ''}.`
       : 'Dia sem prazos apertados. Bom para adiantar algo importante antes que vire urgente.';
-  return { fala, ind: [[abertas.length, 'tarefas abertas', '#5856d6'], [evHoje.length, 'compromissos hoje', '#ff3b30'], [`${habits.filter(h => h.done).length}/${habits.length}`, 'hábitos', '#34c759']], abrir: ['focus', 'Painel'] };
+  return { fala, ind: [[abertas.length, 'tarefas abertas'], [evHoje.length, 'compromissos hoje'], [`${habits.filter(h => h.done).length}/${habits.length}`, 'hábitos']], abrir: ['focus', 'Painel'] };
 }
-function renderPainelArea(area) {
-  const a = AREAS_CEREBRO.find(x => x.id === area), el = document.getElementById('jv-painel'); if (!a || !el) return;
-  const an = analiseAreaJarvis(area);
-  const setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === area);
-  const itens = cer.nos.filter(n => n.tipo === 'item' && n.area === area).length;
-  el.innerHTML = `<div class="jv-painel-topo"><span class="cer-ponto" style="background:${a.cor}"></span><div class="jv-painel-nome"><strong>${esc(a.nome)}</strong><small>${plural(itens, 'item ligado', 'itens ligados')}</small></div><button type="button" class="close-modal" onclick="voltarJarvis()" aria-label="Fechar">✕</button></div>
-    <div class="jv-fala"><span class="jv-glifo"></span><p>${an.fala}</p></div>
-    ${an.ind.length ? `<div class="jv-ind">${an.ind.map(([v, r, c]) => `<div><strong style="color:${c}">${esc(v)}</strong><small>${esc(r)}</small></div>`).join('')}</div>` : ''}
-    <div class="jv-setores">${setores.map(s => `<button type="button" class="chip" onclick="irParaNoJarvis('${esc(s.id)}')"><span class="cer-ponto sm" style="background:${esc(s.cor)}"></span>${esc(s.nome)}</button>`).join('')}</div>
-    ${an.abrir ? `<button type="button" class="btn jv-abrir" onclick="changeTab('${an.abrir[0]}')">Abrir ${esc(an.abrir[1])} ›</button>` : ''}`;
-  el.hidden = !document.getElementById('cer-cartao').hidden;
+
+// ============================================================================
+// PRIMOS 3D no JARVIS — dados do app (pedidos, clientes) + retrato da "Primos 3D Central"
+// (planilha de gestão, expositores, Shopee, filamentos...), gerado no PC pelo script
+// .claude/jarvis/gerar-primos.ps1 → "Primos 3D Central/09 JARVIS/primos-jarvis.json" → importado aqui.
+// ============================================================================
+/** Texto vindo do arquivo importado: escapa tudo e só devolve o negrito <b>. */
+function negritoSeguro(s) { return s ? esc(s).replace(/&lt;(\/?)b&gt;/g, '<$1b>') : ''; }
+function pct(x) { return x === null || x === undefined ? '—' : (x * 100).toFixed(1).replace('.', ',') + '%'; }
+function reais(v) { return v === null || v === undefined ? '—' : formatCurrency(v); }
+function alertasPrimos(pc) {
+  const hoje = hojeISO(), a = []; if (!pc) return a;
+  const [y] = hoje.split('-').map(Number);
+  if (!(pc.vendas || []).length && !orders.some(o => o.paid)) a.push(['alto', 'Nenhuma venda registrada. Sem isso eu não calculo lucro real nem acompanho o limite do MEI.']);
+  if ((pc.caixa || {}).saldo < 0) a.push(['alto', `Caixa estimado negativo (${reais(pc.caixa.saldo)}): parte dos gastos saiu do seu CPF e da conta do MEI. Registre quem pagou o quê na aba Aportes.`]);
+  const ex = pc.expositores || {};
+  if (ex.inicio) {
+    const dias = diasEntre(ex.inicio, hoje), vend = (ex.itens || []).reduce((s, i) => s + (i.vendidos || 0), 0), prox = 15 - (dias % 15);
+    a.push([dias >= 15 && !vend ? 'alto' : 'medio', vend ? `${vend} chaveiros vendidos nos expositores. Repita os modelos que saíram e troque os parados.` : `Expositores ativos há ${plural(dias, 'dia', 'dias')}. Próxima visita em ${plural(prox, 'dia', 'dias')}: anote os vendidos.`]);
+  }
+  (pc.contasPagar || []).filter(c => !/pago/i.test(c.status || '') && c.venc >= hoje && diasEntre(hoje, c.venc) <= 10).slice(0, 2).forEach(c => a.push(['medio', `${esc(c.fornecedor)}: ${reais(c.valor)} vence em ${isoParaBR(c.venc).slice(0, 5)}.`]));
+  const dia = Number(hoje.slice(8, 10)); if (dia >= 10 && dia <= 20) a.push(['medio', `DAS do MEI (${reais((pc.parametros || {}).das)}) vence dia 20.`]);
+  const semPreco = (pc.custoPeca || []).filter(p => p.canal === 'Shopee' && !p.preco).length;
+  if (semPreco) a.push(['medio', `${plural(semPreco, 'produto da Shopee', 'produtos da Shopee')} sem tempo, gramas e preço: fatie no Bambu Studio e anote na aba Custo por Peça.`]);
+  if (pc.projetos3mf && !pc.projetos3mf.fatiados) a.push(['baixo', `Nenhum dos ${pc.projetos3mf.total} projetos .3mf está salvo já fatiado. Salve depois de fatiar e eu leio tempo e gramas sozinho.`]);
+  const datas = [[`${y}-10-12`, 'Dia das Crianças e N. Sra. Aparecida (12/10): destaque a linha religiosa e brinquedos.'], [`${y}-10-15`, 'Dia do Professor (15/10): brindes para escolas e cursos.'], [`${y}-11-27`, 'Black Friday (27/11): kits e combos rendem mais que desconto.'], [`${y}-12-25`, 'Natal: anuncie Feliz Natal e porta-guardanapo até o fim de outubro; brindes corporativos fecham em novembro.']];
+  datas.forEach(([d, t]) => { const f = diasEntre(hoje, d); if (f >= 0 && f <= 45) a.push(['medio', `Em ${plural(f, 'dia', 'dias')} — ${t}`]); });
+  if (diasEntre(pc.geradoEm.slice(0, 10), hoje) > 7) a.push(['baixo', `Dados da Central de ${isoParaBR(pc.geradoEm.slice(0, 10))}. No PC, rode "Atualizar dados do JARVIS" e importe de novo.`]);
+  return a;
 }
+function htmlPrimos() {
+  const pc = primosCentral, hoje = hojeISO(), mes = hoje.slice(0, 7);
+  const prod = orders.filter(o => pedidoAberto(o) && o.status !== 'orcamento'), orc = orders.filter(o => o.status === 'orcamento');
+  const aReceber = orders.filter(o => pedidoGeraLancamento(o) && !o.paid).reduce((s, o) => s + (Number(o.price) || 0), 0);
+  const recebidoMes = orders.filter(o => o.paid && (o.paidAt || '').startsWith(mes)).reduce((s, o) => s + (Number(o.price) || 0), 0);
+  let html = '';
+  if (!pc) {
+    html += falaHTML(orders.length ? `Tenho ${plural(orders.length, 'pedido', 'pedidos')} do app, mas ainda não li a <b>Primos 3D Central</b>. Importe o arquivo que preparei no seu PC e eu passo a enxergar custos, estoque, expositores e Shopee.` : 'Ainda não li a <b>Primos 3D Central</b>. Importe o arquivo que preparei no seu PC e eu passo a enxergar custos, estoque, expositores e Shopee.');
+    html += linhaNivel('primos') + indicadoresHTML([[prod.length, 'em produção'], [orc.length, 'orçamentos'], [formatCurrency(aReceber), 'a receber'], [formatCurrency(recebidoMes), 'recebido no mês']]);
+    html += `<button type="button" class="btn jv-abrir" onclick="$j('jv-import').click()">Importar Primos 3D Central</button><p class="jv-dica">No PC: pasta <b>Primos 3D Central → 09 JARVIS → primos-jarvis.json</b>. No iPhone: mande o arquivo pelo AirDrop/iCloud e escolha aqui.</p>`;
+    return html + setoresHTML('primos');
+  }
+  const an = pc.analise || {}, cx = pc.caixa || {}, par = pc.parametros || {}, ex = pc.expositores || {};
+  const potencial = (ex.resumo || []).reduce((s, r) => s + (r.potencial || 0), 0), colocados = (ex.resumo || []).reduce((s, r) => s + (r.qtd || 0), 0);
+  const vendasCentral = (pc.vendas || []).reduce((s, v) => s + (v.bruto || 0), 0);
+  const alertas = alertasPrimos(pc);
+  html += falaHTML(negritoSeguro(an.manchete) || 'Li a Central. O ponto mais importante agora é vender e registrar as vendas.');
+  html += linhaNivel('primos');
+  html += indicadoresHTML([[formatCurrency(cx.totalGasto), 'investido até agora'], [formatCurrency(vendasCentral + recebidoMes), 'vendas registradas'], [formatCurrency(potencial), `potencial nos expositores (${colocados} un.)`], [formatCurrency(cx.saldo), 'caixa estimado']]);
+  if (alertas.length) html += `<div class="jv-bloco"><h5>Atenção</h5><ul class="jv-alertas">${alertas.slice(0, jv.expandido ? 12 : 3).map(([n, t]) => `<li class="${n}">${t}</li>`).join('')}</ul></div>`;
+  if (!jv.expandido) return html + `<button type="button" class="btn jv-mais" onclick="expandirPainelJarvis(true)">Ver o dossiê completo ▾</button>` + setoresHTML('primos');
+  // --- dossiê completo ---
+  if ((an.acoes || []).length) html += `<div class="jv-bloco"><h5>Próximos passos</h5><ol class="jv-passos">${an.acoes.map(p => `<li><b>${esc(p.prazo || '')}</b> ${esc(p.texto)}</li>`).join('')}</ol></div>`;
+  if ((an.pontos || []).length) html += `<div class="jv-bloco"><h5>Leitura do JARVIS</h5><ul class="jv-lista">${an.pontos.map(p => `<li>${esc(p)}</li>`).join('')}</ul></div>`;
+  const cats = (pc.categorias || []).slice().sort((a, b) => b.valor - a.valor), maxCat = Math.max(1, ...cats.map(c => c.valor));
+  html += `<div class="jv-bloco"><h5>Para onde foi o dinheiro · ${formatCurrency(cx.totalGasto)}</h5>${cats.map(c => `<div class="jv-barra-h"><span>${esc(c.nome)}</span><i><b style="width:${(c.valor / maxCat * 100).toFixed(1)}%"></b></i><em>${formatCurrency(c.valor)}</em></div>`).join('')}
+    <p class="jv-dica">Aportes do sócio: ${formatCurrency(cx.aportes)} · pago fora dos aportes: ${formatCurrency(-(cx.saldo || 0))} · contas já contratadas: ${formatCurrency(cx.contasPagar)}.</p></div>`;
+  html += `<div class="jv-bloco"><h5>Máquinas · capacidade ${par.capacidadeMes || '—'} h/mês</h5><ul class="jv-tabela">${(pc.maquinas || []).map(m => `<li><span>${esc(m.nome)}</span><em>${reais(m.custoH)}/h</em><small>energia ${reais(m.energiaH)} · desgaste ${reais(m.deprecH)}</small></li>`).join('')}</ul><p class="jv-dica">O que custa não é a energia: é a máquina parada. Cada hora vendida paga o desgaste.</p></div>`;
+  const kgMat = {}; (pc.filamentos || []).forEach(f => { kgMat[f.material] = (kgMat[f.material] || 0) + (f.kg || 0); });
+  const porLoja = {}; (pc.filamentos || []).filter(f => f.custoKg).forEach(f => { const l = porLoja[f.loja] = porLoja[f.loja] || { kg: 0, custo: 0 }; l.kg += f.kg || 0; l.custo += f.total || 0; });
+  html += `<div class="jv-bloco"><h5>Filamentos · ${Object.values(kgMat).reduce((s, v) => s + v, 0)} kg comprados · média PLA ${reais(par.custoMedioPLA)}/kg</h5><p class="jv-dica">${Object.entries(kgMat).map(([m, kg]) => `${esc(m)} ${kg} kg`).join(' · ')}</p><ul class="jv-tabela">${Object.entries(porLoja).sort((a, b) => a[1].custo / a[1].kg - b[1].custo / b[1].kg).map(([l, v]) => `<li><span>${esc(l)}</span><em>${reais(v.custo / v.kg)}/kg</em><small>${v.kg} kg</small></li>`).join('')}</ul></div>`;
+  if ((ex.resumo || []).length) html += `<div class="jv-bloco"><h5>Expositores de chaveiros${ex.inicio ? ` · desde ${isoParaBR(ex.inicio).slice(0, 5)}` : ''}</h5><ul class="jv-tabela">${ex.resumo.map(r => `<li><span>${esc(r.local)}</span><em>${r.vendidos || 0}/${r.qtd || 0} vendidos</em><small>potencial ${reais(r.potencial)}</small></li>`).join('')}</ul></div>`;
+  const comPreco = (pc.custoPeca || []).filter(p => p.preco && p.custo);
+  if (comPreco.length) html += `<div class="jv-bloco"><h5>Produtos com preço · lucro por hora de máquina</h5><ul class="jv-tabela">${comPreco.map(p => { const lh = p.horasLote ? p.lucro * (p.pecasLote || 1) / p.horasLote : null; return `<li><span>${esc(p.produto)}</span><em>${lh ? reais(lh) + '/h' : '—'}</em><small>${reais(p.preco)} · custo ${reais(p.custo)} · margem ${pct(p.margem)}</small></li>`; }).join('')}</ul></div>`;
+  const shop = pc.shopee || [];
+  if (shop.length) html += `<div class="jv-bloco"><h5>Shopee · ${shop.length} produtos fotografados</h5><ul class="jv-tabela">${shop.map(s => `<li><span>${esc(s.produto)}</span><em>${s.anuncio ? 'fotos de anúncio ✓' : 'falta foto de anúncio'}</em><small>${esc(s.categoria)} · ${s.fotos} fotos · ${s.videos} vídeos</small></li>`).join('')}</ul></div>`;
+  const fila = (pc.fila || []).concat(orders.filter(o => pedidoAberto(o)).map(o => o.title));
+  if (fila.length) html += `<div class="jv-bloco"><h5>Fila e projetos a fazer</h5><ul class="jv-lista">${fila.map(f => `<li>${esc(f)}</li>`).join('')}</ul></div>`;
+  if ((pc.contasPagar || []).length) { const prox = pc.contasPagar.filter(c => c.venc >= hoje && !/pago/i.test(c.status || '')).slice(0, 3); html += `<div class="jv-bloco"><h5>Contas a pagar · ${formatCurrency(cx.contasPagar)}</h5><ul class="jv-tabela">${prox.map(c => `<li><span>${esc(c.desc)}</span><em>${reais(c.valor)}</em><small>${isoParaBR(c.venc)} · ${esc(c.fornecedor)}</small></li>`).join('')}</ul></div>`; }
+  if ((pc.clientes || []).length) html += `<div class="jv-bloco"><h5>Clientes (empresas)</h5><ul class="jv-tabela">${pc.clientes.map(c => `<li><span>${esc(c.nome)}</span><em>${plural((c.projetos || []).length, 'projeto', 'projetos')}</em><small>último arquivo ${isoParaBR(c.ultimo)}</small></li>`).join('')}</ul></div>`;
+  if ((an.oportunidades || []).length) html += `<div class="jv-bloco"><h5>Oportunidades que o JARVIS encontrou</h5><ul class="jv-lista">${an.oportunidades.map(o => `<li><b>${esc(o.titulo)}</b> ${esc(o.texto)}</li>`).join('')}</ul></div>`;
+  html += `<p class="jv-dica">Dados da Central de ${isoParaBR(pc.geradoEm.slice(0, 10))} ${pc.geradoEm.slice(11, 16)}. Para atualizar: no PC, dê dois cliques em <b>09 JARVIS → Atualizar dados do JARVIS</b> e importe de novo. <a href="#" onclick="$j('jv-import').click(); return false">Importar agora</a></p>`;
+  return html + `<button type="button" class="btn jv-mais" onclick="expandirPainelJarvis(false)">Recolher ▴</button>` + setoresHTML('primos') + `<button type="button" class="btn jv-abrir" onclick="changeTab('primos')">Abrir Primos 3D (pedidos e clientes) ›</button>`;
+}
+function expandirPainelJarvis(sim) { jv.expandido = sim; renderPainelJarvis(); $j('jv-painel').scrollTop = 0; ajustarDeslocamentoJarvis(); }
+/** Importa o primos-jarvis.json gerado no PC (a sincronização leva para os outros aparelhos). */
+function importarCentral(input) {
+  const f = input.files && input.files[0]; input.value = ''; if (!f) return;
+  const fr = new FileReader();
+  fr.onload = e => {
+    let d; try { d = JSON.parse(e.target.result); } catch (err) { toast('Esse arquivo não é o primos-jarvis.json.'); return; }
+    if (!d || d.tipo !== 'jarvis-primos') { toast('Esse arquivo não é o primos-jarvis.json (Primos 3D Central → 09 JARVIS).', 7000); return; }
+    const tam = JSON.stringify(d).length;
+    if (tam > 48000) toast(`Aviso: o arquivo tem ${Math.round(tam / 1000)} mil letras; a planilha de sincronização aceita até 50 mil por módulo.`, 8000);
+    primosCentral = d; salvar('primoscentral', primosCentral);
+    toast(`🟢 Primos 3D Central importada (dados de ${isoParaBR(d.geradoEm.slice(0, 10))}).`, 6000);
+    jv.assinatura = ''; renderJarvis(); irParaNoJarvis('a-primos');
+  };
+  fr.readAsText(f);
+}
+
+// ============================================================================
+// MERCADO — cotações ao vivo, direto do aparelho (sem passar pelo computador):
+//   Bitcoin: CoinGecko · Dólar/Euro: AwesomeAPI · Ações B3: brapi.dev (4 grátis sem chave: PETR4, VALE3,
+//   ITUB4, MGLU3; com a chave grátis do Rafael: Ibovespa, mais ações e as americanas via BDR).
+// Cache só deste aparelho (lifeos_mercado_cache). Informação, não recomendação de investimento.
+// ============================================================================
+const ACOES_BR = ['PETR4', 'VALE3', 'ITUB4', 'BBAS3', 'BBDC4', 'WEGE3', 'ABEV3', 'B3SA3'];
+const ACOES_EUA = [['AAPL34', 'Apple'], ['MSFT34', 'Microsoft'], ['NVDC34', 'Nvidia'], ['AMZO34', 'Amazon'], ['GOGL34', 'Alphabet'], ['M1TA34', 'Meta'], ['TSLA34', 'Tesla']];
+function cacheMercado() { try { return JSON.parse(localStorage.getItem('lifeos_mercado_cache')); } catch (e) { return null; } }
+let mercadoBuscando = false;
+async function atualizarMercado(forcar) {
+  const c = cacheMercado();
+  if (!forcar && c && Date.now() - c.quando < 5 * 60000) return;
+  if (mercadoBuscando) return; mercadoBuscando = true;
+  const pega = async u => { const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); return r.json(); };
+  const novo = { quando: Date.now(), acoes: [], eua: [] };
+  const tok = jvConfig.brapi ? `?token=${encodeURIComponent(jvConfig.brapi)}` : '';
+  const [cg, aw, hist, br] = await Promise.allSettled([
+    pega('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=brl,usd&include_24hr_change=true'),
+    pega('https://economia.awesomeapi.com.br/json/last/USD-BRL,EUR-BRL'),
+    c && c.hist && Date.now() - c.hist.quando < 30 * 60000 ? Promise.resolve(null) : pega('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=brl&days=7'),
+    jvConfig.brapi ? Promise.all(['^BVSP', ...ACOES_BR, ...ACOES_EUA.map(x => x[0])].map(t => pega(`https://brapi.dev/api/quote/${encodeURIComponent(t)}${tok}`).catch(() => null))) : pega('https://brapi.dev/api/quote/PETR4,VALE3,ITUB4,MGLU3')
+  ]);
+  if (cg.status === 'fulfilled') { const b = cg.value.bitcoin || {}, e = cg.value.ethereum || {}; novo.btc = { brl: b.brl, usd: b.usd, var: b.brl_24h_change }; novo.eth = { brl: e.brl, var: e.brl_24h_change }; }
+  if (aw.status === 'fulfilled') { const u = aw.value.USDBRL || {}, eu = aw.value.EURBRL || {}; novo.usd = { v: Number(u.bid), var: Number(u.pctChange) }; novo.eur = { v: Number(eu.bid), var: Number(eu.pctChange) }; }
+  if (hist.status === 'fulfilled' && hist.value) { const p = (hist.value.prices || []).map(x => x[1]); const passo = Math.max(1, Math.floor(p.length / 56)); novo.hist = { quando: Date.now(), p: p.filter((_, i) => i % passo === 0) }; } else if (c && c.hist) novo.hist = c.hist;
+  if (br.status === 'fulfilled') {
+    const res = Array.isArray(br.value) ? br.value.flatMap(x => (x && x.results) || []) : (br.value.results || []);
+    res.forEach(q => { const it = { s: q.symbol, n: q.shortName || q.symbol, v: q.regularMarketPrice, var: q.regularMarketChangePercent };
+      if (q.symbol === '^BVSP') novo.ibov = it; else if (ACOES_EUA.some(x => x[0] === q.symbol)) { it.n = (ACOES_EUA.find(x => x[0] === q.symbol) || [])[1]; novo.eua.push(it); } else novo.acoes.push(it); });
+  }
+  if (!novo.btc && c) Object.assign(novo, { btc: c.btc, eth: c.eth });
+  try { localStorage.setItem('lifeos_mercado_cache', JSON.stringify(novo)); } catch (e) { } // cache do aparelho, não é dado do app
+  mercadoBuscando = false;
+  if (jv.painel === 'mercado') { const el = $j('jv-painel'); const y = el.scrollTop; el.innerHTML = htmlArea('mercado'); el.scrollTop = y; }
+  renderAreasJarvis();
+}
+function variacao(v) { if (v === null || v === undefined || isNaN(v)) return ''; const s = v >= 0 ? '▲' : '▼'; return `<span class="jv-var ${v >= 0 ? 'sobe' : 'desce'}">${s} ${Math.abs(v).toFixed(2).replace('.', ',')}%</span>`; }
+function linhaSVG(p) {
+  if (!p || p.length < 2) return ''; const min = Math.min(...p), max = Math.max(...p), w = 300, h = 54;
+  const pts = p.map((v, i) => `${(i / (p.length - 1) * w).toFixed(1)},${(h - 4 - (v - min) / (max - min || 1) * (h - 8)).toFixed(1)}`).join(' ');
+  return `<svg class="jv-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
+}
+function htmlMercado() {
+  const m = cacheMercado();
+  if (!m || !m.btc) return falaHTML('Buscando as cotações…') + linhaNivel('mercado') + setoresHTML('mercado');
+  const hora = new Date(m.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const btcTxt = `Bitcoin a <b>${formatCurrency(m.btc.brl)}</b> (US$ ${Math.round(m.btc.usd).toLocaleString('pt-BR')}), ${m.btc.var >= 0 ? 'alta' : 'queda'} de ${Math.abs(m.btc.var || 0).toFixed(1).replace('.', ',')}% em 24 h.${m.usd ? ` Dólar a ${formatCurrency(m.usd.v)}.` : ''}`;
+  let html = falaHTML(btcTxt) + linhaNivel('mercado');
+  html += `<div class="jv-bloco"><h5>Bitcoin · 7 dias</h5>${linhaSVG(m.hist && m.hist.p)}<ul class="jv-tabela"><li><span>BTC</span><em>${formatCurrency(m.btc.brl)}</em><small>${variacao(m.btc.var)} 24 h</small></li>${m.eth && m.eth.brl ? `<li><span>ETH</span><em>${formatCurrency(m.eth.brl)}</em><small>${variacao(m.eth.var)} 24 h</small></li>` : ''}${m.usd ? `<li><span>Dólar</span><em>${formatCurrency(m.usd.v)}</em><small>${variacao(m.usd.var)}</small></li>` : ''}${m.eur ? `<li><span>Euro</span><em>${formatCurrency(m.eur.v)}</em><small>${variacao(m.eur.var)}</small></li>` : ''}</ul></div>`;
+  html += `<div class="jv-bloco"><h5>Ações Brasil${m.ibov ? ` · Ibovespa ${Math.round(m.ibov.v).toLocaleString('pt-BR')} pts ${variacao(m.ibov.var)}` : ''}</h5><ul class="jv-tabela">${(m.acoes || []).map(a => `<li><span>${esc(a.s)}</span><em>${formatCurrency(a.v)}</em><small>${variacao(a.var)}</small></li>`).join('') || '<li><span>Sem dados agora</span></li>'}</ul></div>`;
+  html += `<div class="jv-bloco"><h5>Ações EUA (BDRs na B3)</h5>${(m.eua || []).length ? `<ul class="jv-tabela">${m.eua.map(a => `<li><span>${esc(a.n)} <small>${esc(a.s)}</small></span><em>${formatCurrency(a.v)}</em><small>${variacao(a.var)}</small></li>`).join('')}</ul>` : `<p class="jv-dica">Com uma chave <b>grátis</b> da brapi.dev eu mostro o Ibovespa, mais ações do Brasil e as americanas (Apple, Nvidia, Microsoft...). Crie em brapi.dev e cole em <a href="#" onclick="abrirAjustesJarvis(); return false">Ajustes do JARVIS</a>.</p>`}</div>`;
+  html += `<p class="jv-dica">Atualizado às ${hora} · CoinGecko, AwesomeAPI e brapi.dev · informação, não recomendação de investimento. <a href="#" onclick="atualizarMercado(true); return false">Atualizar</a></p>`;
+  return html + setoresHTML('mercado') + `<button type="button" class="btn jv-abrir" onclick="changeTab('business')">Abrir Negócios (carteira e metas) ›</button>`;
+}
+
+// ============================================================================
+// FAMÍLIA — fotos (reduzidas e guardadas NESTE aparelho, como os anexos; ou link do Drive/Fotos,
+// que sincroniza), datas especiais (aniversários) e recados. Módulo `familia`.
+// ============================================================================
+function proximaOcorrencia(iso) { if (!iso) return null; const hoje = hojeISO(); const [, m, d] = iso.split('-'); let y = Number(hoje.slice(0, 4)); let p = `${y}-${m}-${d}`; if (p < hoje) p = `${y + 1}-${m}-${d}`; return p; }
+function htmlFamilia() {
+  const fotos = familia.filter(f => f.tipo === 'foto'), datas = familia.filter(f => f.tipo === 'data').map(f => ({ ...f, prox: proximaOcorrencia(f.data) })).sort((a, b) => (a.prox || '9').localeCompare(b.prox || '9')), recados = familia.filter(f => f.tipo === 'recado');
+  const hoje = hojeISO(); const perto = datas.find(d => d.prox && diasEntre(hoje, d.prox) <= 30);
+  let html = falaHTML(perto ? `${diasEntre(hoje, perto.prox) === 0 ? 'Hoje' : 'Em ' + plural(diasEntre(hoje, perto.prox), 'dia', 'dias')}: <b>${esc(perto.texto)}</b>. Quer que eu lembre de um presente ou uma mensagem?` : 'O lugar do que importa de verdade. Guarde aqui fotos, aniversários e recados: eu lembro das datas por você.') + linhaNivel('familia');
+  html += `<div class="jv-bloco"><h5>Fotos</h5><div class="jv-fotos">${fotos.map(f => { const d = f.imgId ? imgPorId(f.imgId) : null; return `<figure>${d ? `<img src="${d}" alt="${esc(f.texto)}" onclick="verImagem('${f.imgId}', '${esc(f.texto || '').replace(/'/g, '')}')">` : f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" class="jv-foto-link">🔗</a>` : '<span class="jv-foto-link">🖼️</span>'}<figcaption>${esc(f.texto || '')}</figcaption><button type="button" class="jv-x mini" onclick="removerFamilia(${f.id})" aria-label="Tirar">✕</button></figure>`; }).join('')}<label class="jv-foto-add">＋<input type="file" accept="image/*" hidden onchange="addFotoFamilia(this)"></label></div><p class="jv-dica">A foto fica guardada neste aparelho. Para aparecer nos dois, cole um link do Google Fotos/Drive abaixo.</p></div>`;
+  html += `<div class="jv-bloco"><h5>Datas especiais</h5><ul class="jv-tabela">${datas.map(d => `<li><span>${esc(d.texto)}</span><em>${isoParaBR(d.data).slice(0, 5)}</em><small>${d.prox ? (diasEntre(hoje, d.prox) === 0 ? 'hoje!' : 'em ' + plural(diasEntre(hoje, d.prox), 'dia', 'dias')) : ''} <a href="#" onclick="removerFamilia(${d.id}); return false">tirar</a></small></li>`).join('') || '<li><span>Nenhuma ainda</span></li>'}</ul></div>`;
+  if (recados.length) html += `<div class="jv-bloco"><h5>Recados</h5><ul class="jv-lista">${recados.map(r => `<li>${esc(r.texto)} <a href="#" onclick="removerFamilia(${r.id}); return false">tirar</a></li>`).join('')}</ul></div>`;
+  html += `<form class="jv-form" onsubmit="addFamilia(event)"><input id="jv-fam-texto" placeholder="Nome / legenda / recado / link" autocomplete="off"><input id="jv-fam-data" type="date" title="Data (para aniversários)"><div class="jv-form-botoes"><button type="submit" class="btn" data-tipo="data" onclick="this.form.dataset.tipo='data'">＋ Data</button><button type="submit" class="btn" onclick="this.form.dataset.tipo='recado'">＋ Recado</button><button type="submit" class="btn" onclick="this.form.dataset.tipo='link'">＋ Foto por link</button></div></form>`;
+  return html + setoresHTML('familia');
+}
+function addFamilia(ev) {
+  ev.preventDefault(); const tipo = ev.target.dataset.tipo || 'recado';
+  const texto = $j('jv-fam-texto').value.trim(), data = $j('jv-fam-data').value;
+  if (tipo === 'data' && (!texto || !data)) { toast('Para uma data especial: escreva o nome (ex.: "Aniversário da mãe") e escolha a data.'); return; }
+  if (tipo === 'link') { const s = separarLink(texto); if (!s.url) { toast('Cole o link da foto (Google Fotos, Drive...).'); return; } familia.unshift({ id: novoId(), tipo: 'foto', url: s.url, texto: s.titulo || 'Foto', data: hojeISO() }); }
+  else if (!texto) { toast('Escreva algo primeiro.'); return; }
+  else familia.unshift({ id: novoId(), tipo, texto, data: data || (tipo === 'recado' ? hojeISO() : '') });
+  salvar('familia', familia); jv.assinatura = ''; renderJarvis();
+}
+function removerFamilia(id) { const f = familia.find(x => x.id === id); if (!f || !confirm(`Tirar "${f.texto || 'este item'}"?`)) return; if (f.imgId) { const m = lerImgs(); delete m[f.imgId]; gravarImgs(m); } familia = familia.filter(x => x.id !== id); salvar('familia', familia); jv.assinatura = ''; renderJarvis(); }
+function addFotoFamilia(input) {
+  const f = input.files && input.files[0]; input.value = ''; if (!f) return;
+  if (tamanhoImgs() > IMGS_KB_TOTAL) { toast(`As imagens deste aparelho já ocupam ${tamanhoImgs()} KB. Apague alguma ou use link.`, 8000); return; }
+  const fr = new FileReader();
+  fr.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const escala = Math.min(1, IMG_LADO_MAX / Math.max(img.width, img.height)); const cv = document.createElement('canvas');
+      cv.width = Math.round(img.width * escala); cv.height = Math.round(img.height * escala); cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+      const dados = cv.toDataURL('image/jpeg', 0.66); const kb = Math.round(dados.length * 0.75 / 1024);
+      if (kb > IMG_KB_MAX) { toast(`Foto grande demais mesmo depois de reduzir (${kb} KB). Use o link.`, 7000); return; }
+      const imgId = 'i' + novoId(); const m = lerImgs(); m[imgId] = dados;
+      if (!gravarImgs(m)) { toast('A memória do navegador encheu. Apague fotos antigas ou use link.', 8000); return; }
+      const legenda = ($j('jv-fam-texto') && $j('jv-fam-texto').value.trim()) || f.name.replace(/\.[^.]+$/, '').slice(0, 40);
+      familia.unshift({ id: novoId(), tipo: 'foto', imgId, texto: legenda, data: hojeISO() }); salvar('familia', familia);
+      toast(`🖼️ Foto guardada (${kb} KB, neste aparelho).`); jv.assinatura = ''; renderJarvis();
+    };
+    img.src = e.target.result;
+  };
+  fr.readAsDataURL(f);
+}
+
+// ============================================================================
+// NÚCLEO — tocar no centro do cérebro: status dos sistemas do JARVIS + as conversas com o computador
+// ============================================================================
+function conversasJarvis() { return claudeReqs.filter(r => r.canal === 'jarvis'); }
+function htmlNucleo() {
+  const conv = conversasJarvis().slice(0, 12), m = cacheMercado();
+  const linha = (ok, nome, det) => `<li><span><i class="jv-ponto ${ok ? 'ok' : ''}"></i>${nome}</span><small>${det}</small></li>`;
+  let html = cabecalhoPainel('J.A.R.V.I.S.', 'status dos sistemas', '<span class="jv-nucleo-mini"></span>');
+  html += falaHTML(emAndamentoJarvis() ? 'Estou trabalhando no seu pedido no computador. Pode sair daqui: eu aviso quando terminar.' : 'Online. Fale comigo pela barra: o que for do dia a dia, eu registro; o que for pedido ou análise, vai para o computador.');
+  html += `<div class="jv-bloco"><ul class="jv-tabela">${linha(claudeConfigurado(), 'Computador (Claude)', claudeConfigurado() ? 'ligado pelo ✳' : 'configure em Ajustes → Claude')}${linha(!!primosCentral, 'Primos 3D Central', primosCentral ? 'dados de ' + isoParaBR(primosCentral.geradoEm.slice(0, 10)) : 'falta importar')}${linha(!!(m && m.btc), 'Mercado', m && m.btc ? 'cotações de ' + new Date(m.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'sem cotações ainda')}${linha(!!jvConfig.iaChave, 'IA do subplano', jvConfig.iaChave ? (IA_PROVEDORES[jvConfig.iaProvedor] || {}).nome || 'ligada' : 'desligada (grátis, 1 passo)')}</ul></div>`;
+  html += `<div class="jv-bloco"><h5>Conversas com o computador</h5>${conv.length ? `<ul class="jv-conversas">${conv.map(r => { const s = STATUS_PEDIDO_CLAUDE[r.status] || STATUS_PEDIDO_CLAUDE.fila; return `<li><p class="eu">${esc(r.text)}</p>${r.nota ? `<p class="ele">${esc(r.nota)}</p>` : `<small>${s[3] ? '<span class="spin"></span> ' : ''}${s[1]}</small>`}<small>${isoParaBR(r.date).slice(0, 5)}</small></li>`; }).join('')}</ul>` : '<p class="jv-dica">Nenhuma ainda. Toque no 🎤 da barra, fale e toque de novo para enviar.</p>'}</div>`;
+  return html + `<button type="button" class="btn jv-mais" onclick="abrirAjustesJarvis()">Ajustes do JARVIS</button>`;
+}
+function abrirNucleoJarvis() { jv.area = null; cer.sel = null; $j('cer-cartao').hidden = true; $j('cerebro').classList.add('jv-focado'); abrirPainelJarvis('nucleo'); }
+
+// ============================================================================
+// SUBPLANO — curiosidades, desabafos e conversas do dia a dia, guardados em `memorias` e desenhados
+// como uma nuvenzinha discreta, afastada do cérebro. Respostas na hora por uma IA GRATUITA (chave do
+// próprio Rafael, guardada só neste aparelho) — não gasta o plano do Claude. Sem chave: só guarda.
+// O que vai para a IA: só a mensagem + as 4 últimas conversas do subplano (nada de finanças/clientes).
+// ============================================================================
+const IA_PROVEDORES = {
+  gemini: { nome: 'Google Gemini (grátis)', url: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', modelo: 'gemini-2.5-flash', site: 'https://aistudio.google.com/apikey' },
+  groq: { nome: 'Groq (grátis)', url: 'https://api.groq.com/openai/v1/chat/completions', modelo: 'llama-3.3-70b-versatile', site: 'https://console.groq.com/keys' },
+  openrouter: { nome: 'OpenRouter (modelos grátis)', url: 'https://openrouter.ai/api/v1/chat/completions', modelo: 'meta-llama/llama-3.3-70b-instruct:free', site: 'https://openrouter.ai/keys' }
+};
+const TIPOS_MEMORIA = { curiosidade: ['◇', 'Curiosidade'], desabafo: ['◯', 'Desabafo'], ideia: ['△', 'Ideia'], pedido: ['□', 'Pedido ao JARVIS'], nota: ['·', 'Nota'] };
+function classificarMemoria(t) {
+  const s = semAcentoCer(t);
+  if (/triste|cansa|ansios|desabaf|sozinh|preocupad|estress|medo|raiva|chatead|desanim|angust|sobrecarreg|frustrad|magoad|dificil|cabeca cheia|muita coisa na cabeca|nao aguento/.test(s)) return 'desabafo';
+  if (/^(por que|porque|como|o que|quem|quando|qual|quanto|sera que|voce sabe|me explica)/.test(s) || /\?\s*$/.test(t)) return 'curiosidade';
+  if (/ideia|e se |pensei em|imagina se/.test(s)) return 'ideia';
+  return 'nota';
+}
+function guardarMemoria(m) { const e = { id: novoId(), quando: new Date().toISOString().slice(0, 16), ...m }; memorias.unshift(e); podarMemorias(); salvar('memorias', memorias); atualizarSubplano(); return e; }
+/** A planilha guarda cada módulo numa célula (até 50 mil letras): corta respostas longas e as mais antigas. */
+function podarMemorias() { memorias.forEach(m => { if (m.resposta && m.resposta.length > 900) m.resposta = m.resposta.slice(0, 900) + '…'; }); while (memorias.length > 20 && JSON.stringify(memorias).length > 40000) memorias.pop(); }
+function atualizarSubplano() { if (jv.modo === '3d') JarvisBrain.definirSubplano(memorias.slice(0, 80).map(m => m.tipo)); }
+function personaIA() {
+  const nome = String(profile.name || 'Rafael').trim().split(/\s+/)[0];
+  return `Você é o JARVIS, o assistente pessoal do ${nome} (engenheiro civil e empreendedor de impressão 3D, no Brasil). Personalidade: mistura do JARVIS do Homem de Ferro com o Alfred do Batman — brilhante, direto, gentil, com humor leve e sem exageros. Responda em português do Brasil, curto (até 120 palavras), claro e prático. Curiosidade: explique de um jeito simples e interessante. Desabafo: acolha primeiro, sem julgar; no máximo uma pergunta ou sugestão pequena; se houver qualquer sinal de crise ou risco, recomende com carinho o CVV (ligue 188, 24 h, grátis) ou um profissional. Não invente fatos: se não souber, diga. Nunca peça senhas ou dados bancários.`;
+}
+async function perguntarIA(texto) {
+  const p = IA_PROVEDORES[jvConfig.iaProvedor] || IA_PROVEDORES.gemini;
+  const historico = memorias.filter(m => m.origem === 'ia' && m.resposta).slice(0, 4).reverse().flatMap(m => [{ role: 'user', content: m.texto }, { role: 'assistant', content: m.resposta }]);
+  const r = await fetch(p.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jvConfig.iaChave }, body: JSON.stringify({ model: jvConfig.iaModelo || p.modelo, messages: [{ role: 'system', content: personaIA() }, ...historico, { role: 'user', content: texto }], temperature: 0.7, max_tokens: 600 }) });
+  if (!r.ok) { let msg = String(r.status); try { const j = await r.json(); msg += ' ' + ((j.error && (j.error.message || j.error)) || j.message || ''); } catch (e) { } throw new Error(msg.slice(0, 180)); }
+  const j = await r.json(); return ((((j.choices || [])[0] || {}).message || {}).content || '').trim();
+}
+async function enviarSubplano(ev) {
+  if (ev) ev.preventDefault();
+  const inp = $j('jv-sub-texto'); const texto = (inp.value || '').trim(); if (!texto) return;
+  inp.value = '';
+  const e = guardarMemoria({ tipo: classificarMemoria(texto), texto, origem: jvConfig.iaChave ? 'ia' : 'local' });
+  if (!jvConfig.iaChave) { e.resposta = 'Guardado no seu subplano. Para eu responder na hora sem gastar o plano do Claude, ligue a IA gratuita em Ajustes do JARVIS.'; salvar('memorias', memorias); renderPainelJarvis(); return; }
+  jv.iaPensando = true; atualizarPensandoJarvis(); renderPainelJarvis();
+  try { e.resposta = await perguntarIA(texto) || '(sem resposta)'; }
+  catch (err) { e.resposta = `Não consegui falar com a IA agora (${err.message}). Sua mensagem ficou guardada.`; e.origem = 'local'; }
+  jv.iaPensando = false; podarMemorias(); salvar('memorias', memorias); atualizarPensandoJarvis(); renderPainelJarvis();
+}
+function removerMemoria(id) { memorias = memorias.filter(m => m.id !== id); salvar('memorias', memorias); atualizarSubplano(); renderPainelJarvis(); }
+function htmlSubplano() {
+  const filtro = jv.filtroSub || '';
+  const lista = memorias.filter(m => !filtro || m.tipo === filtro).slice(0, 40);
+  let html = cabecalhoPainel('Subplano', `${plural(memorias.length, 'memória', 'memórias')} · fica em segundo plano, só para você`, '<span class="jv-sub-mini"></span>');
+  html += falaHTML(jvConfig.iaChave ? 'Curiosidades, ideias, desabafos: pode falar. Eu respondo na hora e guardo aqui, longe do palco principal.' : 'Aqui ficam curiosidades, ideias e desabafos, longe do palco principal. Para eu responder na hora <b>sem gastar o plano do Claude</b>, ligue uma IA gratuita em <a href="#" onclick="abrirAjustesJarvis(); return false">Ajustes do JARVIS</a>.');
+  html += `<form class="jv-form jv-sub-form" onsubmit="enviarSubplano(event)"><input id="jv-sub-texto" placeholder="Uma curiosidade, uma ideia, um desabafo…" autocomplete="off" enterkeyhint="send"><button type="button" class="jv-mic mini" onclick="ditarNoSubplano()" aria-label="Falar">${SVG_MIC}</button><button type="submit" class="jv-enviar mini" aria-label="Enviar">↑</button></form>`;
+  html += `<div class="jv-setores">${[['', 'Tudo'], ...Object.entries(TIPOS_MEMORIA).map(([k, v]) => [k, v[1]])].map(([k, n]) => `<button type="button" class="chip${filtro === k ? ' on' : ''}" onclick="jv.filtroSub='${k}'; renderPainelJarvis()">${n}</button>`).join('')}</div>`;
+  if (jv.iaPensando) html += '<p class="jv-dica"><span class="spin"></span> pensando…</p>';
+  html += lista.length ? `<ul class="jv-memorias">${lista.map(m => `<li><div class="jv-mem-topo"><span>${(TIPOS_MEMORIA[m.tipo] || TIPOS_MEMORIA.nota)[0]} ${(TIPOS_MEMORIA[m.tipo] || TIPOS_MEMORIA.nota)[1]}</span><small>${isoParaBR(m.quando.slice(0, 10)).slice(0, 5)} ${m.quando.slice(11, 16)}</small><button type="button" class="jv-x mini" onclick="removerMemoria(${m.id})" aria-label="Apagar">✕</button></div><p class="eu">${esc(m.texto)}</p>${m.resposta ? `<p class="ele">${linkify(esc(m.resposta))}</p>` : ''}</li>`).join('')}</ul>` : '<p class="jv-dica">Nada guardado ainda.</p>';
+  return html;
+}
+function abrirSubplano() { jv.area = null; cer.sel = null; $j('cer-cartao').hidden = true; $j('cerebro').classList.add('jv-focado'); abrirPainelJarvis('subplano'); }
+/** Dita no campo do subplano usando o mesmo microfone da barra (sem enviar ao computador). */
+function ditarNoSubplano() { const inp = $j('jv-sub-texto'); if (!inp) return; if (jv.ouvindo) { pararMicJarvis(false); return; } iniciarMicJarvis(inp, false); }
+
+// ============================================================================
+// A BARRA "Como vamos atuar hoje?" — digitar acha bolinhas; o 🎤 ouve até você tocar de novo e,
+// ao parar, manda a mensagem ao JARVIS no computador (Claude). Enter também manda.
+// ============================================================================
+const SVG_MIC = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
+function alternarMicJarvis() { if (jv.ouvindo) pararMicJarvis(true); else iniciarMicJarvis($j('jv-cmd'), true); }
+function iniciarMicJarvis(campo, enviarAoParar) {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { campo.focus(); toast('Toque no 🎤 do teclado para ditar e depois em enviar.', 5000); return; }
+  jv.ouvindo = true; jv.religar = 0; jv.campo = campo; jv.enviarAoParar = enviarAoParar;
+  $j('cerebro').classList.add('ouvindo'); if (campo.id === 'jv-cmd') { campo.placeholder = 'Ouvindo… toque no microfone para enviar'; sugerirJarvis(''); }
+  ouvirJarvis();
+}
+function ouvirJarvis() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const campo = jv.campo; let r;
+  try { r = new SR(); } catch (err) { jv.ouvindo = false; fimMicJarvis(); return; }
+  jv.rec = r; r.lang = 'pt-BR'; r.interimResults = true; r.continuous = true;
+  const base = campo.value.trim() ? campo.value.trim() + ' ' : '';
+  r.onresult = e => { let s = ''; for (const res of e.results) s += res[0].transcript; campo.value = base + s.trim(); campo.scrollLeft = campo.scrollWidth; jv.religar = 0; };
+  r.onerror = e => { if (e.error === 'no-speech' || e.error === 'aborted') return; jv.ouvindo = false; jv.enviarAoParar = false; toast(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Microfone bloqueado — libere nos ajustes do navegador, ou use o 🎤 do teclado.' : 'Não consegui ouvir. Tente de novo ou use o 🎤 do teclado.', 6000); };
+  r.onend = () => { jv.rec = null; if (jv.ouvindo && jv.religar < 30) { jv.religar++; setTimeout(() => { if (jv.ouvindo) ouvirJarvis(); }, 200); return; } fimMicJarvis(); };
+  try { r.start(); } catch (err) { jv.ouvindo = false; fimMicJarvis(); }
+}
+function pararMicJarvis(enviar) { jv.ouvindo = false; jv.enviarAoParar = !!enviar && jv.enviarAoParar; if (jv.rec) { try { jv.rec.stop(); } catch (e) { fimMicJarvis(); } } else fimMicJarvis(); }
+function fimMicJarvis() {
+  $j('cerebro').classList.remove('ouvindo'); $j('jv-cmd').placeholder = 'Como vamos atuar hoje?';
+  const campo = jv.campo; if (!jv.enviarAoParar || !campo) return; jv.enviarAoParar = false;
+  setTimeout(() => { const t = campo.value.trim(); if (t) enviarAoJarvis(t); }, 350); // espera a última frase chegar
+}
+/** Manda a mensagem ao JARVIS no computador (mesmo caminho do ✳: issue no repositório do app). */
+async function enviarAoJarvis(texto) {
+  const txt = String(texto || '').trim(); if (!txt) return;
+  if (!prefs.jvAvisoPublico) {
+    if (!confirm('As mensagens para o JARVIS no computador passam pelo repositório do app no GitHub, que é PÚBLICO (o mesmo caminho do ✳).\n\nNão fale senhas, valores ou dados de clientes por aqui — o JARVIS também não responde com esses dados lá. Para curiosidades e desabafos, use o Subplano (a nuvenzinha afastada do cérebro).\n\nEnviar?')) return;
+    prefs.jvAvisoPublico = true; salvarPrefsJarvis();
+  }
+  const req = { id: novoId(), date: hojeISO(), page: 'JARVIS', canal: 'jarvis', text: txt, status: 'fila' };
+  claudeReqs.unshift(req); salvar('clauderequests', claudeReqs);
+  guardarMemoria({ tipo: 'pedido', texto: txt, origem: 'jarvis', reqId: req.id });
+  limparBarraJarvis();
+  if (!claudeConfigurado()) { toast('Guardei o pedido. Para ele ir ao computador, configure o ✳ em Ajustes → Claude.', 7000); atualizarPensandoJarvis(); return; }
+  await enviarUmPedido(req); atualizarIndicadorClaude();
+}
+function emAndamentoJarvis() { return conversasJarvis().some(r => (STATUS_PEDIDO_CLAUDE[r.status] || [])[3]); }
+/** O ponto do JARVIS pisca rápido e o núcleo acelera enquanto ele pensa (computador ou IA do subplano). */
+function atualizarPensandoJarvis() {
+  const p = emAndamentoJarvis() || jv.iaPensando; const c = $j('cerebro'); if (!c) return;
+  c.classList.toggle('pensando', p);
+  const ped = $j('jv-pensando'); if (ped) ped.hidden = !p;
+  if (jv.modo === '3d') JarvisBrain.pensar(p);
+  renderFalaJarvis();
+}
+/** A última resposta do computador aparece embaixo da saudação (até você fechar). */
+function renderFalaJarvis() {
+  const el = $j('jv-resposta'); if (!el) return;
+  const r = conversasJarvis().find(x => x.nota && !x.lido && ['respondido', 'publicado', 'duvida', 'erro'].includes(x.status));
+  if (!r) { el.hidden = true; el.innerHTML = ''; return; }
+  el.innerHTML = `<span class="jv-glifo"></span><div><small>${r.status === 'publicado' ? 'Publicado' : r.status === 'duvida' ? 'Preciso de um detalhe' : r.status === 'erro' ? 'Algo deu errado' : 'Resposta'}</small><p>${linkify(esc(r.nota))}</p></div><button type="button" class="jv-x mini" onclick="marcarLidoJarvis(${r.id})" aria-label="Fechar">✕</button>`;
+  el.hidden = false;
+}
+function marcarLidoJarvis(id) { const r = claudeReqs.find(x => x.id === id); if (r) { r.lido = true; salvar('clauderequests', claudeReqs); } renderFalaJarvis(); }
+/** Quando o computador responde, a resposta também vai para o subplano (memória). */
+function registrarRespostaNaMemoria(req) { const m = memorias.find(x => x.reqId === req.id); if (m && req.nota && m.resposta !== req.nota) { m.resposta = req.nota; podarMemorias(); salvar('memorias', memorias); } }
 
 // --- navegação: área → setor → item, e a volta para a visão geral ---
 /** O 3D avisa que uma área foi tocada (ele mesmo já girou até ela). */
 function abrirAreaJarvis(area) {
-  jv.area = area; cer.sel = null; document.getElementById('cer-cartao').hidden = true;
-  document.getElementById('cerebro').classList.add('jv-focado');
-  renderPainelArea(area); ajustarDeslocamentoJarvis();
+  jv.area = area; cer.sel = null; $j('cer-cartao').hidden = true;
+  $j('cerebro').classList.add('jv-focado');
+  abrirPainelJarvis(area); renderAreasJarvis();
 }
 /** O 3D avisa que um setor/item foi tocado: mostra o cartão dele (Abrir, ＋ Nota, ligações). */
 function escolherNoJarvis(id) {
   const n = cer.mapa[id]; if (!n) return;
-  if (n.area && jv.area !== n.area) { jv.area = n.area; document.getElementById('cerebro').classList.add('jv-focado'); renderPainelArea(n.area); }
+  if (n.area && jv.area !== n.area) { jv.area = n.area; jv.painel = n.area; $j('cerebro').classList.add('jv-focado'); renderPainelJarvis(); renderAreasJarvis(); }
   cer.sel = n; mostrarCartaoCerebro(n);
 }
-/** Da busca, dos setores ou das ligações do cartão: gira até a bolinha e mostra o que ela é. */
+/** Da busca, dos setores, dos selos ou das ligações do cartão: gira até a bolinha e mostra o que ela é. */
 function irParaNoJarvis(id) {
   const n = cer.mapa[id]; if (!n) return; limparBarraJarvis();
   if (n.tipo === 'centro') { voltarJarvis(); return; }
   if (n.tipo === 'area') { JarvisBrain.focarArea(n.area); abrirAreaJarvis(n.area); return; }
   JarvisBrain.focarNo(id); escolherNoJarvis(id);
 }
-function toqueVazioJarvis() { if (!document.getElementById('cer-cartao').hidden) { cer.sel = null; esconderCartaoCerebro(); } }
+function toqueVazioJarvis() { if (!$j('cer-cartao').hidden) { cer.sel = null; esconderCartaoCerebro(); } }
 function voltarJarvis() {
-  jv.area = null; cer.sel = null;
-  document.getElementById('cer-cartao').hidden = true; document.getElementById('jv-painel').hidden = true;
-  document.getElementById('cerebro').classList.remove('jv-focado');
-  JarvisBrain.voltar(); ajustarDeslocamentoJarvis();
+  jv.area = null; jv.painel = null; cer.sel = null; jv.expandido = false;
+  $j('cer-cartao').hidden = true; $j('jv-painel').hidden = true;
+  $j('cerebro').classList.remove('jv-focado');
+  JarvisBrain.voltar(); ajustarDeslocamentoJarvis(); renderAreasJarvis();
 }
 /** A janelinha cobre parte da tela (à direita no PC, embaixo no celular): o cérebro vai para o espaço livre. */
 function ajustarDeslocamentoJarvis() {
-  const jan = ['jv-painel', 'cer-cartao'].map(id => document.getElementById(id)).find(el => !el.hidden);
+  const jan = ['jv-painel', 'cer-cartao'].map(id => $j(id)).find(el => !el.hidden);
   if (!jan) { JarvisBrain.deslocar(0, 0); return; }
   const r = jan.getBoundingClientRect(), W = window.innerWidth, H = window.innerHeight;
   if (W > 800) JarvisBrain.deslocar(r.left / 2 - W / 2, 0);
-  else { const topo = document.querySelector('.jv-topo').getBoundingClientRect().bottom; JarvisBrain.deslocar(0, (topo + r.top) / 2 - H / 2); }
+  else { const topo = document.querySelector('.jv-topo').getBoundingClientRect().bottom; JarvisBrain.deslocar(0, (topo + Math.max(r.top, topo + 120)) / 2 - H / 2); }
 }
 
-// --- a barra "Como vamos atuar hoje?": achar algo no cérebro ou registrar pelo ditado ---
-// (Conversar com o JARVIS de verdade, pelo computador, é a próxima etapa.)
+// --- sugestões enquanto digita ---
 function sugerirJarvis(v) {
-  const el = document.getElementById('jv-sugestoes'); const q = semAcentoCer(v);
+  const el = $j('jv-sugestoes'); const q = semAcentoCer(v);
+  $j('cerebro').classList.toggle('com-texto', !!String(v || '').trim());
   if (!q) { el.hidden = true; el.innerHTML = ''; return; }
   const ordem = { area: 0, secao: 1, item: 2 };
-  const achados = cer.nos.filter(n => n.tipo !== 'centro' && semAcentoCer(n.nome).includes(q)).sort((a, b) => ordem[a.tipo] - ordem[b.tipo]).slice(0, 6);
-  el.innerHTML = achados.map(n => `<button type="button" onclick="irParaNoJarvis('${esc(n.id)}')"><span class="cer-ponto sm" style="background:${esc(n.cor)}"></span><span class="jv-sug-nome">${esc(n.nome)}</span><small>${TIPO_CEREBRO[n.tipo]}</small></button>`).join('')
-    + `<button type="button" class="jv-sug-ditado" onclick="comandoJarvis()"><span>🎤</span><span class="jv-sug-nome">Registrar “${esc(v.trim())}”</span><small>pedido, despesa, tarefa…</small></button>`;
+  const achados = cer.nos.filter(n => n.tipo !== 'centro' && semAcentoCer(n.nome).includes(q)).sort((a, b) => ordem[a.tipo] - ordem[b.tipo]).slice(0, 5);
+  el.innerHTML = `<button type="button" class="jv-sug-jarvis" onclick="enviarAoJarvis($j('jv-cmd').value)"><span class="jv-glifo"></span><span class="jv-sug-nome">Enviar ao JARVIS</span><small>computador</small></button>`
+    + achados.map(n => `<button type="button" onclick="irParaNoJarvis('${esc(n.id)}')"><span class="jv-sug-ponto"></span><span class="jv-sug-nome">${esc(n.nome)}</span><small>${TIPO_CEREBRO[n.tipo]}</small></button>`).join('')
+    + `<button type="button" onclick="registrarPelaBarra()"><span>✎</span><span class="jv-sug-nome">Registrar como dado</span><small>pedido, despesa, tarefa…</small></button>`;
   el.hidden = false;
 }
-function limparBarraJarvis() { const i = document.getElementById('jv-cmd'); i.value = ''; i.blur(); sugerirJarvis(''); }
+function limparBarraJarvis() { const i = $j('jv-cmd'); i.value = ''; i.blur(); sugerirJarvis(''); }
+function registrarPelaBarra() { const t = $j('jv-cmd').value.trim(); limparBarraJarvis(); abrirVoz('ditado', t || undefined); }
 function comandoJarvis(ev) {
   if (ev) ev.preventDefault();
-  const txt = document.getElementById('jv-cmd').value.trim();
-  if (!txt) { abrirVoz('ditado'); return; }
+  const txt = $j('jv-cmd').value.trim();
+  if (!txt) { alternarMicJarvis(); return; }
   const q = semAcentoCer(txt); const exato = cer.nos.find(n => n.tipo !== 'centro' && semAcentoCer(n.nome) === q);
   if (exato) { irParaNoJarvis(exato.id); return; }
-  limparBarraJarvis(); abrirVoz('ditado', txt); // o ditado entende "gastei 90 em filamento", "pedido do João..." etc.
+  enviarAoJarvis(txt);
 }
 
-// --- a "base": as abas de sempre, num menu discreto (o botão de grade no canto) ---
+// --- a "base": as abas de sempre + ajustes do JARVIS, num menu discreto (botão de grade no canto) ---
 function abrirBaseJarvis() {
   const botoes = [...document.querySelectorAll('.tabs .tab-btn')].filter(b => b.id !== 'btn-cerebro' && !b.hidden);
-  document.getElementById('jv-base-grade').innerHTML = botoes.map(b => `<button type="button" class="jv-app" onclick="fecharBaseJarvis(); changeTab('${b.id.slice(4)}')">${b.querySelector('.tab-ico').outerHTML.replace(' id="sync-dot"', '')}<span>${esc(b.querySelector('.tab-lbl').textContent)}</span></button>`).join('')
+  $j('jv-base-grade').innerHTML = botoes.map(b => `<button type="button" class="jv-app" onclick="fecharBaseJarvis(); changeTab('${b.id.slice(4)}')">${b.querySelector('.tab-ico').outerHTML.replace(' id="sync-dot"', '')}<span>${esc(b.querySelector('.tab-lbl').textContent)}</span></button>`).join('')
     + `<button type="button" class="jv-app" onclick="fecharBaseJarvis(); abrirVoz('claude')"><span class="tab-ico" style="background:#d97757"><b>✳</b></span><span>Pedir ao Claude</span></button>`;
-  document.getElementById('jv-base').style.display = 'flex';
+  $j('jv-base-extra').innerHTML = `<button type="button" class="btn" onclick="trocarVisualJarvis()">◐ Visual do JARVIS: ${visualJarvis() === 'escuro' ? 'Escuro' : 'Claro'}</button><button type="button" class="btn" onclick="fecharBaseJarvis(); abrirAjustesJarvis()">Ajustes do JARVIS</button><button type="button" class="btn" onclick="fecharBaseJarvis(); $j('jv-import').click()">Importar Primos 3D Central</button>`;
+  $j('jv-base').style.display = 'flex';
 }
-function fecharBaseJarvis() { const el = document.getElementById('jv-base'); if (el) el.style.display = 'none'; }
-document.getElementById('jv-base').addEventListener('click', e => { if (e.target.id === 'jv-base') fecharBaseJarvis(); });
+function fecharBaseJarvis() { const el = $j('jv-base'); if (el) el.style.display = 'none'; }
+
+// --- Ajustes do JARVIS (chaves só deste aparelho) ---
+function abrirAjustesJarvis() {
+  const p = IA_PROVEDORES[jvConfig.iaProvedor] || IA_PROVEDORES.gemini;
+  $j('jv-ajustes-corpo').innerHTML = `<h4>IA gratuita do subplano</h4><p class="hint">Responde curiosidades e desabafos na hora, sem gastar o plano do Claude. Crie uma chave grátis no site do serviço e cole aqui. Fica só neste aparelho. A mensagem vai para esse serviço; no plano grátis ele pode usá-la para melhorar os modelos, então nada de senhas ou dados de clientes.</p>
+    <label>Serviço<select id="jv-ia-prov" onchange="jvConfig.iaProvedor=this.value; abrirAjustesJarvis()">${Object.entries(IA_PROVEDORES).map(([k, v]) => `<option value="${k}" ${k === jvConfig.iaProvedor ? 'selected' : ''}>${v.nome}</option>`).join('')}</select></label>
+    <p class="hint">Criar a chave: <a href="${p.site}" target="_blank" rel="noopener">${p.site.replace('https://', '')}</a></p>
+    <label>Chave<input id="jv-ia-chave" type="password" autocomplete="off" value="${esc(jvConfig.iaChave)}" placeholder="cole a chave aqui"></label>
+    <label>Modelo (opcional)<input id="jv-ia-modelo" autocomplete="off" value="${esc(jvConfig.iaModelo)}" placeholder="${esc(p.modelo)}"></label>
+    <h4>Mercado</h4><p class="hint">Chave grátis da <a href="https://brapi.dev" target="_blank" rel="noopener">brapi.dev</a> para Ibovespa, mais ações do Brasil e as americanas (BDRs).</p>
+    <label>Chave brapi<input id="jv-brapi" type="password" autocomplete="off" value="${esc(jvConfig.brapi)}" placeholder="opcional"></label>
+    <div class="jv-form-botoes"><button type="button" class="btn jv-abrir" onclick="salvarAjustesJarvis()">Salvar e testar</button></div><p id="jv-ajustes-status" class="hint"></p>`;
+  $j('jv-ajustes').style.display = 'flex';
+}
+async function salvarAjustesJarvis() {
+  jvConfig.iaProvedor = $j('jv-ia-prov').value; jvConfig.iaChave = $j('jv-ia-chave').value.trim(); jvConfig.iaModelo = $j('jv-ia-modelo').value.trim(); jvConfig.brapi = $j('jv-brapi').value.trim();
+  salvarJvConfig(); const st = $j('jv-ajustes-status');
+  if (jvConfig.iaChave) { st.innerText = '🔄 Testando a IA…'; try { const r = await perguntarIA('Responda só: ok'); st.innerText = '🟢 IA respondeu: ' + r.slice(0, 60); } catch (e) { st.innerText = '🔴 A IA não respondeu: ' + e.message; } }
+  else st.innerText = 'Salvo.';
+  atualizarMercado(true);
+}
+function fecharAjustesJarvis() { $j('jv-ajustes').style.display = 'none'; if (jv.painel) renderPainelJarvis(); }
+
+['jv-base', 'jv-ajustes'].forEach(id => $j(id).addEventListener('click', e => { if (e.target.id === id) (id === 'jv-base' ? fecharBaseJarvis : fecharAjustesJarvis)(); }));
 window.addEventListener('resize', () => { if (jv.modo === '3d') ajustarDeslocamentoJarvis(); });
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape' || jv.modo !== '3d' || abaAtual() !== 'cerebro') return;
-  if (document.getElementById('jv-base').style.display === 'flex') fecharBaseJarvis();
-  else if (!document.getElementById('cer-cartao').hidden) { cer.sel = null; esconderCartaoCerebro(); }
-  else if (jv.area) voltarJarvis();
+  if ($j('jv-ajustes').style.display === 'flex') fecharAjustesJarvis();
+  else if ($j('jv-base').style.display === 'flex') fecharBaseJarvis();
+  else if (!$j('cer-cartao').hidden) { cer.sel = null; esconderCartaoCerebro(); }
+  else if (jv.painel) voltarJarvis();
 });
-
+// cotações: atualiza sozinho a cada 5 min enquanto a página inicial estiver aberta
+setInterval(() => { if (document.visibilityState === 'visible' && jv.modo === '3d' && abaAtual() === 'cerebro') atualizarMercado(false); }, 5 * 60000);
 // --- Entregas × pedidos da Primos 3D ---
 // Na versão da Trinca, as compras a caminho ficavam no módulo `orders`; aqui `orders` são os pedidos da
 // Primos 3D e as compras viraram `entregas`. Entrega tem "item" (e loja/rastreio/previsão); pedido tem "title".
@@ -4886,8 +5361,8 @@ function migrarEntregasDePedidos() {
 }
 
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) salvar('primoscentral', data.primoscentral); if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -5608,6 +6083,7 @@ function limparImagensOrfas() {
   const varrer = o => ((o && o.anexos) || []).forEach(a => { if (a.imgId) usados.add(a.imgId); });
   tasks.forEach(varrer);
   notes.forEach(n => (n.checklist || []).forEach(varrer));
+  familia.forEach(f => { if (f.imgId) usados.add(f.imgId); }); // fotos da Família (JARVIS)
   const orfas = ids.filter(id => !usados.has(id));
   if (!orfas.length) return 0;
   orfas.forEach(id => delete m[id]); gravarImgs(m);
@@ -7099,7 +7575,7 @@ if (_vndProd) _vndProd.addEventListener('change', previaVenda);
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'primoscentral', 'familia', 'memorias', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -7231,6 +7707,7 @@ function redesenharTudo() {
   entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || [];
   orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
   claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || [];
+  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || [];
   media = JSON.parse(localStorage.getItem('lifeos_media')) || []; playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || [];
   trips = JSON.parse(localStorage.getItem('lifeos_trips')) || []; contacts = JSON.parse(localStorage.getItem('lifeos_contacts')) || [];
   devnotes = JSON.parse(localStorage.getItem('lifeos_devnotes')) || {};
