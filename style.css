@@ -2050,3 +2050,4 @@ body.jv-pensando .jvp-orbe { animation: jvPensa 0.9s ease-in-out infinite; }
 .jvp-janela.entrando { animation: sheetUp 0.3s cubic-bezier(0.2, 0.9, 0.3, 1); }
 #cerebro .jvp-env { background: #2d3137; color: #fff; }
 .jvp-seg-sub { top: -4px; background: #fffefb; box-shadow: 0 6px 10px -8px rgba(60, 50, 35, 0.25); }
+.jva-plano-b { margin-top: 10px; } .jva-plano-b summary { cursor: pointer; font-size: 0.84rem; font-weight: 600; color: #007aff; }

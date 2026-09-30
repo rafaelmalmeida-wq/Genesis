@@ -4713,7 +4713,7 @@ const $j = id => document.getElementById(id);
 // configuração só deste aparelho: iaChave (Gemini), iaModelo/iaModelos (escolhidos sozinhos), iaBusca (busca no Google disponível?),
 // iaDados (mandar os números da Primos sem nomes — autorizado pelo Rafael), voz (ler respostas), brapi (Mercado)
 let jvConfig = Object.assign({ iaProvedor: 'gemini', iaChave: '', iaModelo: '', iaModelos: [], iaBusca: null, iaDados: true, voz: false, brapi: '' }, JSON.parse(localStorage.getItem('lifeos_jarvis_config')) || {});
-if (jvConfig.iaProvedor !== 'gemini') { jvConfig.iaProvedor = 'gemini'; if (!/^AIza/.test(jvConfig.iaChave || '')) jvConfig.iaChave = ''; jvConfig.iaModelo = ''; } // desde a fase 4 o cérebro é só o Gemini
+if (jvConfig.iaProvedor !== 'gemini') { jvConfig.iaProvedor = 'gemini'; if (!/^(AIza|AQ\.)/.test(jvConfig.iaChave || '')) jvConfig.iaChave = ''; jvConfig.iaModelo = ''; } // desde a fase 4 o cérebro é só o Gemini
 // desde 01/10/2026 o canal com o computador é o cofre privado (antes era o repositório público do app)
 if (claudeConfig.repo !== JARVIS_REPO) { claudeConfig.repo = JARVIS_REPO; localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); } // configuração do aparelho
 const HALO = '<img src="icon-180.png" alt="" class="jv-halo-img" draggable="false">';
@@ -5554,7 +5554,11 @@ const IA_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 const IA_MODELOS_PADRAO = ['gemini-3.8-flash', 'gemini-3.7-flash', 'gemini-3.6-flash', 'gemini-3.5-flash', 'gemini-flash-latest', 'gemini-2.5-flash'];
 const IA_SITE_CHAVE = 'https://aistudio.google.com/apikey';
 const TOKEN_URL = 'https://github.com/settings/personal-access-tokens/new?name=JARVIS&description=Conexao+do+app+J.A.R.V.I.S.+com+o+cofre+privado&target_name=rafaelmalmeida-wq&expires_in=365&contents=write&issues=write';
-function iaLigada() { return /^AIza[\w-]{20,}$/.test(jvConfig.iaChave || ''); }
+// chave clássica (AIza…) ou a nova "chave de autenticação" que o AI Studio passou a gerar em 2026 (AQ.…)
+const RE_CHAVE_IA = /^(AIza[\w-]{20,}|AQ\.[\w.-]{20,})$/;
+function iaLigada() { return RE_CHAVE_IA.test(jvConfig.iaChave || ''); }
+/** Como a chave vai para o Google: no cabeçalho x-goog-api-key (padrão) ou como Bearer (algumas chaves AQ. só funcionam assim). */
+function cabecalhoIA(chave, modo) { return (modo || jvConfig.iaAuth) === 'bearer' ? { Authorization: 'Bearer ' + chave } : { 'x-goog-api-key': chave }; }
 function escRegex(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
 /** Erro da API do Gemini → tipo + mensagem em português simples. */
@@ -5563,8 +5567,10 @@ async function erroGemini(r) {
   try { const j = await r.json(); msg = (j.error && j.error.message) || ''; status = (j.error && j.error.status) || ''; } catch (e) { }
   const e = new Error(msg || String(r.status)); e.status = r.status;
   const m = msg.toLowerCase();
-  if (/api key|api_key|key not valid|invalid.*key/.test(m) || (r.status === 400 && status === 'INVALID_ARGUMENT' && /key/.test(m))) { e.tipo = 'chave'; e.amigavel = 'A chave não é válida. Copie de novo no Google AI Studio (ela começa com AIza).'; }
-  else if (r.status === 403) { e.tipo = 'chave'; e.amigavel = 'A chave não tem permissão para o Gemini. Crie outra no Google AI Studio.'; }
+  if (/api key|api_key|key not valid|invalid.*key|access_token_type_unsupported|unauthenticated|invalid authentication|credential/.test(m) || /UNAUTHENTICATED|ACCESS_TOKEN_TYPE_UNSUPPORTED/.test(status) || r.status === 401 || (r.status === 400 && status === 'INVALID_ARGUMENT' && /key/.test(m))) {
+    e.tipo = 'chave'; e.amigavel = /^AQ\./.test(jvConfig.iaChave || '') ? 'O Google recusou esta chave nova (AQ.). Crie uma chave clássica, que começa com AIza — o passo a passo está em Ajustes → Cérebro → "Se a chave não funcionar".' : 'A chave não é válida. Copie de novo no Google AI Studio.';
+  }
+  else if (r.status === 403) { e.tipo = 'chave'; e.amigavel = 'A chave não tem permissão para o Gemini (a "Generative Language API" precisa estar ativa no projeto). Veja em Ajustes → Cérebro.'; }
   else if (/google_search|googlesearch|grounding|search tool|tool/.test(m) && r.status !== 429) { e.tipo = 'busca'; }
   else if (r.status === 429) { e.tipo = /grounding|search/.test(m) ? 'busca' : 'limite'; e.amigavel = 'O limite grátis deste minuto acabou. Tente de novo em 1 minuto.'; }
   else if (r.status === 404) { e.tipo = 'modelo'; }
@@ -5574,8 +5580,14 @@ async function erroGemini(r) {
 }
 /** Lista os modelos que a chave enxerga e ordena: o "flash" mais novo primeiro. */
 async function modelosGemini(chave) {
-  let r; try { r = await fetch(`${IA_BASE}/models?pageSize=200`, { headers: { 'x-goog-api-key': chave } }); } catch (e) { const x = new Error('sem internet'); x.tipo = 'rede'; x.amigavel = 'Sem internet agora.'; throw x; }
-  if (!r.ok) throw await erroGemini(r);
+  // tenta a chave no cabeçalho padrão; se for uma chave AQ. e o Google recusar, tenta como Bearer (e guarda o jeito que funcionou)
+  const modos = /^AQ\./.test(chave) ? ['cabecalho', 'bearer'] : ['cabecalho']; let r, ultimoErro = null;
+  for (const modo of modos) {
+    try { r = await fetch(`${IA_BASE}/models?pageSize=200`, { headers: cabecalhoIA(chave, modo) }); } catch (e) { const x = new Error('sem internet'); x.tipo = 'rede'; x.amigavel = 'Sem internet agora (ou o navegador bloqueou o pedido).'; if (modo === modos[modos.length - 1]) throw x; ultimoErro = x; continue; }
+    if (r.ok) { jvConfig.iaAuth = modo; break; }
+    ultimoErro = await erroGemini(r); r = null;
+  }
+  if (!r) throw ultimoErro;
   const j = await r.json();
   const nomes = (j.models || []).filter(m => (m.supportedGenerationMethods || []).includes('generateContent')).map(m => m.name.replace(/^models\//, ''));
   const versao = n => { const v = n.match(/gemini-(\d+(?:\.\d+)?)/); return v ? parseFloat(v[1]) : 0; };
@@ -5589,7 +5601,7 @@ async function chamarGemini(modelo, sistema, conteudos, comBusca, aoEscrever, si
   const corpo = { systemInstruction: { parts: [{ text: sistema }] }, contents: conteudos, generationConfig: { temperature: 0.75, maxOutputTokens: 4096 } };
   if (comBusca) corpo.tools = [{ google_search: {} }];
   let r;
-  try { r = await fetch(`${IA_BASE}/models/${encodeURIComponent(modelo)}:streamGenerateContent?alt=sse`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': jvConfig.iaChave }, body: JSON.stringify(corpo), signal: sinal }); }
+  try { r = await fetch(`${IA_BASE}/models/${encodeURIComponent(modelo)}:streamGenerateContent?alt=sse`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...cabecalhoIA(jvConfig.iaChave) }, body: JSON.stringify(corpo), signal: sinal }); }
   catch (e) { if (e.name === 'AbortError') { e.abortado = true; throw e; } const x = new Error('sem internet'); x.tipo = 'rede'; x.amigavel = 'Sem internet agora. Assim que voltar, é só perguntar de novo.'; throw x; }
   if (!r.ok) throw await erroGemini(r);
   let texto = '', fontes = [], motivo = '';
@@ -6208,12 +6220,14 @@ function renderAjustesJarvis() {
     <ol class="jva-passos">
       <li>Toque em <a href="${IA_SITE_CHAVE}" target="_blank" rel="noopener"><b>Abrir o Google AI Studio</b></a> e entre com sua conta Google. Se aparecer, aceite os termos.</li>
       <li>Toque em <b>Create API key</b> (Criar chave de API). Se pedir um projeto, escolha o que aparecer ou <b>Create project</b>.</li>
-      <li>Copie a chave (um código que começa com <code>AIza</code>).</li>
+      <li>Toque em <b>Copiar chave</b> (é o código grande, que começa com <code>AQ.</code> nas chaves novas ou <code>AIza</code> nas antigas — não é o nome nem o número do projeto).</li>
       <li>Volte aqui, cole no campo abaixo e toque em <b>Ligar o cérebro</b>.</li>
     </ol>
-    <div class="jva-campo"><input id="jva-ia-chave" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…" value="${esc(jvConfig.iaChave || '')}"><button type="button" class="jva-bt2" onclick="colarEm('jva-ia-chave')">Colar</button></div>
+    <div class="jva-campo"><input id="jva-ia-chave" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AQ.… ou AIza…" value="${esc(jvConfig.iaChave || '')}"><button type="button" class="jva-bt2" onclick="colarEm('jva-ia-chave')">Colar</button></div>
     <div class="jva-botoes"><button type="button" class="jva-bt" onclick="ligarCerebroJarvis()">${ia ? 'Testar de novo' : 'Ligar o cérebro'}</button>${jvConfig.iaChave ? `<button type="button" class="jva-bt2" onclick="desligarCerebroJarvis()">Desligar</button>` : ''}</div>
-    <p id="jva-ia-st" class="jva-st">${ia ? '🟢 Ligado.' : jvConfig.iaChave ? '🔴 Essa chave não parece do Gemini (ela começa com AIza). Cole de novo.' : ''}</p>
+    <p id="jva-ia-st" class="jva-st">${ia ? '🟢 Ligado.' : jvConfig.iaChave ? '🔴 Essa chave não parece do Gemini (ela começa com AQ. ou AIza). Cole de novo.' : ''}</p>
+    <details class="jva-plano-b"><summary>Se a chave não funcionar</summary><p class="jva-mini">O Google está trocando o formato das chaves (as novas começam com <code>AQ.</code>) e, em algumas contas, elas ainda não funcionam fora das ferramentas do Google. Nesse caso, crie uma chave clássica (começa com <code>AIza</code>):</p>
+      <ol class="jva-passos"><li>Abra o <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener"><b>Google Cloud → Credenciais</b></a> com a mesma conta Google e escolha, lá em cima, o <b>mesmo projeto</b> da chave do AI Studio.</li><li>Toque em <b>+ Criar credenciais</b> → <b>Chave de API</b>. Copie a chave (começa com <code>AIza</code>).</li><li>(Recomendado) Em <b>Restringir chave</b>, escolha <b>Generative Language API</b> e salve.</li><li>Cole aqui e toque em <b>Ligar o cérebro</b>.</li></ol></details>
     <p class="jva-mini">No plano grátis o Google pode usar as conversas para melhorar o serviço. Por isso, os nomes dos seus clientes são trocados por códigos antes de sair do aparelho (veja Privacidade).</p></section>`;
   // computador
   h += `<section class="jva-sec" id="jva-pc"><h4>2 · Conexão com o computador</h4>
@@ -6259,8 +6273,9 @@ function colarEm(id) {
 async function ligarCerebroJarvis() {
   const chave = ($j('jva-ia-chave').value || '').trim().replace(/\s+/g, ''), st = $j('jva-ia-st');
   if (!chave) { st.innerText = 'Cole a chave primeiro (passo 3).'; return; }
-  if (/^github_pat_|^ghp_/.test(chave)) { st.innerText = '🔴 Esse é o código do GitHub — ele vai no item 2 (Conexão com o computador). A chave do Gemini começa com AIza.'; return; }
-  if (!/^AIza[\w-]{20,}$/.test(chave)) { st.innerText = '🔴 Essa não parece a chave do Gemini: ela começa com AIza e tem uns 39 caracteres. Copie de novo no Google AI Studio.'; return; }
+  if (/^github_pat_|^ghp_/.test(chave)) { st.innerText = '🔴 Esse é o código do GitHub — ele vai no item 2 (Conexão com o computador). A chave do Gemini começa com AQ. ou AIza.'; return; }
+  if (/^projects\/|^\d{6,}$/.test(chave)) { st.innerText = '🔴 Esse é o nome/número do projeto. A chave é o código grande da linha "Chave de API" (toque em "Copiar chave").'; return; }
+  if (!RE_CHAVE_IA.test(chave)) { st.innerText = '🔴 Essa não parece a chave do Gemini: ela começa com AQ. (chaves novas) ou AIza (antigas). No AI Studio, toque em "Copiar chave" e cole de novo.'; return; }
   st.innerText = '🔄 Conferindo a chave…';
   const antes = { ...jvConfig };
   try {
@@ -6271,7 +6286,7 @@ async function ligarCerebroJarvis() {
     st.innerHTML = `🟢 Cérebro ligado (${esc(r.modelo)}${jvConfig.iaBusca ? ', com busca no Google' : ''}). Ele disse: <i>${esc(r.texto.slice(0, 140))}</i>`;
     renderChatJarvis(); setTimeout(renderAjustesJarvis, 2500);
   } catch (e) {
-    if (e.tipo === 'chave') { jvConfig.iaChave = antes.iaChave || ''; jvConfig.iaModelos = antes.iaModelos; jvConfig.iaModelo = antes.iaModelo; salvarJvConfig(); }
+    if (e.tipo === 'chave' || e.tipo === 'rede') { jvConfig.iaChave = antes.iaChave || ''; jvConfig.iaModelos = antes.iaModelos; jvConfig.iaModelo = antes.iaModelo; jvConfig.iaAuth = antes.iaAuth; salvarJvConfig(); }
     st.innerText = '🔴 ' + (e.amigavel || ('Não ligou: ' + e.message));
   }
 }
@@ -6280,7 +6295,7 @@ function salvarBrapiJarvis() { jvConfig.brapi = ($j('jv-brapi').value || '').tri
 /** Salva o token (só neste aparelho) e testa: cofre privado + pedidos + dados da Primos. */
 async function conectarJarvis() {
   const token = ($j('jv-token').value || '').trim().replace(/\s+/g, ''), st = $j('jv-conexao-status');
-  if (/^AIza/.test(token)) { st.innerText = '🔴 Essa é a chave do Gemini — ela vai no item 1 (Cérebro). O código do GitHub começa com github_pat_.'; return; }
+  if (/^(AIza|AQ\.)/.test(token)) { st.innerText = '🔴 Essa é a chave do Gemini — ela vai no item 1 (Cérebro). O código do GitHub começa com github_pat_.'; return; }
   if (token && !/^(github_pat_|ghp_)[\w]{20,}$/.test(token)) { st.innerText = '🔴 Esse código não parece do GitHub (começa com github_pat_). Copie de novo — ele só aparece uma vez; se perdeu, gere outro.'; return; }
   claudeConfig = { repo: JARVIS_REPO, token }; localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); // configuração do aparelho
   if (!token) { st.innerText = 'Cole o código primeiro (passo 4).'; return; }
