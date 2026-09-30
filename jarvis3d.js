@@ -1,20 +1,21 @@
 // ============================================================================
 // JARVIS — cérebro 3D da página inicial (Three.js, cópia local em vendor/)
 // Recebe o grafo montado pelo app (montarGrafoCerebro: áreas → seções → itens) e
-// desenha uma esfera girável em preto, branco e cinza (visual "holograma"):
-//  • o NÚCLEO no centro = o JARVIS: uma luz que respira (pisca mais rápido quando está pensando),
-//    com anéis de HUD girando em volta;
-//  • ÁREAS como bolhas de vidro, setores e itens como pontos, ligações bem finas;
-//  • névoa suave (nebulosa, sem estrelas) + poeira flutuando + "nuvens" em volta de cada área.
-// Na visão geral só as ÁREAS têm nome; ao tocar numa área ela vem para a frente e mostra a ramificação.
-// Dois visuais: 'escuro' (padrão) e 'claro'. Conversa com o app por window.JarvisBrain.
+// desenha o "cérebro" do JARVIS. Visual padrão 'perola' (pedido do Rafael em 01/10/2026: claro, branco-pérola,
+// realista, limpo): uma ESFERA CENTRAL grande, translúcida e iridescente (o JARVIS, com uma luz que respira
+// dentro — pisca mais rápido quando está pensando), as ÁREAS como pérolas pousadas na superfície dela
+// (com o símbolo da área em relevo), setores e itens em volta, luz de estúdio e sombra suave embaixo.
+// Sem linhas saindo do centro e sem "universo". Na visão geral só as ÁREAS têm nome; ao tocar numa área
+// ela vem para a frente e mostra a ramificação. Outros visuais: 'escuro' e 'claro'. Conversa com o app por window.JarvisBrain.
 // Nada aqui grava dados: é só o desenho.
 // ============================================================================
 import * as THREE from './vendor/three.module.min.js';
 
 const R = 100;              // raio da esfera (unidades do mundo)
 const REL_AREA = 0.5;       // quanto a câmera se aproxima ao abrir uma área (1 = visão geral)
+const ORBE_R = R * 0.5;      // raio da esfera central (o JARVIS) — as áreas pousam na superfície dela
 const PALETAS = {
+  perola: { fundo: '#f2f0eb', area: '#ffffff', secao: '#a59e93', cat: '#b3aca1', item: '#c9c2b7', nucleo: '#fff8ec', poeira: '#b9b2a7', nevoa: null, linha: '#bdb6aa', hud: '#a39c90', aditivo: false, orbe: true },
   escuro: { fundo: '#050608', area: '#f5f5f7', secao: '#d1d1d6', cat: '#b4b4ba', item: '#8e8e93', nucleo: '#ffffff', poeira: '#c9ceda', nevoa: '#8f98ab', linha: '#ffffff', hud: '#e8ecf5', aditivo: true },
   claro: { fundo: '#f5f5f7', area: '#1d1d1f', secao: '#3a3a3c', cat: '#48484a', item: '#6e6e73', nucleo: '#1d1d1f', poeira: '#5a5f6b', nevoa: '#9a9ca3', linha: '#1d1d1f', hud: '#1d1d1f', aditivo: false }
 };
@@ -23,7 +24,7 @@ const J = {
   nos: [], porId: {}, pontos: null, linhas: null, poeira: null, auras: [], nevoa: [], aneis: null, hud: null, nucleo: null, segs: [],
   rel: 1, relAlvo: 1, baseDist: 330, prof: 330, raioFoco: 0, ox: 0, oxAlvo: 0, oy: 0, oyAlvo: 0, qAlvo: null, qAtual: null, velRot: { x: 0, y: 0 }, autoGiro: true,
   foco: null, sel: null, ativo: false, raf: 0, t0: performance.now(), ptrs: new Map(), gesto: null, ultimaInteracao: 0,
-  elRotulos: {}, visual: 'escuro', pal: PALETAS.escuro, fundo: new THREE.Color(PALETAS.escuro.fundo), escala: 1, tamBase: null,
+  elRotulos: {}, visual: 'perola', pal: PALETAS.perola, fundo: new THREE.Color(PALETAS.perola.fundo), escala: 1, tamBase: null,
   grafo: null, status: {}, pensando: false, energia: 0, hudOp: 1
 };
 
@@ -164,7 +165,7 @@ function dispor(grafo) {
   });
   const areas = nos.filter(n => n.tipo === 'area');
   // áreas espalhadas pela esfera toda (espiral de Fibonacci), não num anel: fica um "cérebro" redondo
-  areas.forEach((a, i) => { const y = (1 - (i + 0.5) / areas.length * 2) * 0.8, r = Math.sqrt(1 - y * y), ang = i * 2.39996 + 0.6; a.p.set(Math.cos(ang) * r, y, Math.sin(ang) * r).multiplyScalar(R * 0.7); });
+  areas.forEach((a, i) => { const y = (1 - (i + 0.5) / areas.length * 2) * 0.8, r = Math.sqrt(1 - y * y), ang = i * 2.39996 + 0.6; a.p.set(Math.cos(ang) * r, y, Math.sin(ang) * r).multiplyScalar(ORBE_R * 1.1); }); // pousadas na superfície da esfera central
   const centro = porId.centro;
   // em volta do pai, mas "achatado" para os lados (plano de frente para fora da esfera): quando a área
   // vem para a frente da câmera, os setores e itens se abrem na tela em vez de ficarem um atrás do outro
@@ -174,7 +175,7 @@ function dispor(grafo) {
     n.p.copy(base).add(d.multiplyScalar(raio * (0.7 + rnd() * 0.5))); if (n.p.length() > R * 0.97) n.p.setLength(R * 0.97);
   };
   const paiDe = n => pais[n.id] || porId['a-' + n.area] || centro;
-  nos.filter(n => n.tipo === 'secao').forEach(s => { const a = porId['a-' + s.area]; colocar(s, a ? a.p.clone().multiplyScalar(1.08) : new THREE.Vector3(), 30, 0.75); });
+  nos.filter(n => n.tipo === 'secao').forEach(s => { const a = porId['a-' + s.area]; colocar(s, a ? a.p.clone().multiplyScalar(1.45) : new THREE.Vector3(), 24, 0.8); });
   nos.filter(n => n.tipo === 'item' && n.categoria).forEach(it => colocar(it, paiDe(it).p, 15, 0.5));
   nos.filter(n => n.tipo === 'item' && !n.categoria).forEach(it => colocar(it, paiDe(it).p, 11, 0.5));
   // relaxa: afasta o que ficou grudado e segura cada um perto do pai
@@ -187,7 +188,8 @@ function dispor(grafo) {
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
         (grade.get(`${cx + dx},${cy + dy},${cz + dz}`) || []).forEach(o => { if (o === n) return; const d = n.p.distanceTo(o.p); if (d < minD && d > 0.001) n.p.addScaledVector(n.p.clone().sub(o.p).normalize(), (minD - d) * 0.5); });
       }
-      const pai = pais[n.id]; if (pai) { const alvo = n.tipo === 'secao' ? 30 : n.categoria ? 15 : 11; if (n.p.distanceTo(pai.p) > alvo * 1.7) n.p.lerp(pai.p, 0.08); }
+      if (n.p.length() < ORBE_R * 1.2) n.p.setLength(ORBE_R * 1.2); // nada fica dentro da esfera central
+      const pai = pais[n.id]; if (pai) { const alvo = n.tipo === 'secao' ? 24 : n.categoria ? 15 : 11; if (n.p.distanceTo(pai.p) > alvo * 1.7) n.p.lerp(pai.p, 0.08); }
       if (n.p.length() > R * 0.97) n.p.setLength(R * 0.97);
     });
   }
@@ -203,45 +205,53 @@ function construir(grafo) {
   limparMundo(); J.mundo = new THREE.Group(); J.cena.add(J.mundo);
   if (J.qAtual) J.mundo.quaternion.copy(J.qAtual); else J.mundo.rotation.set(0.18, -0.5, 0);
   const pal = J.pal, adit = pal.aditivo;
-  // bolinhas de verdade (tamanho em unidades do mundo): núcleo e áreas = bolhas de vidro
+  const orbe = !!pal.orbe; // visual pérola: áreas = pérolas de verdade (malhas) em vez de bolhas desenhadas
+  // bolinhas de verdade (tamanho em unidades do mundo)
   const tam = n => n.tipo === 'centro' ? 7 : n.tipo === 'area' ? 9 : n.tipo === 'secao' ? 3.8 : n.categoria ? 3.2 : 2.1 + Math.min(1.4, Math.sqrt(n.grau) * 0.35);
   const pos = [], cor = [], tamA = [], alfa = [], pulso = [], bolha = [];
   nos.forEach((n, i) => { n.i = i; pos.push(n.p.x, n.p.y, n.p.z); const c = corDoNo(n); cor.push(c.r, c.g, c.b); tamA.push(tam(n)); alfa.push(1); pulso.push(n.tipo === 'area' ? 1 : 0); bolha.push(n.tipo === 'area' ? 1 : 0); });
   J.pontos = new THREE.Points(geometriaPontos(pos, cor, tamA, alfa, pulso, bolha), materialPontos(0.35, false)); J.pontos.renderOrder = 4; J.mundo.add(J.pontos);
   J.tamBase = Float32Array.from(tamA);
-  // ligações: fios finíssimos
-  J.segs = grafo.links.map(l => [porId[l.a.id], porId[l.b.id]]).filter(x => x[0] && x[1]);
+  // ligações: fios finíssimos (sem os fios que saem do centro — o centro agora é a esfera)
+  J.segs = grafo.links.map(l => [porId[l.a.id], porId[l.b.id]]).filter(x => x[0] && x[1] && x[0].tipo !== 'centro' && x[1].tipo !== 'centro');
   const seg = [], segCor = [];
   J.segs.forEach(([a, b]) => { seg.push(a.p.x, a.p.y, a.p.z, b.p.x, b.p.y, b.p.z); segCor.push(0, 0, 0, 0, 0, 0); });
   const gL = new THREE.BufferGeometry(); gL.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3)); gL.setAttribute('color', new THREE.Float32BufferAttribute(segCor, 3));
-  J.linhas = new THREE.LineSegments(gL, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: adit ? 0.55 : 0.4, depthWrite: false, blending: mistura() }));
+  J.linhas = new THREE.LineSegments(gL, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: adit ? 0.55 : orbe ? 0.7 : 0.4, depthWrite: false, blending: mistura() }));
   J.linhas.renderOrder = 1; J.mundo.add(J.linhas);
-  // nuvens de informação (em volta de cada área) + poeira fina na esfera toda
+  // nuvens de informação (em volta de cada área) + poeira fina
   const rnd = semente(23); const dPos = [], dCor = [], dTam = [], dAlfa = [], dPulso = [], dBolha = []; const cp = corDe(pal.poeira);
   nos.filter(n => n.tipo === 'area').forEach(a => {
-    for (let k = 0; k < 130; k++) { const v = dirAleatoria(rnd).multiplyScalar(6 + Math.pow(rnd(), 0.6) * 32).add(a.p); if (v.length() > R * 1.02) v.setLength(R * 1.02); dPos.push(v.x, v.y, v.z); const l = 0.85 + rnd() * 0.3; dCor.push(cp.r * l, cp.g * l, cp.b * l); dTam.push(0.6 + rnd() * 1.0); dAlfa.push((adit ? 0.28 : 0.3) + rnd() * 0.3); dPulso.push(0); dBolha.push(0); }
+    for (let k = 0; k < (orbe ? 70 : 130); k++) { const v = dirAleatoria(rnd).multiplyScalar(6 + Math.pow(rnd(), 0.6) * 30).add(a.p.clone().multiplyScalar(orbe ? 1.25 : 1)); if (v.length() > R * 1.02) v.setLength(R * 1.02); if (orbe && v.length() < ORBE_R * 1.1) v.setLength(ORBE_R * 1.1); dPos.push(v.x, v.y, v.z); const l = 0.85 + rnd() * 0.3; dCor.push(cp.r * l, cp.g * l, cp.b * l); dTam.push(0.6 + rnd() * 1.0); dAlfa.push((adit ? 0.28 : orbe ? 0.35 : 0.3) + rnd() * 0.3); dPulso.push(0); dBolha.push(0); }
   });
-  for (let k = 0; k < 1600; k++) { const v = dirAleatoria(rnd).multiplyScalar(R * (0.12 + 0.92 * Math.pow(rnd(), 0.3))); dPos.push(v.x, v.y, v.z); const l = 0.7 + rnd() * 0.4; dCor.push(cp.r * l, cp.g * l, cp.b * l); dTam.push(0.45 + rnd() * 0.85); dAlfa.push((adit ? 0.18 : 0.22) + rnd() * 0.3); dPulso.push(0); dBolha.push(0); }
+  for (let k = 0; k < (orbe ? 700 : 1600); k++) { const v = dirAleatoria(rnd).multiplyScalar(R * (0.12 + 0.92 * Math.pow(rnd(), 0.3))); if (orbe && v.length() < ORBE_R * 1.05) v.setLength(ORBE_R * (1.05 + rnd() * 0.9)); dPos.push(v.x, v.y, v.z); const l = 0.7 + rnd() * 0.4; dCor.push(cp.r * l, cp.g * l, cp.b * l); dTam.push(0.45 + rnd() * 0.85); dAlfa.push((adit ? 0.18 : 0.22) + rnd() * 0.3); dPulso.push(0); dBolha.push(0); }
   J.poeira = new THREE.Points(geometriaPontos(dPos, dCor, dTam, dAlfa, dPulso, dBolha), materialPontos(2.4, adit)); J.poeira.renderOrder = 0; J.mundo.add(J.poeira);
-  // névoa (nebulosa sem estrelas): nuvens grandes e transparentes que giram devagar
+  // névoa (nebulosa sem estrelas) — só nos visuais escuro/claro
   J.nevoa = [];
-  for (let k = 0; k < 11; k++) {
+  if (pal.nevoa) for (let k = 0; k < 11; k++) {
     const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaNuvem(31 + k), color: corDe(pal.nevoa), transparent: true, opacity: (adit ? 0.11 : 0.1) + rnd() * 0.06, depthWrite: false, blending: mistura() }));
     s.position.copy(dirAleatoria(rnd).multiplyScalar(R * (0.2 + rnd() * 0.6))); s.scale.setScalar(90 + rnd() * 90); s.material.rotation = rnd() * 6.28; s.userData.giro = (rnd() - 0.5) * 0.05; s.renderOrder = -1;
     J.mundo.add(s); J.nevoa.push(s);
   }
-  // auras: halo suave nas áreas
+  // auras: halo suave nas áreas (no pérola, um brilho quente bem leve)
   const tex = J.tex || (J.tex = texturaAura()); J.auras = [];
   nos.filter(n => n.tipo === 'area').forEach(n => {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(pal.area), transparent: true, opacity: adit ? 0.28 : 0.12, depthWrite: false, blending: mistura() }));
-    s.position.copy(n.p); s.scale.setScalar(34); s.renderOrder = 2; s.userData.no = n; J.mundo.add(s); J.auras.push(s);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(orbe ? '#ffffff' : pal.area), transparent: true, opacity: adit ? 0.28 : orbe ? 0.55 : 0.12, depthWrite: false, blending: mistura() }));
+    s.position.copy(n.p); s.scale.setScalar(orbe ? 22 : 34); s.renderOrder = 2; s.userData.no = n; J.mundo.add(s); J.auras.push(s);
   });
-  // símbolos dentro das bolhas das áreas (logo da Primos, treliça da engenharia, capacete, ₿...)
+  // pérolas das áreas (malhas com material de pérola: brilho, verniz e iridescência)
+  J.perolas = [];
+  if (orbe) nos.filter(n => n.tipo === 'area').forEach(n => {
+    const m = new THREE.Mesh(J.geoPerola || (J.geoPerola = new THREE.SphereGeometry(6.4, 48, 32)), materialPerola(1));
+    m.position.copy(n.p); m.renderOrder = 3; m.userData.no = n; J.mundo.add(m); J.perolas.push(m);
+  });
+  // símbolos das áreas (logo da Primos, treliça da engenharia, capacete, ₿...) — em relevo, bem transparentes
   J.icones = [];
   nos.filter(n => n.tipo === 'area' && J.op.icones && J.op.icones[n.area]).forEach(n => {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaIcone(n.area, J.op.icones[n.area]), transparent: true, opacity: adit ? 0.5 : 0.38, depthWrite: false }));
-    s.position.copy(n.p); s.scale.setScalar(7.4); s.renderOrder = 5; s.userData.no = n; s.userData.op0 = s.material.opacity; J.mundo.add(s); J.icones.push(s);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaIcone(n.area, J.op.icones[n.area]), transparent: true, opacity: adit ? 0.5 : orbe ? 0.62 : 0.38, depthWrite: false, depthTest: !orbe }));
+    s.position.copy(n.p); s.scale.setScalar(orbe ? 8.8 : 7.4); s.renderOrder = 6; s.userData.no = n; s.userData.op0 = s.material.opacity; J.mundo.add(s); J.icones.push(s);
   });
+  construirOrbe();
   construirNucleo();
   construirAneis();
   prepararRotulos();
@@ -250,30 +260,71 @@ function construir(grafo) {
   if (J.sel && !J.porId[J.sel]) J.sel = null; marcarSel();
 }
 
+// --- visual PÉROLA: material de pérola, luz de estúdio, esfera central (o JARVIS) e sombra no chão ---
+function materialPerola(opacidade, cor) {
+  return new THREE.MeshPhysicalMaterial({ color: new THREE.Color(cor || '#f6efe4'), roughness: 0.14, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 0.7, sheenRoughness: 0.3, sheenColor: new THREE.Color('#ffe6c4'), iridescence: 1, iridescenceIOR: 1.3, iridescenceThicknessRange: [260, 720], envMapIntensity: 1.15, transparent: opacidade < 1, opacity: opacidade, depthWrite: opacidade >= 1 });
+}
+/** "Estúdio" para os reflexos: domo claro com degradê quente embaixo + 3 softboxes (como foto de produto). */
+function ambienteEstudio() {
+  if (J.ambiente) return J.ambiente;
+  const pm = new THREE.PMREMGenerator(J.renderer); const cena = new THREE.Scene();
+  const geo = new THREE.SphereGeometry(50, 32, 16); const cores = []; const p = geo.attributes.position; const cima = new THREE.Color('#ffffff'), baixo = new THREE.Color('#9d9282');
+  for (let i = 0; i < p.count; i++) { const c = baixo.clone().lerp(cima, Math.min(1, (p.getY(i) / 50 + 1) / 1.6)); cores.push(c.r, c.g, c.b); }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cores, 3));
+  cena.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const painel = (w, h, x, y, z, k) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k * 0.97), side: THREE.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 0, 0); cena.add(m); };
+  painel(34, 14, 0, 38, 16, 4.2); painel(14, 30, -38, 6, 18, 2.6); painel(10, 24, 36, -4, -14, 1.8); painel(60, 8, 0, -30, 30, 0.35);
+  J.ambiente = pm.fromScene(cena, 0.035).texture; pm.dispose();
+  return J.ambiente;
+}
+function construirOrbe() {
+  if (J.orbe) { J.cena.remove(J.orbe); J.orbe.traverse(x => { if (x.geometry) x.geometry.dispose(); if (x.material && x.material.map !== J.tex) x.material.dispose(); }); J.orbe = null; }
+  if (!J.pal.orbe) { J.cena.environment = null; return; }
+  J.cena.environment = ambienteEstudio();
+  J.orbe = new THREE.Group();
+  // a esfera: casca de pérola translúcida (dentro e fora) — deixa ver a luz do JARVIS lá dentro
+  const geo = new THREE.SphereGeometry(ORBE_R, 96, 64);
+  const dentro = new THREE.Mesh(geo, materialPerola(0.5, '#e9dfcf')); dentro.material.side = THREE.BackSide; dentro.renderOrder = -2;
+  const fora = new THREE.Mesh(geo, materialPerola(0.8, '#f8f2e8')); fora.renderOrder = 2;
+  // luzes de estúdio
+  const hemi = new THREE.HemisphereLight('#ffffff', '#d9d1c4', 0.9);
+  const chave = new THREE.DirectionalLight('#ffffff', 1.7); chave.position.set(60, 90, 120);
+  const recorte = new THREE.DirectionalLight('#ffe9cf', 0.7); recorte.position.set(-90, -20, -80);
+  // sombra suave no "chão"
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const ctx = cv.getContext('2d'); const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(60,52,40,0.55)'); g.addColorStop(0.6, 'rgba(60,52,40,0.12)'); g.addColorStop(1, 'rgba(60,52,40,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
+  const ts = new THREE.CanvasTexture(cv); ts.colorSpace = THREE.SRGBColorSpace;
+  const sombra = new THREE.Sprite(new THREE.SpriteMaterial({ map: ts, transparent: true, opacity: 0.35, depthWrite: false, fog: false })); sombra.scale.set(R * 1.7, R * 0.3, 1); sombra.position.set(0, -R * 1.12, 0); sombra.renderOrder = -3;
+  J.orbe.add(dentro, fora, hemi, chave, recorte, sombra); J.orbe.userData = { dentro, fora, sombra };
+  J.cena.add(J.orbe);
+}
+
 // --- o NÚCLEO (o JARVIS): luz que respira + anéis de HUD sempre de frente para a câmera ---
 function construirNucleo() {
   [J.nucleo, J.hud].forEach(o => { if (o) { J.cena.remove(o); o.traverse(x => { if (x.geometry) x.geometry.dispose(); if (x.material) x.material.dispose(); }); } });
-  const pal = J.pal, tex = J.tex || (J.tex = texturaAura());
+  const pal = J.pal, tex = J.tex || (J.tex = texturaAura()), orbe = !!pal.orbe;
   J.nucleo = new THREE.Group();
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(pal.nucleo), transparent: true, opacity: 0.7, depthWrite: false, blending: mistura() })); halo.scale.setScalar(pal.aditivo ? 40 : 30);
-  const miolo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(pal.aditivo ? '#ffffff' : '#1d1d1f'), transparent: true, opacity: 1, depthWrite: false, blending: mistura() })); miolo.scale.setScalar(10);
-  J.nucleo.add(halo, miolo); J.nucleo.userData = { halo, miolo }; J.nucleo.renderOrder = 5; halo.renderOrder = 5; miolo.renderOrder = 6;
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(orbe ? '#f2c27a' : pal.nucleo), transparent: true, opacity: 0.7, depthWrite: false, depthTest: !orbe, blending: orbe ? THREE.NormalBlending : mistura() })); halo.scale.setScalar(orbe ? 44 : pal.aditivo ? 40 : 30);
+  const miolo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(orbe ? '#fff6e6' : pal.aditivo ? '#ffffff' : '#1d1d1f'), transparent: true, opacity: 1, depthWrite: false, depthTest: !orbe, blending: mistura() })); miolo.scale.setScalar(orbe ? 16 : 10);
+  J.nucleo.add(halo, miolo); J.nucleo.userData = { halo, miolo }; J.nucleo.renderOrder = 5; halo.renderOrder = orbe ? 3 : 5; miolo.renderOrder = orbe ? 3 : 6; // no pérola: a luz aparece através da casca
   J.cena.add(J.nucleo);
-  // HUD: arcos tracejados, régua com marcas e arcos curtos (como os hologramas do JARVIS nos filmes)
-  const cor = corDe(pal.hud), mat = op => new THREE.LineBasicMaterial({ color: cor, transparent: true, opacity: op, depthWrite: false, blending: mistura() });
-  const arco = (r, a0, a1, n) => { const p = []; for (let k = 0; k <= n; k++) { const a = a0 + (a1 - a0) * k / n; p.push(new THREE.Vector3(Math.cos(a) * r, Math.sin(a) * r, 0)); } return new THREE.BufferGeometry().setFromPoints(p); };
+  // HUD: arcos tracejados, régua com marcas e arcos curtos (no pérola, em volta da esfera, bem sutis)
+  const k = orbe ? ORBE_R / 15 * 1.12 : 1;
+  const cor = corDe(pal.hud), mat = op => new THREE.LineBasicMaterial({ color: cor, transparent: true, opacity: orbe ? op * 0.8 : op, depthWrite: false, blending: mistura() });
+  const arco = (r, a0, a1, n) => { const p = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; p.push(new THREE.Vector3(Math.cos(a) * r * k, Math.sin(a) * r * k, 0)); } return new THREE.BufferGeometry().setFromPoints(p); };
   J.hud = new THREE.Group(); const g1 = new THREE.Group(), g2 = new THREE.Group(), g3 = new THREE.Group();
-  for (let k = 0; k < 3; k++) g1.add(new THREE.Line(arco(15, k * 2.094, k * 2.094 + 1.35, 40), mat(0.6)));
-  g2.add(new THREE.Line(arco(20.5, 0, Math.PI * 2, 120), mat(0.16)));
-  const marcas = []; for (let k = 0; k < 72; k++) { const a = k / 72 * Math.PI * 2, r1 = 20.5, r2 = k % 6 === 0 ? 23 : 21.6; marcas.push(Math.cos(a) * r1, Math.sin(a) * r1, 0, Math.cos(a) * r2, Math.sin(a) * r2, 0); }
-  const gm = new THREE.BufferGeometry(); gm.setAttribute('position', new THREE.Float32BufferAttribute(marcas, 3)); g2.add(new THREE.LineSegments(gm, mat(0.3)));
-  g3.add(new THREE.Line(arco(27, 0.3, 1.0, 24), mat(0.45))); g3.add(new THREE.Line(arco(27, 3.4, 4.3, 24), mat(0.45))); g3.add(new THREE.Line(arco(30, 1.9, 2.2, 10), mat(0.35)));
+  if (!orbe) for (let i = 0; i < 3; i++) g1.add(new THREE.Line(arco(15, i * 2.094, i * 2.094 + 1.35, 40), mat(0.6)));
+  else for (let i = 0; i < 2; i++) g1.add(new THREE.Line(arco(16.4, i * Math.PI, i * Math.PI + 0.9, 30), mat(0.55)));
+  g2.add(new THREE.Line(arco(20.5, 0, Math.PI * 2, 160), mat(0.16)));
+  const marcas = []; for (let i = 0; i < 72; i++) { const a = i / 72 * Math.PI * 2, r1 = 20.5 * k, r2 = (i % 6 === 0 ? 23 : 21.6) * k; marcas.push(Math.cos(a) * r1, Math.sin(a) * r1, 0, Math.cos(a) * r2, Math.sin(a) * r2, 0); }
+  const gm = new THREE.BufferGeometry(); gm.setAttribute('position', new THREE.Float32BufferAttribute(marcas, 3)); g2.add(new THREE.LineSegments(gm, mat(orbe ? 0.22 : 0.3)));
+  g3.add(new THREE.Line(arco(27, 0.3, 1.0, 24), mat(0.45))); g3.add(new THREE.Line(arco(27, 3.4, 4.3, 24), mat(0.45))); if (!orbe) g3.add(new THREE.Line(arco(30, 1.9, 2.2, 10), mat(0.35)));
   J.hud.add(g1, g2, g3); J.hud.userData = { g1, g2, g3 }; J.hud.renderOrder = 6; J.cena.add(J.hud);
 }
 function construirAneis() {
   if (J.aneis) { J.cena.remove(J.aneis); J.aneis.traverse(x => { if (x.geometry) x.geometry.dispose(); if (x.material) x.material.dispose(); }); }
   J.aneis = new THREE.Group(); const cor = corDe(J.pal.hud);
-  [[1.1, 0.12, 0, 0.12], [1.2, 1.15, 0.4, 0.08], [1.3, -0.7, 1.1, 0.06]].forEach(([esc, rx, rz, op]) => {
+  (J.pal.orbe ? [[1.12, 0.35, 0.1, 0.16]] : [[1.1, 0.12, 0, 0.12], [1.2, 1.15, 0.4, 0.08], [1.3, -0.7, 1.1, 0.06]]).forEach(([esc, rx, rz, op]) => {
     const pts = []; for (let k = 0; k <= 180; k++) { const a = k / 180 * Math.PI * 2; pts.push(new THREE.Vector3(Math.cos(a) * R * esc, 0, Math.sin(a) * R * esc)); }
     const anel = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: cor, transparent: true, opacity: op, depthWrite: false, blending: mistura() }));
     anel.rotation.set(rx, 0, rz); J.aneis.add(anel);
@@ -343,15 +394,17 @@ function rotuloNoPonto(cx, cy) {
 function aplicarFoco(area) {
   J.foco = area || null; if (!J.pontos) return;
   const alfa = J.pontos.geometry.getAttribute('aAlfa');
-  J.nos.forEach(n => { alfa.array[n.i] = !area || n.area === area || n.tipo === 'centro' ? 1 : 0.12; });
+  const orbe = !!J.pal.orbe; // no pérola, a área é uma pérola de verdade: o ponto desenhado dela some
+  J.nos.forEach(n => { alfa.array[n.i] = orbe && (n.tipo === 'area' || n.tipo === 'centro') ? 0 : !area || n.area === area || n.tipo === 'centro' ? 1 : 0.12; });
   alfa.needsUpdate = true; marcarSel();
   const adit = J.pal.aditivo;
   J.auras.forEach(s => { const n = s.userData.no; s.material.opacity = !area || n.area === area ? (adit ? 0.28 : 0.12) : 0.04; });
   (J.icones || []).forEach(s => { s.material.opacity = !area || s.userData.no.area === area ? s.userData.op0 : s.userData.op0 * 0.25; });
+  (J.perolas || []).forEach(m => { const acesa = !area || m.userData.no.area === area; m.material.transparent = !acesa; m.material.opacity = acesa ? 1 : 0.28; m.material.depthWrite = acesa; });
   const cor = J.linhas.geometry.getAttribute('color'); const base = corDe(J.pal.linha);
   J.segs.forEach(([a, b], k) => {
     const liga = !area || a.area === area || b.area === area;
-    const peso = !area ? 0.38 : liga ? 0.75 : 0.08; // quanto do fio "acende"
+    const peso = J.pal.orbe ? (!area ? 0.8 : liga ? 1 : 0.18) : !area ? 0.38 : liga ? 0.75 : 0.08; // quanto do fio "acende"
     const c = J.fundo.clone().lerp(base, peso);
     cor.setXYZ(k * 2, c.r, c.g, c.b); cor.setXYZ(k * 2 + 1, c.r, c.g, c.b);
   });
@@ -465,7 +518,13 @@ function quadro() {
   // o núcleo respira (devagar parado; rápido e mais forte quando está pensando)
   J.energia += ((J.pensando ? 1 : 0) - J.energia) * 0.05;
   const ritmo = 1.6 + J.energia * 5, onda = 0.5 + 0.5 * Math.sin(t * ritmo);
-  if (J.nucleo) { const { halo, miolo } = J.nucleo.userData; halo.scale.setScalar((J.pal.aditivo ? 34 : 26) * (1 + onda * (0.12 + J.energia * 0.25))); halo.material.opacity = (0.45 + onda * 0.35) * (J.foco ? 0.5 : 1); miolo.scale.setScalar(8 + onda * 2.5 + J.energia * 3); }
+  if (J.nucleo) {
+    const { halo, miolo } = J.nucleo.userData, orbe = !!J.pal.orbe;
+    halo.scale.setScalar((orbe ? 46 : J.pal.aditivo ? 34 : 26) * (1 + onda * (0.12 + J.energia * 0.25)));
+    halo.material.opacity = (orbe ? 0.22 + onda * 0.22 + J.energia * 0.25 : 0.45 + onda * 0.35) * (J.foco ? 0.5 : 1); if (orbe) miolo.material.opacity = (0.55 + onda * 0.35) * (J.foco ? 0.5 : 1);
+    miolo.scale.setScalar((orbe ? 13 : 8) + onda * (orbe ? 4 : 2.5) + J.energia * 3);
+  }
+  if (J.orbe) { J.orbe.userData.fora.material.opacity = (J.foco ? 0.3 : 0.5) + onda * 0.04; J.orbe.userData.dentro.material.opacity = J.foco ? 0.18 : 0.35; }
   if (J.hud) {
     J.hudOp += ((J.foco ? 0.15 : 1) - J.hudOp) * 0.08;
     const { g1, g2, g3 } = J.hud.userData, vel = 1 + J.energia * 4;
@@ -493,7 +552,7 @@ function redimensionar() {
   if (J.sub) J.sub.position.copy(posSubplano());
 }
 function aplicarPaleta(visual) {
-  J.visual = PALETAS[visual] ? visual : 'escuro'; J.pal = PALETAS[J.visual]; J.fundo.set(corDe(J.pal.fundo));
+  J.visual = PALETAS[visual] ? visual : 'perola'; J.pal = PALETAS[J.visual]; J.fundo.set(corDe(J.pal.fundo));
   if (J.cena && J.cena.fog) J.cena.fog.color.copy(J.fundo);
 }
 

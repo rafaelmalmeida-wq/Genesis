@@ -62,10 +62,12 @@
             <span class="jv-glifo" aria-hidden="true"></span>
             <input type="text" id="jv-cmd" placeholder="Como vamos atuar hoje?" oninput="sugerirJarvis(this.value)" enterkeyhint="send" aria-label="Como vamos atuar hoje?">
             <button type="submit" class="jv-enviar" aria-label="Enviar ao JARVIS" title="Enviar ao JARVIS">↑</button>
-            <button type="button" class="jv-mic" onclick="alternarMicJarvis()" aria-label="Falar com o JARVIS (toque de novo para enviar)" title="Falar (toque de novo para enviar)"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11.5" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
+            <label class="jv-clipe" title="Mandar print ao JARVIS" aria-label="Mandar print ao JARVIS"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5l-8.4 8.4a5.3 5.3 0 0 1-7.5-7.5l8.8-8.8a3.5 3.5 0 0 1 5 5l-8.8 8.8a1.8 1.8 0 0 1-2.5-2.5l8.1-8.1"/></svg><input type="file" accept="image/*" multiple hidden onchange="anexarPrintJarvis(this)"></label>
+            <button type="button" class="jv-halo-btn" onclick="abrirVozJarvis()" aria-label="Falar com o JARVIS" title="Falar com o JARVIS"><img src="icon-180.png" alt="" class="jv-halo-img" draggable="false"></button>
           </form>
         </div>
         <input type="file" id="jv-import" accept=".json,application/json" hidden onchange="importarCentral(this)">
+        <div id="jv-primos" class="jv-primos" hidden></div>
         <canvas id="cer-canvas" aria-label="Cérebro: mapa de tudo no Genesis. Toque numa bolinha para ver as ligações."></canvas>
         <div class="cer-topo">
           <div class="cer-titulo"><h1 class="page-title">Cérebro</h1><small id="cer-info"></small></div>
@@ -1357,14 +1359,23 @@
   </div>
   <!-- Bolinhas flutuantes: ✳ Claude (mudanças no app) e 🎤 ditado (lançar dados) -->
   <div class="fab-stack">
-    <button type="button" class="fab fab-claude" onclick="abrirVoz('claude')" title="Pedir mudança no app ao Claude" aria-label="Pedir mudança no app ao Claude">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><g stroke="#fff" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/><line x1="18.4" y1="5.6" x2="5.6" y2="18.4"/></g></svg>
-    </button>
-    <button type="button" class="fab fab-mic" onclick="abrirVoz('dados')" title="Ditado: lançar pedido, tarefa, gasto..." aria-label="Ditado">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="#fff"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
-    </button>
+    <button type="button" class="fab fab-jarvis" onclick="abrirVozJarvis()" title="Falar com o JARVIS" aria-label="Falar com o JARVIS"><img src="icon-180.png" alt="" class="jv-halo-img" draggable="false"></button>
   </div>
 
+  <!-- A telinha de voz do JARVIS (em qualquer página): ouve até tocar no JARVIS de novo; bip; envia ao computador -->
+  <div id="jv-voz" class="jv-voz" hidden>
+    <div class="jv-voz-cartao" role="dialog" aria-label="Falar com o JARVIS">
+      <div class="jv-voz-topo"><span class="jv-voz-marca">J.A.R.V.I.S.</span><small id="jv-voz-ctx"></small><button type="button" class="jv-x" onclick="fecharVozJarvis()" aria-label="Cancelar">✕</button></div>
+      <textarea id="jv-voz-texto" rows="3" placeholder="Fale ou escreva… toque no JARVIS para enviar."></textarea>
+      <div id="jv-voz-anexos" class="jv-voz-anexos" hidden></div>
+      <div class="jv-voz-botoes">
+        <label class="jv-voz-lateral" title="Anexar print"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 11.5l-8.4 8.4a5.3 5.3 0 0 1-7.5-7.5l8.8-8.8a3.5 3.5 0 0 1 5 5l-8.8 8.8a1.8 1.8 0 0 1-2.5-2.5l8.1-8.1"/></svg><span>Print</span><input type="file" accept="image/*" multiple hidden onchange="anexarPrintJarvis(this)"></label>
+        <button type="button" class="jv-voz-halo" onclick="concluirVozJarvis()" aria-label="Enviar ao JARVIS"><img src="icon-180.png" alt="" class="jv-halo-img" draggable="false"></button>
+        <button type="button" class="jv-voz-lateral" onclick="registrarVozLocal()" title="Lançar direto no app, sem o computador"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4l10.5-10.5a2.8 2.8 0 0 0-4-4L4 16v4z"/></svg><span>Lançar no app</span></button>
+      </div>
+      <p class="jv-voz-dica">Toque no JARVIS para enviar ao computador.</p>
+    </div>
+  </div>
   <div id="voice-sheet" class="modal-overlay">
     <div class="modal-content voice-content">
       <div class="modal-header"><h3 id="voice-title">🎤 Ditado</h3><button class="close-modal" onclick="fecharVoz()">✕</button></div>
