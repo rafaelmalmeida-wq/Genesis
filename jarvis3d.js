@@ -1,12 +1,13 @@
 // ============================================================================
-// JARVIS — cérebro 3D da página inicial (Three.js, cópia local em vendor/)
+// J.A.R.V.I.S. — cérebro 3D da página inicial (Three.js, cópia local em vendor/)
 // Recebe o grafo montado pelo app (montarGrafoCerebro: áreas → seções → itens) e
-// desenha o "cérebro" do JARVIS. Visual padrão 'perola' (pedido do Rafael em 01/10/2026: claro, branco-pérola,
-// realista, limpo): uma ESFERA CENTRAL grande, translúcida e iridescente (o JARVIS, com uma luz que respira
-// dentro — pisca mais rápido quando está pensando), as ÁREAS como pérolas pousadas na superfície dela
-// (com o símbolo da área em relevo), setores e itens em volta, luz de estúdio e sombra suave embaixo.
-// Sem linhas saindo do centro e sem "universo". Na visão geral só as ÁREAS têm nome; ao tocar numa área
-// ela vem para a frente e mostra a ramificação. Outros visuais: 'escuro' e 'claro'. Conversa com o app por window.JarvisBrain.
+// desenha o "cérebro" do J.A.R.V.I.S.: uma ESFERA CENTRAL grande e translúcida (o J.A.R.V.I.S., com uma luz
+// que respira dentro — pisca mais rápido quando está pensando), as ÁREAS como pérolas pousadas na superfície
+// dela (com o símbolo da área em relevo, desenhado em vetor e rasterizado em alta resolução), setores e itens
+// em volta, luz de estúdio e sombra suave embaixo. Sem linhas saindo do centro e sem "universo".
+// TEMAS (Ajustes do J.A.R.V.I.S. → Aparência): 'perola' (padrão), 'cristal', 'grafite' e 'escuro' (Holograma).
+// Na visão geral só as ÁREAS têm nome (embaixo da pérola, sem se sobrepor; as que estão atrás da esfera somem);
+// ao tocar numa área ela vem para a frente e mostra a ramificação. Conversa com o app por window.JarvisBrain.
 // Nada aqui grava dados: é só o desenho.
 // ============================================================================
 import * as THREE from './vendor/three.module.min.js';
@@ -14,10 +15,21 @@ import * as THREE from './vendor/three.module.min.js';
 const R = 100;              // raio da esfera (unidades do mundo)
 const REL_AREA = 0.5;       // quanto a câmera se aproxima ao abrir uma área (1 = visão geral)
 const ORBE_R = R * 0.5;      // raio da esfera central (o JARVIS) — as áreas pousam na superfície dela
+const PEROLA_R = 6.4;        // raio das pérolas das áreas
+// Temas com esfera (orbe: true) trazem também o material das pérolas (mat), a casca da esfera (cor de fora/dentro
+// e opacidade), o "estúdio" dos reflexos (domo), a cor da luz do núcleo, a sombra e a cor do símbolo em relevo.
 const PALETAS = {
-  perola: { fundo: '#f2f0eb', area: '#ffffff', secao: '#a59e93', cat: '#b3aca1', item: '#c9c2b7', nucleo: '#fff8ec', poeira: '#b9b2a7', nevoa: null, linha: '#bdb6aa', hud: '#a39c90', aditivo: false, orbe: true },
-  escuro: { fundo: '#050608', area: '#f5f5f7', secao: '#d1d1d6', cat: '#b4b4ba', item: '#8e8e93', nucleo: '#ffffff', poeira: '#c9ceda', nevoa: '#8f98ab', linha: '#ffffff', hud: '#e8ecf5', aditivo: true },
-  claro: { fundo: '#f5f5f7', area: '#1d1d1f', secao: '#3a3a3c', cat: '#48484a', item: '#6e6e73', nucleo: '#1d1d1f', poeira: '#5a5f6b', nevoa: '#9a9ca3', linha: '#1d1d1f', hud: '#1d1d1f', aditivo: false }
+  perola: { fundo: '#f2f0eb', area: '#ffffff', secao: '#a59e93', cat: '#b3aca1', item: '#c9c2b7', nucleo: '#fff8ec', poeira: '#b9b2a7', nevoa: null, linha: '#bdb6aa', hud: '#a39c90', aditivo: false, orbe: true,
+    mat: { cor: '#f6efe4', rough: 0.14, metal: 0, sheen: '#ffe6c4', irid: 1, env: 1.15 }, casca: ['#f8f2e8', '#e9dfcf'], cascaOp: [0.5, 0.35], domo: ['#ffffff', '#9d9282'],
+    luz: '#f2c27a', miolo: '#fff6e6', sombra: '60,52,40', icone: '#3a3a3c', hemi: ['#ffffff', '#d9d1c4', 0.9], recorte: '#ffe9cf' },
+  cristal: { fundo: '#edf1f5', area: '#ffffff', secao: '#8e99a6', cat: '#9ea8b4', item: '#bcc4ce', nucleo: '#f4f9ff', poeira: '#a9b3bf', nevoa: null, linha: '#b4bdc8', hud: '#8a96a4', aditivo: false, orbe: true,
+    mat: { cor: '#f5f8fc', rough: 0.05, metal: 0, sheen: '#d6e6ff', irid: 0.55, env: 1.35 }, casca: ['#f7fafd', '#dce5ef'], cascaOp: [0.4, 0.28], domo: ['#ffffff', '#8796a7'],
+    luz: '#86bfff', miolo: '#f3f9ff', sombra: '38,54,76', icone: '#36404c', hemi: ['#ffffff', '#cdd7e2', 0.95], recorte: '#dcebff' },
+  grafite: { fundo: '#1d1f23', area: '#d9dce1', secao: '#8e949c', cat: '#7c828a', item: '#646a72', nucleo: '#fff1d6', poeira: '#70757d', nevoa: null, linha: '#50555c', hud: '#8b9199', aditivo: false, orbe: true, escuro: true,
+    mat: { cor: '#50545b', rough: 0.3, metal: 0.55, sheen: '#b9c1cb', irid: 0.3, env: 1.05 }, casca: ['#3b3f46', '#141619'], cascaOp: [0.62, 0.5], domo: ['#e8ebef', '#191b1f'],
+    luz: '#f2c27a', miolo: '#fff1d6', luzAditiva: true, sombra: '0,0,0', icone: '#eef0f3', hemi: ['#cfd5dd', '#101113', 0.7], recorte: '#ffd9a8' },
+  escuro: { fundo: '#050608', area: '#f5f5f7', secao: '#d1d1d6', cat: '#b4b4ba', item: '#8e8e93', nucleo: '#ffffff', poeira: '#c9ceda', nevoa: '#8f98ab', linha: '#ffffff', hud: '#e8ecf5', aditivo: true, escuro: true, icone: '#c9ced8' },
+  claro: { fundo: '#f5f5f7', area: '#1d1d1f', secao: '#3a3a3c', cat: '#48484a', item: '#6e6e73', nucleo: '#1d1d1f', poeira: '#5a5f6b', nevoa: '#9a9ca3', linha: '#1d1d1f', hud: '#1d1d1f', aditivo: false, icone: '#3a3a3c' }
 };
 const J = {
   renderer: null, cena: null, camera: null, mundo: null, host: null, op: {},
@@ -97,30 +109,34 @@ function geometriaPontos(pos, cor, tam, alfa, pulso, bolha) {
 }
 function corDoNo(n) { const p = J.pal; return corDe(n.tipo === 'centro' ? p.nucleo : n.tipo === 'area' ? p.area : n.tipo === 'secao' ? p.secao : n.categoria ? p.cat : p.item); }
 
-// --- símbolo de cada área DENTRO da bolha: bem transparente, em "alto relevo" (sombra + luz + face) ---
-// def = { svg: '<svg ...>' } (traço branco) ou { img: 'img/primos-p.png' } (a logo vira silhueta: quanto mais escura, mais opaca)
+// --- símbolo de cada área DENTRO da pérola: em "alto relevo" (sombra + luz + face), nítido ---
+// def = { svg: '<svg ...>' } (vetor com traço; desenhado a 512 px, com mipmaps e filtro anisotrópico)
+// ou { img: '...' } (imagem vira silhueta: quanto mais escura, mais opaca).
 const texIcones = {};
+const TAM_ICONE = 512;
 function texturaIcone(area, def) {
   const chave = area + ':' + J.visual; if (texIcones[chave]) return texIcones[chave];
-  const cv = document.createElement('canvas'); cv.width = cv.height = 256; const ctx = cv.getContext('2d');
-  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; texIcones[chave] = tex;
+  const T = TAM_ICONE, k = T / 256;
+  const cv = document.createElement('canvas'); cv.width = cv.height = T; const ctx = cv.getContext('2d');
+  const tex = new THREE.CanvasTexture(cv); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = J.renderer ? J.renderer.capabilities.getMaxAnisotropy() : 1; texIcones[chave] = tex;
   const img = new Image();
   img.onload = () => {
-    const forma = document.createElement('canvas'); forma.width = forma.height = 256; const fx = forma.getContext('2d'); const m = def.img ? 22 : 40;
-    fx.drawImage(img, m, m, 256 - 2 * m, 256 - 2 * m);
+    const forma = document.createElement('canvas'); forma.width = forma.height = T; const fx = forma.getContext('2d'); const m = (def.img ? 22 : 34) * k;
+    fx.drawImage(img, m, m, T - 2 * m, T - 2 * m);
     if (def.img) {
-      const d = fx.getImageData(0, 0, 256, 256);
+      const d = fx.getImageData(0, 0, T, T);
       for (let i = 0; i < d.data.length; i += 4) { const lum = (d.data[i] * 0.3 + d.data[i + 1] * 0.59 + d.data[i + 2] * 0.11) / 255; const a = (d.data[i + 3] / 255) * Math.max(0, Math.min(1, (0.92 - lum) * 1.7)); d.data[i] = d.data[i + 1] = d.data[i + 2] = 255; d.data[i + 3] = a * 255; }
       fx.putImageData(d, 0, 0);
     }
-    const tingir = cor => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); x.drawImage(forma, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = cor; x.fillRect(0, 0, 256, 256); return c; };
-    ctx.clearRect(0, 0, 256, 256);
-    ctx.drawImage(tingir('#000000'), 5, 6);                       // sombra (embaixo à direita)
-    ctx.drawImage(tingir('#ffffff'), -3, -3);                     // luz (em cima à esquerda)
-    ctx.drawImage(tingir(J.pal.aditivo ? '#c9ced8' : '#3a3a3c'), 0, 0); // face
+    const tingir = cor => { const c = document.createElement('canvas'); c.width = c.height = T; const x = c.getContext('2d'); x.drawImage(forma, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = cor; x.fillRect(0, 0, T, T); return c; };
+    const escuro = !!J.pal.escuro;
+    ctx.clearRect(0, 0, T, T);
+    ctx.globalAlpha = escuro ? 0.55 : 0.8; ctx.drawImage(tingir('#000000'), 3.5 * k, 4.5 * k);   // sombra (embaixo à direita)
+    ctx.globalAlpha = escuro ? 0.35 : 1; ctx.drawImage(tingir('#ffffff'), -2 * k, -2 * k);       // luz (em cima à esquerda)
+    ctx.globalAlpha = 1; ctx.drawImage(tingir(J.pal.icone || '#3a3a3c'), 0, 0);                  // face
     tex.needsUpdate = true; tocar();
   };
-  img.src = def.img ? def.img : 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(def.svg.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" '));
+  img.src = def.img ? def.img : 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(def.svg.replace('<svg ', `<svg xmlns="http://www.w3.org/2000/svg" width="${T}" height="${T}" `));
   return tex;
 }
 
@@ -236,20 +252,20 @@ function construir(grafo) {
   // auras: halo suave nas áreas (no pérola, um brilho quente bem leve)
   const tex = J.tex || (J.tex = texturaAura()); J.auras = [];
   nos.filter(n => n.tipo === 'area').forEach(n => {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(orbe ? '#ffffff' : pal.area), transparent: true, opacity: adit ? 0.28 : orbe ? 0.55 : 0.12, depthWrite: false, blending: mistura() }));
-    s.position.copy(n.p); s.scale.setScalar(orbe ? 22 : 34); s.renderOrder = 2; s.userData.no = n; J.mundo.add(s); J.auras.push(s);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(orbe ? (pal.escuro ? pal.luz : '#ffffff') : pal.area), transparent: true, opacity: adit ? 0.28 : orbe ? (pal.escuro ? 0.16 : 0.55) : 0.12, depthWrite: false, blending: pal.escuro && orbe ? THREE.AdditiveBlending : mistura() }));
+    s.position.copy(n.p); s.scale.setScalar(orbe ? 22 : 34); s.renderOrder = 2; s.userData.no = n; s.userData.op0 = s.material.opacity; J.mundo.add(s); J.auras.push(s);
   });
-  // pérolas das áreas (malhas com material de pérola: brilho, verniz e iridescência)
+  // pérolas das áreas (malhas com o material do tema: brilho, verniz e iridescência)
   J.perolas = [];
   if (orbe) nos.filter(n => n.tipo === 'area').forEach(n => {
-    const m = new THREE.Mesh(J.geoPerola || (J.geoPerola = new THREE.SphereGeometry(6.4, 48, 32)), materialPerola(1));
+    const m = new THREE.Mesh(J.geoPerola || (J.geoPerola = new THREE.SphereGeometry(PEROLA_R, 64, 40)), materialPerola(1));
     m.position.copy(n.p); m.renderOrder = 3; m.userData.no = n; J.mundo.add(m); J.perolas.push(m);
   });
-  // símbolos das áreas (logo da Primos, treliça da engenharia, capacete, ₿...) — em relevo, bem transparentes
+  // símbolos das áreas (P da Primos, treliça da engenharia, capacete, ₿...) — em relevo, nítidos
   J.icones = [];
   nos.filter(n => n.tipo === 'area' && J.op.icones && J.op.icones[n.area]).forEach(n => {
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaIcone(n.area, J.op.icones[n.area]), transparent: true, opacity: adit ? 0.5 : orbe ? 0.62 : 0.38, depthWrite: false, depthTest: !orbe }));
-    s.position.copy(n.p); s.scale.setScalar(orbe ? 8.8 : 7.4); s.renderOrder = 6; s.userData.no = n; s.userData.op0 = s.material.opacity; J.mundo.add(s); J.icones.push(s);
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaIcone(n.area, J.op.icones[n.area]), transparent: true, opacity: adit ? 0.55 : orbe ? 0.82 : 0.42, depthWrite: false, depthTest: !orbe }));
+    s.position.copy(n.p); s.scale.setScalar(orbe ? 9.2 : 7.4); s.renderOrder = 6; s.userData.no = n; s.userData.op0 = s.material.opacity; J.mundo.add(s); J.icones.push(s);
   });
   construirOrbe();
   construirNucleo();
@@ -262,39 +278,43 @@ function construir(grafo) {
 
 // --- visual PÉROLA: material de pérola, luz de estúdio, esfera central (o JARVIS) e sombra no chão ---
 function materialPerola(opacidade, cor) {
-  return new THREE.MeshPhysicalMaterial({ color: new THREE.Color(cor || '#f6efe4'), roughness: 0.14, metalness: 0, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 0.7, sheenRoughness: 0.3, sheenColor: new THREE.Color('#ffe6c4'), iridescence: 1, iridescenceIOR: 1.3, iridescenceThicknessRange: [260, 720], envMapIntensity: 1.15, transparent: opacidade < 1, opacity: opacidade, depthWrite: opacidade >= 1 });
+  const m = (J.pal && J.pal.mat) || PALETAS.perola.mat;
+  return new THREE.MeshPhysicalMaterial({ color: new THREE.Color(cor || m.cor), roughness: m.rough, metalness: m.metal, clearcoat: 1, clearcoatRoughness: 0.06, sheen: 0.7, sheenRoughness: 0.3, sheenColor: new THREE.Color(m.sheen), iridescence: m.irid, iridescenceIOR: 1.3, iridescenceThicknessRange: [260, 720], envMapIntensity: m.env, transparent: opacidade < 1, opacity: opacidade, depthWrite: opacidade >= 1 });
 }
-/** "Estúdio" para os reflexos: domo claro com degradê quente embaixo + 3 softboxes (como foto de produto). */
+/** "Estúdio" para os reflexos: domo com degradê (cores do tema) + 3 softboxes (como foto de produto). Um por tema. */
+const ambientes = {};
 function ambienteEstudio() {
-  if (J.ambiente) return J.ambiente;
+  const dom = (J.pal && J.pal.domo) || PALETAS.perola.domo, chave = dom.join('|');
+  if (ambientes[chave]) return ambientes[chave];
   const pm = new THREE.PMREMGenerator(J.renderer); const cena = new THREE.Scene();
-  const geo = new THREE.SphereGeometry(50, 32, 16); const cores = []; const p = geo.attributes.position; const cima = new THREE.Color('#ffffff'), baixo = new THREE.Color('#9d9282');
+  const geo = new THREE.SphereGeometry(50, 32, 16); const cores = []; const p = geo.attributes.position; const cima = new THREE.Color(dom[0]), baixo = new THREE.Color(dom[1]);
   for (let i = 0; i < p.count; i++) { const c = baixo.clone().lerp(cima, Math.min(1, (p.getY(i) / 50 + 1) / 1.6)); cores.push(c.r, c.g, c.b); }
   geo.setAttribute('color', new THREE.Float32BufferAttribute(cores, 3));
   cena.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
   const painel = (w, h, x, y, z, k) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: new THREE.Color(k, k, k * 0.97), side: THREE.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 0, 0); cena.add(m); };
   painel(34, 14, 0, 38, 16, 4.2); painel(14, 30, -38, 6, 18, 2.6); painel(10, 24, 36, -4, -14, 1.8); painel(60, 8, 0, -30, 30, 0.35);
-  J.ambiente = pm.fromScene(cena, 0.035).texture; pm.dispose();
-  return J.ambiente;
+  ambientes[chave] = pm.fromScene(cena, 0.035).texture; pm.dispose();
+  return ambientes[chave];
 }
 function construirOrbe() {
   if (J.orbe) { J.cena.remove(J.orbe); J.orbe.traverse(x => { if (x.geometry) x.geometry.dispose(); if (x.material && x.material.map !== J.tex) x.material.dispose(); }); J.orbe = null; }
-  if (!J.pal.orbe) { J.cena.environment = null; return; }
+  const pal = J.pal;
+  if (!pal.orbe) { J.cena.environment = null; return; }
   J.cena.environment = ambienteEstudio();
   J.orbe = new THREE.Group();
-  // a esfera: casca de pérola translúcida (dentro e fora) — deixa ver a luz do JARVIS lá dentro
+  // a esfera: casca translúcida (dentro e fora) — deixa ver a luz do J.A.R.V.I.S. lá dentro
   const geo = new THREE.SphereGeometry(ORBE_R, 96, 64);
-  const dentro = new THREE.Mesh(geo, materialPerola(0.5, '#e9dfcf')); dentro.material.side = THREE.BackSide; dentro.renderOrder = -2;
-  const fora = new THREE.Mesh(geo, materialPerola(0.8, '#f8f2e8')); fora.renderOrder = 2;
+  const dentro = new THREE.Mesh(geo, materialPerola(0.5, pal.casca[1])); dentro.material.side = THREE.BackSide; dentro.renderOrder = -2;
+  const fora = new THREE.Mesh(geo, materialPerola(0.8, pal.casca[0])); fora.renderOrder = 2;
   // luzes de estúdio
-  const hemi = new THREE.HemisphereLight('#ffffff', '#d9d1c4', 0.9);
-  const chave = new THREE.DirectionalLight('#ffffff', 1.7); chave.position.set(60, 90, 120);
-  const recorte = new THREE.DirectionalLight('#ffe9cf', 0.7); recorte.position.set(-90, -20, -80);
+  const hemi = new THREE.HemisphereLight(pal.hemi[0], pal.hemi[1], pal.hemi[2]);
+  const chave = new THREE.DirectionalLight('#ffffff', pal.escuro ? 1.9 : 1.7); chave.position.set(60, 90, 120);
+  const recorte = new THREE.DirectionalLight(pal.recorte, pal.escuro ? 1.1 : 0.7); recorte.position.set(-90, -20, -80);
   // sombra suave no "chão"
   const cv = document.createElement('canvas'); cv.width = cv.height = 128; const ctx = cv.getContext('2d'); const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0, 'rgba(60,52,40,0.55)'); g.addColorStop(0.6, 'rgba(60,52,40,0.12)'); g.addColorStop(1, 'rgba(60,52,40,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
+  g.addColorStop(0, `rgba(${pal.sombra},0.55)`); g.addColorStop(0.6, `rgba(${pal.sombra},0.12)`); g.addColorStop(1, `rgba(${pal.sombra},0)`); ctx.fillStyle = g; ctx.fillRect(0, 0, 128, 128);
   const ts = new THREE.CanvasTexture(cv); ts.colorSpace = THREE.SRGBColorSpace;
-  const sombra = new THREE.Sprite(new THREE.SpriteMaterial({ map: ts, transparent: true, opacity: 0.35, depthWrite: false, fog: false })); sombra.scale.set(R * 1.7, R * 0.3, 1); sombra.position.set(0, -R * 1.12, 0); sombra.renderOrder = -3;
+  const sombra = new THREE.Sprite(new THREE.SpriteMaterial({ map: ts, transparent: true, opacity: pal.escuro ? 0.6 : 0.35, depthWrite: false, fog: false })); sombra.scale.set(R * 1.7, R * 0.3, 1); sombra.position.set(0, -R * 1.12, 0); sombra.renderOrder = -3;
   J.orbe.add(dentro, fora, hemi, chave, recorte, sombra); J.orbe.userData = { dentro, fora, sombra };
   J.cena.add(J.orbe);
 }
@@ -304,8 +324,8 @@ function construirNucleo() {
   [J.nucleo, J.hud].forEach(o => { if (o) { J.cena.remove(o); o.traverse(x => { if (x.geometry) x.geometry.dispose(); if (x.material) x.material.dispose(); }); } });
   const pal = J.pal, tex = J.tex || (J.tex = texturaAura()), orbe = !!pal.orbe;
   J.nucleo = new THREE.Group();
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(orbe ? '#f2c27a' : pal.nucleo), transparent: true, opacity: 0.7, depthWrite: false, depthTest: !orbe, blending: orbe ? THREE.NormalBlending : mistura() })); halo.scale.setScalar(orbe ? 44 : pal.aditivo ? 40 : 30);
-  const miolo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(orbe ? '#fff6e6' : pal.aditivo ? '#ffffff' : '#1d1d1f'), transparent: true, opacity: 1, depthWrite: false, depthTest: !orbe, blending: mistura() })); miolo.scale.setScalar(orbe ? 16 : 10);
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(orbe ? pal.luz : pal.nucleo), transparent: true, opacity: 0.7, depthWrite: false, depthTest: !orbe, blending: orbe ? (pal.luzAditiva ? THREE.AdditiveBlending : THREE.NormalBlending) : mistura() })); halo.scale.setScalar(orbe ? 44 : pal.aditivo ? 40 : 30);
+  const miolo = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: corDe(orbe ? pal.miolo : pal.aditivo ? '#ffffff' : '#1d1d1f'), transparent: true, opacity: 1, depthWrite: false, depthTest: !orbe, blending: pal.luzAditiva ? THREE.AdditiveBlending : mistura() })); miolo.scale.setScalar(orbe ? 16 : 10);
   J.nucleo.add(halo, miolo); J.nucleo.userData = { halo, miolo }; J.nucleo.renderOrder = 5; halo.renderOrder = orbe ? 3 : 5; miolo.renderOrder = orbe ? 3 : 6; // no pérola: a luz aparece através da casca
   J.cena.add(J.nucleo);
   // HUD: arcos tracejados, régua com marcas e arcos curtos (no pérola, em volta da esfera, bem sutis)
@@ -346,37 +366,58 @@ function prepararRotulos() {
 }
 const _v = new THREE.Vector3();
 function projetar(n, w, h) { _v.copy(n.p).applyMatrix4(J.mundo.matrixWorld); const z = _v.z; _v.project(J.camera); return { x: (_v.x + 1) / 2 * w, y: (1 - _v.y) / 2 * h, z, fora: _v.z > 1 }; }
+/** Largura do nome na tela (medida uma vez e guardada; muda só se o texto mudar). */
+function larguraRotulo(el, n) {
+  if (el._w && el._nome === n.nome) return el._w;
+  const w = el.offsetWidth; if (w) { el._w = w; el._nome = n.nome; return w; }
+  return (n.tipo === 'area' ? 24 : 18) + n.nome.length * (n.tipo === 'area' ? 7.2 : 6.2);
+}
+/**
+ * Nomes por cima do 3D, SEM se sobrepor: cada nome procura um lugar livre em volta da bolinha
+ * (área: embaixo → em cima → à direita → à esquerda; setor/item: em cima → embaixo). Quem está na
+ * frente escolhe primeiro. Áreas que ficaram atrás da esfera central somem na visão geral (limpa a tela).
+ */
 function atualizarRotulos() {
   const w = J.host.clientWidth, h = J.host.clientHeight; J.mundo.updateMatrixWorld();
   const perto = J.rel < 0.42; const ocupados = [];
   const lista = [];
+  const tg = Math.tan(J.camera.fov * Math.PI / 360), camZ = J.camera.position.z;
   J.nos.forEach(n => {
     const el = J.elRotulos[n.id]; if (!el) return;
     const candidato = n.tipo === 'area' || (J.foco && n.area === J.foco && (n.tipo === 'secao' || n.categoria || perto)) || n.id === J.sel;
     if (!candidato) { if (el.style.opacity !== '0') el.style.opacity = '0'; return; }
     lista.push({ n, el, ...projetar(n, w, h) });
   });
-  // ordem de quem ganha o espaço: áreas acesas → o escolhido → setores/itens (da frente para trás) → áreas apagadas
-  const forte = n => n.tipo === 'area' && (!J.foco || n.area === J.foco);
-  const prio = n => forte(n) ? 0 : n.id === J.sel ? 1 : n.tipo === 'area' ? 3 : 2;
+  // ordem de quem ganha o espaço: área em foco → o escolhido → áreas (da frente para trás) → setores/itens
+  const forte = n => n.tipo === 'area' && J.foco && n.area === J.foco;
+  const prio = n => forte(n) ? 0 : n.id === J.sel ? 1 : n.tipo === 'area' ? 2 : 3;
   lista.sort((a, b) => prio(a.n) - prio(b.n) || b.z - a.z);
+  const bate = r => r.x0 < 4 || r.x1 > w - 4 || r.y0 < 4 || r.y1 > h - 4 || ocupados.some(o => r.x0 < o.x1 && r.x1 > o.x0 && r.y0 < o.y1 && r.y1 > o.y0);
   lista.forEach(({ n, el, x, y, z, fora }) => {
-    const frente = Math.max(0, Math.min(1, (z + R) / (2 * R))); // 0 = fundo, 1 = frente
-    let visivel = !fora, embaixo = false;
-    if (visivel && !forte(n)) {
-      // tenta em cima da bolinha; se bater em outro nome, tenta embaixo; se ainda bater, some (aparece ao aproximar)
-      const larg = Math.min(170, 22 + n.nome.length * 6.4), alt = 24, bate = r => ocupados.some(o => r.x0 < o.x1 && r.x1 > o.x0 && r.y0 < o.y1 && r.y1 > o.y0);
-      const cima = { x0: x - larg / 2, x1: x + larg / 2, y0: y - alt - 8, y1: y - 6 }, baixo = { x0: cima.x0, x1: cima.x1, y0: y + 6, y1: y + alt + 8 };
-      if (!bate(cima)) ocupados.push(cima); else if (!bate(baixo)) { ocupados.push(baixo); embaixo = true; } else visivel = false;
-    } else if (visivel) { // área sempre aparece; se bater noutra área, desce para baixo da bolinha
-      const larg = 32 + n.nome.length * 7.6, cima = { x0: x - larg / 2, x1: x + larg / 2, y0: y - 40, y1: y - 6 };
-      if (ocupados.some(o => cima.x0 < o.x1 && cima.x1 > o.x0 && cima.y0 < o.y1 && cima.y1 > o.y0)) { embaixo = true; ocupados.push({ x0: cima.x0, x1: cima.x1, y0: y + 6, y1: y + 40 }); } else ocupados.push(cima);
+    const frente = Math.max(0, Math.min(1, (z + R * 0.6) / (R * 1.2))); // 0 = atrás da esfera, 1 = na frente
+    let visivel = !fora;
+    if (visivel && n.tipo === 'area' && !J.foco && frente < 0.3) visivel = false; // atrás da esfera: não polui a tela
+    let lugar = null;
+    if (visivel) {
+      const larg = larguraRotulo(el, n), alt = n.tipo === 'area' ? 24 : 20;
+      const raio = n.tipo === 'area' ? Math.max(8, PEROLA_R * h / (2 * tg * Math.max(1, camZ - z))) : 5; // raio da pérola na tela
+      const vao = n.tipo === 'area' ? 5 : 6;
+      const opcoes = {
+        baixo: { x0: x - larg / 2, x1: x + larg / 2, y0: y + raio + vao, y1: y + raio + vao + alt },
+        cima: { x0: x - larg / 2, x1: x + larg / 2, y0: y - raio - vao - alt, y1: y - raio - vao },
+        direita: { x0: x + raio + vao + 2, x1: x + raio + vao + 2 + larg, y0: y - alt / 2, y1: y + alt / 2 },
+        esquerda: { x0: x - raio - vao - 2 - larg, x1: x - raio - vao - 2, y0: y - alt / 2, y1: y + alt / 2 }
+      };
+      const ordem = n.tipo === 'area' ? ['baixo', 'cima', 'direita', 'esquerda'] : ['cima', 'baixo'];
+      lugar = ordem.find(k => !bate(opcoes[k]));
+      if (!lugar && (forte(n) || n.id === J.sel)) lugar = ordem[0]; // o que está em foco aparece de qualquer jeito
+      if (lugar) { ocupados.push(opcoes[lugar]); el._r = opcoes[lugar]; } else visivel = false;
     }
     if (!visivel) { if (el.style.opacity !== '0') el.style.opacity = '0'; return; }
-    const op = n.tipo === 'area' ? (J.foco ? (n.area === J.foco ? 1 : 0.3) : 0.62 + frente * 0.38) : 0.4 + frente * 0.6;
-    const esc = n.tipo === 'area' ? 0.84 + frente * 0.2 : 0.92 + frente * 0.1;
-    el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, ${embaixo ? '11px' : 'calc(-100% - 11px)'}) scale(${esc.toFixed(3)})`;
-    el.classList.toggle('embaixo', embaixo);
+    const op = n.tipo === 'area' ? (J.foco ? (n.area === J.foco ? 1 : 0.35) : 0.55 + frente * 0.45) : 0.45 + frente * 0.55;
+    const r = el._r;
+    el.style.transform = `translate3d(${r.x0.toFixed(1)}px, ${r.y0.toFixed(1)}px, 0)`;
+    el.dataset.lugar = lugar;
     el.style.opacity = op.toFixed(2); el.style.zIndex = String(Math.round(frente * 100) + (n.tipo === 'area' ? 200 : 0) + (n.id === J.sel ? 400 : 0));
     el.classList.toggle('sel', n.id === J.sel);
   });
@@ -398,7 +439,7 @@ function aplicarFoco(area) {
   J.nos.forEach(n => { alfa.array[n.i] = orbe && (n.tipo === 'area' || n.tipo === 'centro') ? 0 : !area || n.area === area || n.tipo === 'centro' ? 1 : 0.12; });
   alfa.needsUpdate = true; marcarSel();
   const adit = J.pal.aditivo;
-  J.auras.forEach(s => { const n = s.userData.no; s.material.opacity = !area || n.area === area ? (adit ? 0.28 : 0.12) : 0.04; });
+  J.auras.forEach(s => { const n = s.userData.no; s.material.opacity = !area || n.area === area ? s.userData.op0 : s.userData.op0 * 0.2; });
   (J.icones || []).forEach(s => { s.material.opacity = !area || s.userData.no.area === area ? s.userData.op0 : s.userData.op0 * 0.25; });
   (J.perolas || []).forEach(m => { const acesa = !area || m.userData.no.area === area; m.material.transparent = !acesa; m.material.opacity = acesa ? 1 : 0.28; m.material.depthWrite = acesa; });
   const cor = J.linhas.geometry.getAttribute('color'); const base = corDe(J.pal.linha);
@@ -506,8 +547,10 @@ function quadro() {
     if (Math.abs(J.velRot.x) + Math.abs(J.velRot.y) > 0.00015) { girar(J.velRot.x, J.velRot.y); J.velRot.x *= 0.95; J.velRot.y *= 0.95; }
     else if (J.autoGiro && !J.qAlvo && agora - J.ultimaInteracao > 2200) girar(0.0016, 0);
   }
+  if (J.giroEntrada > 0.0005) { girar(J.giroEntrada, 0); J.giroEntrada *= 0.955; } // a volta da abertura
   if (J.qAlvo) { J.mundo.quaternion.slerp(J.qAlvo, 0.085); J.qAtual = J.mundo.quaternion.clone(); if (J.mundo.quaternion.angleTo(J.qAlvo) < 0.002) J.qAlvo = null; }
-  J.rel += (J.relAlvo - J.rel) * 0.09; J.ox += (J.oxAlvo - J.ox) * 0.09; J.oy += (J.oyAlvo - J.oy) * 0.09;
+  const suav = agora < (J.entradaAte || 0) ? 0.04 : 0.09; // na abertura a câmera chega mais devagar
+  J.rel += (J.relAlvo - J.rel) * suav; J.ox += (J.oxAlvo - J.ox) * 0.09; J.oy += (J.oyAlvo - J.oy) * 0.09;
   const d = dist(); J.prof += ((J.foco ? d - J.raioFoco : d) - J.prof) * 0.09;
   const u = 2 * Math.max(20, J.prof) * Math.tan(J.camera.fov * Math.PI / 360) / (J.host.clientHeight || 1); // unidades do mundo por pixel (na profundidade do foco)
   const cx = -J.ox * u, cy = J.oy * u; J.camera.position.set(cx, cy, d); J.camera.lookAt(cx, cy, 0);
@@ -524,7 +567,7 @@ function quadro() {
     halo.material.opacity = (orbe ? 0.22 + onda * 0.22 + J.energia * 0.25 : 0.45 + onda * 0.35) * (J.foco ? 0.5 : 1); if (orbe) miolo.material.opacity = (0.55 + onda * 0.35) * (J.foco ? 0.5 : 1);
     miolo.scale.setScalar((orbe ? 13 : 8) + onda * (orbe ? 4 : 2.5) + J.energia * 3);
   }
-  if (J.orbe) { J.orbe.userData.fora.material.opacity = (J.foco ? 0.3 : 0.5) + onda * 0.04; J.orbe.userData.dentro.material.opacity = J.foco ? 0.18 : 0.35; }
+  if (J.orbe) { const [of, od] = J.pal.cascaOp || [0.5, 0.35]; J.orbe.userData.fora.material.opacity = (J.foco ? of * 0.6 : of) + onda * 0.04; J.orbe.userData.dentro.material.opacity = J.foco ? od * 0.5 : od; }
   if (J.hud) {
     J.hudOp += ((J.foco ? 0.15 : 1) - J.hudOp) * 0.08;
     const { g1, g2, g3 } = J.hud.userData, vel = 1 + J.energia * 4;
@@ -547,7 +590,7 @@ function redimensionar() {
   const dpr = Math.min(2, window.devicePixelRatio || 1); J.renderer.setPixelRatio(dpr); J.renderer.setSize(w, h, false);
   const aspecto = w / h; J.camera.aspect = aspecto; J.camera.fov = aspecto < 1 ? 50 : 42; J.camera.updateProjectionMatrix();
   const tg = Math.tan(J.camera.fov * Math.PI / 360);
-  J.baseDist = Math.max(R * 1.2 / tg, R * 1.1 / (tg * Math.min(1, aspecto))); // a esfera cabe na tela (em pé ou deitada)
+  J.baseDist = Math.max(R * 1.2 / tg, R * (aspecto < 0.8 ? 0.86 : 1.1) / (tg * Math.min(1, aspecto))); // a esfera cabe na tela (no celular em pé, mais perto: as pontas de fora podem cortar)
   J.escala = h * dpr / 2 / tg; [J.pontos, J.poeira, J.subPontos].forEach(p => { if (p) p.material.uniforms.uEscala.value = J.escala; });
   if (J.sub) J.sub.position.copy(posSubplano());
 }
@@ -576,8 +619,10 @@ window.JarvisBrain = {
     } catch (e) { console.warn('JARVIS 3D indisponível:', e); return false; }
   },
   carregar(grafo) { if (!J.renderer) return; construir(grafo); redimensionar(); tocar(); },
-  /** 'escuro' ou 'claro' — refaz as cores de tudo. */
+  /** Tema: 'perola' | 'cristal' | 'grafite' | 'escuro' — refaz as cores e os materiais de tudo. */
   definirVisual(visual) { if (!J.renderer) return; aplicarPaleta(visual); if (J.grafo) construir(J.grafo); else { construirNucleo(); construirAneis(); } redimensionar(); tocar(); },
+  /** Abertura: a câmera chega de longe, devagar, com meia volta — logo depois da vinheta. */
+  entrada() { if (!J.renderer) return; J.rel = 2.4; J.relAlvo = J.foco ? REL_AREA : 1; J.giroEntrada = 0.022; J.entradaAte = performance.now() + 1800; tocar(); },
   /** Cor da bolinha de status de cada área (nível de informação do JARVIS): { primos: '#34c759', ... } */
   definirStatus(mapa) { J.status = mapa || {}; J.nos.forEach(n => { const el = J.elRotulos[n.id]; if (el && n.tipo === 'area') el.style.setProperty('--status', J.status[n.area] || ''); }); },
   /** Lista dos tipos das memórias do subplano (uma bolinha para cada). */
