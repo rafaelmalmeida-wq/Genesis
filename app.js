@@ -5182,11 +5182,23 @@ function contabilidadePrimos(pc) {
   const expoBruto = ((pc.expositores || {}).itens || []).reduce((s, i) => s + (i.vendidos || 0) * (i.preco || 0), 0);
   const receitaBruta = receitaPlan + receitaApp + expoBruto;
   const comissoes = expoBruto * ((pc.parametros || {}).comissaoExpositor || 0.3);
-  const cmv = ((pc.expositores || {}).itens || []).reduce((s, i) => s + (i.vendidos || 0) * (i.custo || 0), 0);
+  const cmv = ((pc.expositores || {}).itens || []).reduce((s, i) => s + (i.vendidos || 0) * (i.custo || 0), 0) + vendasAno.reduce((s, v) => s + custoDaVenda(pc, v), 0);
   const depreciacao = (pc.despesas || []).filter(d => d.categoria === 'Equipamento' && d.data).reduce((s, d) => s + (d.total || 0) * Math.min(1, Math.max(0, diasEntre(d.data, hoje)) / 1825), 0);
   const resultado = receitaBruta - taxas - comissoes - cmv - despesasRealizadas - depreciacao;
   const cx = pc.caixa || {}, foraDosPix = Math.max(0, -(cx.saldo || 0));
   return { imobilizado, estoques, despesasRealizadas, receitaBruta, receitaPlan, receitaApp, expoBruto, taxas, comissoes, cmv, depreciacao, resultado, foraDosPix, vl };
+}
+/** Custo estimado de uma venda da planilha: pelo produto do mesmo cliente na aba Custo por Peça (ex.: "Psicóloga Bruna");
+ *  se não houver, pela proporção média custo/preço dos produtos com preço (estimativa). */
+function custoDaVenda(pc, v) {
+  const qtd = v.qtd || 1, cli = semAcentoCer(v.cliente || ''), prod = semAcentoCer(v.produto || '');
+  const genericos = /^(brinde|expositor|shopee|direto|consignado)/;
+  const doCliente = (pc.custoPeca || []).filter(p => p.custo && p.linha && !genericos.test(semAcentoCer(p.linha)) && cli.includes(semAcentoCer(p.linha)));
+  const escolhido = doCliente.find(p => p.preco) || doCliente[0] || (pc.custoPeca || []).find(p => p.custo && prod && semAcentoCer(p.produto).split(/\s+/).filter(w => w.length > 4).some(w => prod.includes(w)) && /suporte|chaveiro/.test(prod) === /suporte|chaveiro/.test(semAcentoCer(p.produto)));
+  if (escolhido) return escolhido.custo * qtd;
+  const comPreco = (pc.custoPeca || []).filter(p => p.custo && p.preco);
+  const razao = comPreco.length ? comPreco.reduce((s, p) => s + p.custo / p.preco, 0) / comPreco.length : 0.35;
+  return (v.bruto || 0) * razao;
 }
 function fluxoMensalPrimos(pc) {
   const m = {}; const add = (d, k, v) => { if (!d || !v) return; const mes = String(d).slice(0, 7); const x = m[mes] = m[mes] || { ent: 0, sai: 0, aportes: 0, vendas: 0, filamento: 0, despesas: 0 }; x[k] += v; if (k === 'aportes' || k === 'vendas') x.ent += v; else x.sai += v; };
@@ -5211,7 +5223,7 @@ function primosContabil(pc) {
   let x = `<div class="jvp-seg jvp-seg-sub">${SUB_CONTABIL.map(([k, n]) => `<button type="button" class="${sub === k ? 'on' : ''}" onclick="jv.subContabil='${k}'; renderPrimosPagina()">${n}</button>`).join('')}</div>`;
   if (sub === 'geral') {
     const totalApl = ct.imobilizado + ct.estoques + ct.despesasRealizadas, totalOrig = (cx.aportes || 0) + ct.foraDosPix + ct.vl.total;
-    x += falaHTML(`Contabilidade gerencial da Primos (MEI). O dinheiro que entrou (<b>${formatCurrency(totalOrig)}</b>) virou principalmente <b>máquinas e estrutura</b> (${formatCurrency(ct.imobilizado)}) e <b>estoque</b> (${formatCurrency(ct.estoques)}). Resultado acumulado estimado: <b>${formatCurrency(ct.resultado)}</b> — normal numa empresa de 2 meses que ainda não registrou vendas.`);
+    x += falaHTML(`Contabilidade gerencial da Primos (MEI). O dinheiro que entrou (<b>${formatCurrency(totalOrig)}</b>) virou principalmente <b>máquinas e estrutura</b> (${formatCurrency(ct.imobilizado)}) e <b>estoque</b> (${formatCurrency(ct.estoques)}). Resultado acumulado estimado: <b>${formatCurrency(ct.resultado)}</b>${ct.receitaBruta ? ` com ${formatCurrency(ct.receitaBruta)} de vendas registradas — normal no começo, enquanto o investimento ainda é maior que as vendas.` : " — normal numa empresa de 2 meses que ainda não registrou vendas."}`);
     x += `<div class="jvp-balanco"><div><h6>De onde veio o dinheiro</h6>${tabelaHTML([linhaTab('Aportes do sócio (3 PIX)', reais(cx.aportes)), linhaTab('Pago pelo CPF / conta MEI', reais(ct.foraDosPix), 'ainda não registrado como aporte'), linhaTab('Vendas recebidas', reais(ct.vl.total)), linhaTab('<b>Total</b>', `<b>${reais(totalOrig)}</b>`)])}</div>
       <div><h6>Onde ele está</h6>${tabelaHTML([linhaTab('Máquinas, ferramentas e estrutura', reais(ct.imobilizado), 'imobilizado'), linhaTab('Filamento, insumos e embalagens', reais(ct.estoques), 'estoque, a preço de compra'), linhaTab('Despesas já feitas', reais(ct.despesasRealizadas), 'marketing/site, serviços, fretes'), linhaTab('<b>Total</b>', `<b>${reais(totalApl)}</b>`)])}</div></div>`;
     x += `<div class="jv-bloco"><h5>Resultado acumulado (DRE gerencial de ${hojeISO().slice(0, 4)})</h5>${tabelaHTML([
