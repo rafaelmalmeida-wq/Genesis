@@ -2332,3 +2332,38 @@ body.jv-pensando #cerebro .jv-marca::before, #cerebro.pensando .jv-marca::before
   .jvk-anel { width: 72px; height: 72px; }
   .jvk-resumo-txt h3 { font-size: 1.25rem; }
 }
+
+/* ============================================================================
+   DESTAQUES do J.A.R.V.I.S. (fase 5, J#11): embaixo da saudação — cartões no PC, fileira de botões no celular;
+   tocar abre a página do destaque (mesmo esqueleto do menu das áreas)
+   ============================================================================ */
+.jv-destaques { margin-top: 14px; max-width: 380px; }
+.jv-destaques[hidden], #cerebro.jv-focado .jv-destaques { display: none; }
+.jv-dest-rot { display: block; margin: 0 0 6px 2px; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--jv-txt3); }
+.jv-dest-lista { display: flex; flex-direction: column; gap: 6px; }
+.jv-dest { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; width: 100%; margin: 0; padding: 10px 13px; border: none; border-radius: 16px; text-align: left; cursor: pointer; color: var(--jv-txt);
+  background: var(--jv-vidro); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px); box-shadow: inset 0 0 0 0.5px var(--jv-borda), 0 6px 20px rgba(0, 0, 0, 0.06); }
+.jv-dest:active { transform: scale(0.98); }
+.jv-dest strong { font-size: 0.9rem; font-weight: 650; }
+.jv-dest span { grid-row: 2; font-size: 0.76rem; line-height: 1.35; color: var(--jv-txt2); }
+.jv-dest em { grid-row: 1 / 3; grid-column: 2; font-style: normal; font-size: 1.3rem; color: var(--jv-txt3); }
+.jvd-ico { font-size: 1.4rem; color: #fff; }
+.jvd-grupo { margin: 14px 0 6px; }
+.jvd-grupo h5 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 0.8rem; font-weight: 600; color: #4a4640; }
+.jvd-links { display: flex; flex-direction: column; gap: 6px; }
+.jvd-link { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 14px; text-decoration: none; color: #1d1d1f; background: rgba(60, 50, 35, 0.04); box-shadow: inset 0 0 0 0.5px rgba(60, 50, 35, 0.1); }
+.jvd-link > div { flex: 1; min-width: 0; }
+.jvd-link strong { display: block; font-size: 0.88rem; }
+.jvd-link small { font-size: 0.74rem; color: #8f897f; }
+.jvd-link em { font-style: normal; color: #c2682c; font-weight: 700; }
+.jvd-link:active { transform: scale(0.99); }
+@media (max-width: 800px) {
+  .jv-destaques { max-width: none; margin-top: 10px; }
+  .jv-dest-rot { display: none; }
+  .jv-dest-lista { flex-direction: row; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .jv-dest-lista::-webkit-scrollbar { display: none; }
+  .jv-dest { width: auto; flex: 0 0 auto; max-width: 80vw; padding: 8px 12px; border-radius: 14px; }
+  .jv-dest strong { font-size: 0.84rem; }
+  .jv-dest span { display: none; }
+  .jv-dest strong::before { content: "✦ "; color: var(--jv-txt3); }
+}

@@ -4812,7 +4812,30 @@ function renderTopoJarvis() {
   const nome = String(profile.name || '').trim().split(/\s+/)[0];
   $j('jv-saudacao').innerText = nome ? `${saud}, ${nome}.` : `${saud}.`;
   $j('jv-resumo').innerText = resumoJarvis();
+  renderDestaquesJarvis();
 }
+// --- DESTAQUES (fase 5, pedido J#11): o que o J.A.R.V.I.S. separou para você — links e avisos com prazo. Vêm do
+// .claude/jarvis/destaques.json (o Claude mantém) pelo cofre; somem sozinhos depois da data "ate".
+// PC: cartões embaixo da saudação · celular: uma fileira de botões; tocar abre a página do destaque.
+function destaquesAtivos() { const hoje = hojeISO(); return [].concat((primosCentral && primosCentral.destaques) || []).flat().filter(d => d && d.titulo && (!d.ate || d.ate >= hoje)); }
+function renderDestaquesJarvis() {
+  const el = $j('jv-destaques'); if (!el) return; const ds = destaquesAtivos();
+  el.hidden = !ds.length; if (!ds.length) { el.innerHTML = ''; return; }
+  el.innerHTML = `<small class="jv-dest-rot">✦ Destaques do J.A.R.V.I.S.</small><div class="jv-dest-lista">${ds.map((d, i) => `<button type="button" class="jv-dest" onclick="abrirDestaque(${i})"><strong>${esc(d.titulo)}</strong><span>${esc(d.resumo || '')}</span><em aria-hidden="true">›</em></button>`).join('')}</div>`;
+}
+function abrirDestaque(i) {
+  const d = destaquesAtivos()[i], el = $j('jv-destaque'); if (!d || !el) return;
+  const a = AREAS_CEREBRO.find(x => x.id === d.area), cor = a ? a.cor : '#c2682c';
+  el.innerHTML = `<div class="jvp-janela jvm-janela entrando" style="--area:${cor}">
+    <header class="jvp-topo jvm-topo"><span class="jvm-ico jvd-ico">✦</span><div class="jvp-marca"><strong>${esc(d.titulo)}</strong><small>Destaque do J.A.R.V.I.S.${d.ate ? ` · até ${isoParaBR(d.ate).slice(0, 5)}` : ''}</small></div><button type="button" class="jv-x" onclick="fecharDestaque()" aria-label="Fechar">✕</button></header>
+    <div class="jvp-corpo">${d.resumo ? falaHTML(esc(d.resumo)) : ''}
+      ${(d.grupos || []).map(g => `<div class="jvd-grupo"><h5>${seloLicenca(g.status || 'verificar')} ${esc(g.nome || '')}</h5><div class="jvd-links">${(g.itens || []).map(it => `<a class="jvd-link" href="${esc(it.url || '#')}" target="_blank" rel="noopener"><div><strong>${esc(it.titulo || '')}</strong><small>${esc([it.autor, it.info].filter(Boolean).join(' · '))}</small></div><em aria-hidden="true">↗</em></a>`).join('')}</div></div>`).join('')}
+      ${d.rodape ? `<p class="jv-dica">${esc(d.rodape)}</p>` : ''}
+      <button type="button" class="btn jv-mais" onclick="fecharDestaque(); abrirChatJarvis({ contexto: ${JSON.stringify(d.titulo).replace(/"/g, '&quot;')}, area: ${JSON.stringify(d.area || null).replace(/"/g, '&quot;')} })">Conversar com o J.A.R.V.I.S. sobre isso ›</button></div></div>`;
+  if (el.hidden) empilharCamada('destaque', fecharDestaque);
+  el.hidden = false;
+}
+function fecharDestaque(daVolta) { const el = $j('jv-destaque'); if (!el || el.hidden) return; el.hidden = true; if (!daVolta) desempilharCamada('destaque'); }
 function resumoJarvis() {
   const hoje = hojeISO(); const partes = [];
   const prod = orders.filter(o => pedidoAberto(o) && o.status !== 'orcamento');
@@ -5535,7 +5558,7 @@ function primosVendas(pc) {
 // --- CHAVEIROS (fase 5): os expositores como vitrine — o expositor em 3D com o estoque de verdade, custo × retorno × lucro
 // de cada um, os vídeos da loja, o próximo expositor (Gomides Barber) e as licenças de cada modelo (analise-chaveiros.json).
 // Os números vêm da planilha pelo cofre: a aba Vendas é o dinheiro; a aba Expositores é o estoque por modelo.
-const LICENCA_CHAVEIRO = { ok: ['Pode vender', 'ok'], verificar: ['Conferir licença', 'conferir'], nao: ['Não pode vender', 'risco'], marca: ['Marca registrada', 'risco'], novo: ['Desenho novo (seu)', 'novo'] };
+const LICENCA_CHAVEIRO = { ok: ['Pode vender', 'ok'], comercial: ['Só com licença comercial', 'conferir'], verificar: ['Conferir licença', 'conferir'], nao: ['Não pode vender', 'risco'], marca: ['Marca registrada', 'risco'], novo: ['Desenho novo (seu)', 'novo'] };
 /** Cor do chaveiro pelo nome do modelo (a mesma no 3D e nos cartões). */
 function corChaveiro(nome) {
   const n = semAcentoCer(nome);
@@ -6057,7 +6080,8 @@ function dadosPrimosIA() {
   L.push('MÁQUINAS: ' + (pc.maquinas || []).map(m => `${m.nome} (${m.modelo || ''}) custo ${R$(m.custoH)}/h [energia ${R$(m.energiaH)}, depreciação ${R$(m.deprecH)}, manutenção ${R$(m.manutH)}], ${m.potenciaW || '?'} W, pago ${R$(m.preco)}`).join('; ') + '.');
   const kgMat = {}; (pc.filamentos || []).forEach(f => { const k = `${f.material} ${f.cor}`; kgMat[k] = (kgMat[k] || 0) + (f.kg || 0); });
   const porLoja = {}; (pc.filamentos || []).filter(f => f.custoKg).forEach(f => { const l = porLoja[f.loja] = porLoja[f.loja] || { kg: 0, c: 0 }; l.kg += f.kg || 0; l.c += f.total || 0; });
-  L.push(`FILAMENTO: ${n1(Object.values(kgMat).reduce((s, v) => s + v, 0))} kg comprados (consumo ainda não medido). Por cor: ${Object.entries(kgMat).map(([k, v]) => `${k} ${n1(v)} kg`).join('; ')}. Custo real por fornecedor: ${Object.entries(porLoja).map(([l, v]) => `${l} ${R$(v.c / v.kg)}/kg`).join('; ')}.`);
+  L.push('ROLOS COMPRADOS (data · loja · material · cor · kg · total pago · R$/kg): ' + (pc.filamentos || []).slice().sort((a, b) => (b.data || '').localeCompare(a.data || '')).slice(0, 30).map(f => `${isoParaBR(f.data || '').slice(0, 5)} ${f.loja || ''} ${f.material || ''} ${f.cor || ''} ${n1(f.kg)} kg ${R$(f.total)} (${f.custoKg ? R$(f.custoKg) + '/kg' : '—'})`).join('; ') + '.');
+  L.push(`FILAMENTO:${n1(Object.values(kgMat).reduce((s, v) => s + v, 0))} kg comprados (consumo ainda não medido). Por cor: ${Object.entries(kgMat).map(([k, v]) => `${k} ${n1(v)} kg`).join('; ')}. Custo real por fornecedor: ${Object.entries(porLoja).map(([l, v]) => `${l} ${R$(v.c / v.kg)}/kg`).join('; ')}.`);
   const cp = (pc.custoPeca || []).filter(p => p.custo);
   L.push('CUSTO POR PEÇA (produto | canal | custo/un | preço | lucro/un | margem | lucro por hora de máquina | preço mínimo p/ margem-alvo): ' + cp.map(p => { const lh = p.lucro && p.horasLote ? p.lucro * (p.pecasLote || 1) / p.horasLote : null; return `${p.produto} | ${p.canal} | ${R$(p.custo)} | ${p.preco ? R$(p.preco) : 'sem preço'} | ${p.lucro ? R$(p.lucro) : '—'} | ${p.margem ? pct(p.margem) : '—'} | ${lh ? R$(lh) + '/h' : '—'} | ${R$(p.precoMin)}`; }).join(' ;; ') + '.');
   const semPreco = (pc.custoPeca || []).filter(p => !p.custo).map(p => p.produto); if (semPreco.length) L.push(`PRODUTOS AINDA SEM TEMPO/GRAMAS/PREÇO (Shopee): ${semPreco.join(', ')}.`);
@@ -6539,7 +6563,7 @@ async function prepararMicVoz() {
 /** Microfone → 16 kHz, 16 bits → base64 → Google. Calado enquanto o J.A.R.V.I.S. fala (a não ser com "interromper falando"). */
 function enviarMicVoz(x, taxa) {
   if (!vz.pronto || vz.mudo || !vz.ws || vz.ws.readyState !== 1) return;
-  if ((vz.falando || performance.now() < vz.fimFala + 350) && !jvConfig.vozInterromper) return;
+  if ((vz.falando || performance.now() < vz.fimFala + 700) && !jvConfig.vozInterromper) return; // 0,7 s de folga: o fim da fala dele não volta pelo microfone
   const k = Math.max(1, taxa / 16000), n = Math.floor(x.length / k), pcm = new Int16Array(n);
   for (let i = 0; i < n; i++) { const a = Math.floor(i * k), b = Math.max(a + 1, Math.floor((i + 1) * k)); let s = 0; for (let j = a; j < b; j++) s += x[j]; const v = Math.max(-1, Math.min(1, s / (b - a))); pcm[i] = v < 0 ? v * 0x8000 : v * 0x7fff; }
   try { vz.ws.send(JSON.stringify({ realtimeInput: { audio: { mimeType: 'audio/pcm;rate=16000', data: paraBase64(pcm.buffer) } } })); } catch (e) { }
@@ -6597,7 +6621,8 @@ function sistemaVoz() {
 VOZ E JEITO: fale português do Brasil fluente, com um leve sotaque britânico — como um inglês culto que mora no Brasil há anos: voz grave e calma, dicção clara e elegante. Tem a inteligência e a perspicácia do Alfred, mas é bem menos formal: chame-o de "${nome}" (quase nunca "senhor"), fale de igual para igual, com humor seco e leve na medida. Adapte-se a ele: o ${nome} é direto, informal, fala rápido e às vezes pensa alto enquanto dita — acompanhe o ritmo, sem sermão e sem enrolação.
 COMO FALAR: frases curtas e naturais, feitas para ouvir (de 1 a 4 frases; mais só se ele pedir). Nada de listas, símbolos, markdown ou links. Números arredondados e ditos com naturalidade ("uns trezentos e cinquenta reais", "quase vinte e dois mil"). Uma pergunta por vez. Se faltar dado, diga qual falta e como conseguir.
 PAPEL: sócio-analista dele em tudo — a Primos 3D (vendas, caixa, custos, estratégia, marketing), a engenharia, as finanças pessoais, a agenda, as tarefas, a saúde e a rotina. Seja proativo: o que importa agora, riscos, oportunidades e o próximo passo. Nunca invente números: use o bloco DADOS.
-FERRAMENTAS: abrir_tela para mostrar algo no app; ${claudeConfigurado() ? 'pedir_ao_computador para o que precisa do PC (planilha, Central, mudar o app), confirmando antes; ' : ''}lembrar_sobre_rafael quando ele revelar um gosto, um jeito ou um objetivo duradouro. Para fatos atuais, preços e notícias, use a busca do Google.
+${vz.nivelSetup >= 2 ? `COMPUTADOR: nesta conversa você não tem ferramentas. ${claudeConfigurado() ? 'Quando precisar do PC (planilha, Central, mudar o app) e ele confirmar, diga numa frase afirmativa "vou mandar ao Claude: <o quê>" — o app encaminha sozinho.' : 'O app não está conectado ao computador: se precisar do PC, peça para ele conectar em Ajustes do J.A.R.V.I.S.'}`
+    : `FERRAMENTAS: abrir_tela para mostrar algo no app; ${claudeConfigurado() ? 'pedir_ao_computador para o que precisa do PC (planilha, Central, mudar o app) — confirme numa frase e CHAME a ferramenta (não basta dizer que vai pedir); ' : ''}lembrar_sobre_rafael quando ele revelar um gosto, um jeito ou um objetivo duradouro.${vz.nivelSetup < 1 ? ' Para fatos atuais, preços e notícias, use a busca do Google.' : ''}`}
 LIMITES: você não envia e-mails, não posta, não compra e não paga nada. Nunca peça senhas nem dados bancários. Em desabafo, acolha primeiro; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); diga "um cliente" ou o código, sem inventar nomes.
 ${perfilIA(nome)}AGORA: ${dia}, ${hora}. Tela aberta no app: ${vz.contexto || 'página inicial'}.${vz.saudar ? '\nCOMECE você: cumprimente em uma frase curta, com a sua voz, e pergunte por onde ele quer começar.' : ''}
@@ -6645,6 +6670,20 @@ function fecharTurnoVoz() {
   if (eu || ele) { gravarChat(); renderChatJarvis(); }
   if (eu) vz.legEu = eu; if (ele) vz.legEle = ele;
   vz.eu = ''; vz.ele = ''; renderLegendaVoz();
+  if (ele) redeDeSegurancaVoz(ele);
+}
+/** Rede de segurança (30/09/2026: ele disse "vou pedir ao Claude" e não mandou): se a fala dele PROMETE mandar algo ao
+ *  computador (sem ser pergunta) e a ferramenta não foi usada há pouco, o app manda sozinho, com o trecho da conversa. */
+function redeDeSegurancaVoz(ele) {
+  if (!claudeConfigurado() || Date.now() - (vz.pediuEm || 0) < 180000) return;
+  const promete = /\b(vou|irei|j[aá] vou|estou|t[oô])\s+(pedir|mandar|passar|enviar|solicitar|encaminhar|pedindo|mandando|enviando)\b[^.!?]{0,80}\b(claude|computador|pc)\b/i;
+  const frases = ele.split(/(?<=[.!?])\s+/).filter(f => promete.test(f) && !/\?\s*$/.test(f.trim()));
+  if (!frases.length || /\b(confirma|quer que|posso|pode ser|tudo bem|prefere|deseja|topa|fechado|ok|certo)\b[^?]*\?\s*$/i.test(ele.trim())) return; // ainda pedindo confirmação: espera
+  vz.pediuEm = Date.now();
+  const conversa = jarvisChat.filter(m => (m.de === 'eu' || m.de === 'jv') && m.t).slice(-10).map(m => `${m.de === 'eu' ? 'Rafael' : 'J.A.R.V.I.S.'}: ${desanonimizar(String(m.t), vz.mapa)}`).join('\n');
+  const pedido = jarvisChat.filter(m => m.de === 'eu' && m.t).slice(-3).map(m => m.t).join(' / ');
+  enviarAoComputador(pedido || 'Pedido feito na conversa por voz', [], vz.contexto, vz.area, `${desanonimizar(frases.join(' '), vz.mapa)}\n\n(Enviado automaticamente: o J.A.R.V.I.S. prometeu na conversa por voz.)\n\nConversa (voz):\n${conversa}`.slice(0, 3500));
+  toast('📤 Mandei ao Claude no computador o que o J.A.R.V.I.S. prometeu.', 4500);
 }
 function executarFerramentasVoz(chamadas) {
   const respostas = chamadas.map(c => {
@@ -6652,7 +6691,7 @@ function executarFerramentasVoz(chamadas) {
     try {
       if (c.name === 'abrir_tela' && DESTINOS_JARVIS[a.destino]) { const d = a.destino; setTimeout(() => irDestinoJarvis(d), 0); r = { ok: true, aberto: DESTINOS_JARVIS[d][0] }; }
       else if (c.name === 'lembrar_sobre_rafael' && a.fato) { guardarMemoria({ tipo: 'perfil', texto: String(a.fato).slice(0, 240) }); r = { ok: true }; }
-      else if (c.name === 'pedir_ao_computador' && a.tarefa && claudeConfigurado()) { enviarAoComputador(desanonimizar(vz.legEu || a.tarefa, vz.mapa), [], vz.contexto, vz.area, desanonimizar(String(a.tarefa), vz.mapa)); r = { ok: true, aviso: 'Pedido enviado ao Claude no computador; a resposta aparece no chat do app.' }; }
+      else if (c.name === 'pedir_ao_computador' && a.tarefa && claudeConfigurado()) { vz.pediuEm = Date.now(); enviarAoComputador(desanonimizar(vz.legEu || a.tarefa, vz.mapa), [], vz.contexto, vz.area, desanonimizar(String(a.tarefa), vz.mapa)); r = { ok: true, aviso: 'Pedido enviado ao Claude no computador; a resposta aparece no chat do app.' }; }
       else r = { ok: false, erro: 'não consegui fazer isso' };
     } catch (e) { r = { ok: false, erro: String(e.message || e) }; }
     return { id: c.id, name: c.name, response: r };
@@ -7032,6 +7071,7 @@ document.addEventListener('keydown', e => {
   if ($j('jv-base').style.display === 'flex') fecharBaseJarvis();
   else if (!$j('jv-primos').hidden) fecharPrimos();
   else if (!$j('jv-menu-area').hidden) fecharMenuArea();
+  else if (!$j('jv-destaque').hidden) fecharDestaque();
   else if (!$j('cer-cartao').hidden) { cer.sel = null; esconderCartaoCerebro(); }
   else if (jv.painel || jv.heroi) voltarJarvis();
 });
