@@ -2488,3 +2488,9 @@ body.jv-em-voz #cerebro .jv-central-btn { opacity: 0; pointer-events: none; }
   .cc-agentes::before { content: ""; position: absolute; left: 3px; top: -24px; bottom: 30px; border-left: 1px dashed rgba(255,255,255,0.22); }
   .cc-agentes > .cc-no::before { content: ""; position: absolute; left: -11px; top: 26px; width: 10px; border-top: 1px dashed rgba(255,255,255,0.22); }
 }
+.cc-relatorio { padding: 14px 16px; border-radius: 14px; background: linear-gradient(160deg, rgba(10,132,255,0.10), rgba(255,255,255,0.03)); box-shadow: inset 0 0 0 0.5px rgba(10,132,255,0.25); }
+.cc-relatorio h5 { margin: 12px 0 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #8e8e93; }
+.cc-relatorio b { color: #fff; }
+.cc-alerta { margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; background: rgba(255,159,10,0.12); color: #ffd60a; font-size: 0.84rem; }
+.cc-pontos li::before { background: #0a84ff !important; }
+.cc-acoes li::before { background: #30d158 !important; }

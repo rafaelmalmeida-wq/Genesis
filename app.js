@@ -5787,6 +5787,7 @@ function cofreBruto(caminho) {
   return fetch(`https://api.github.com/repos/${JARVIS_REPO}/contents/${caminho.split('/').map(encodeURIComponent).join('/')}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github.raw', Authorization: `Bearer ${claudeConfig.token}`, 'X-GitHub-Api-Version': '2022-11-28' } })
     .then(r => { if (!r.ok) throw new Error(String(r.status)); return r; });
 }
+let relatoriosAgentes = (() => { try { return JSON.parse(localStorage.getItem('lifeos_relatorios')); } catch (e) { return null; } })(); // Central: relatórios dos agentes (GitHub Actions do cofre, 1×/dia) — CACHE local, como a Primos
 function guardarPrimosLocal() { try { localStorage.setItem('lifeos_primoscentral', JSON.stringify(primosCentral)); } catch (e) { } } // cache do que veio do cofre (não passa pela planilha)
 async function sincronizarCofre(forcar) {
   if (!claudeConfigurado() || jv.sincronizando) return;
@@ -5801,6 +5802,7 @@ async function sincronizarCofre(forcar) {
       renderPrimosPagina();
       toast(primeira ? '🟢 J.A.R.V.I.S. conectado à Primos 3D Central.' : `🟢 J.A.R.V.I.S. atualizou a Primos 3D (Central de ${isoParaBR(d.geradoEm.slice(0, 10)).slice(0, 5)} às ${d.geradoEm.slice(11, 16)}).`, 5000);
     } else if (forcar) toast('A Primos 3D já está com os dados mais novos.', 3500);
+    try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } renderCentral(); } } catch (e) { } // ainda sem relatório: tudo bem
   } catch (e) { if (forcar) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
   jv.sincronizando = false; renderAreasJarvis(); renderPrimosPagina(); renderAjustesJarvis(); setTimeout(renderAreasJarvis, 91000);
 }
@@ -6940,7 +6942,7 @@ function abrirCentral(setor) {
   const el = $j('jv-central'); if (!el) return;
   if (setor) cc.setor = setor;
   if (el.hidden) empilharCamada('central', fecharCentral);
-  el.hidden = false; document.body.classList.add('cc-aberta'); renderCentral();
+  el.hidden = false; document.body.classList.add('cc-aberta'); renderCentral(); sincronizarCofre();
 }
 function fecharCentral(daVolta) {
   const el = $j('jv-central'); if (!el || el.hidden) return;
@@ -6953,6 +6955,17 @@ function fecharPainelCentral() { cc.agente = null; cc.novo = false; renderCentra
 
 /** Situação de cada agente: nível (ok | atencao | sem) + o número que aparece no cartão. */
 function estadoAgente(a) {
+  const rel = relatorioAgente(a.id); if (rel && rel.alerta && a.id !== 'treino') { const base = estadoAgenteBase(a); return { ...base, nivel: base.nivel === 'sem' ? 'sem' : 'atencao' }; }
+  return estadoAgenteBase(a);
+}
+function relatorioAgente(id) { return relatoriosAgentes && relatoriosAgentes.agentes ? relatoriosAgentes.agentes[id] || null : null; }
+/** Texto do agente: escapa tudo e só devolve o <b> (o relatório vem de uma IA). */
+function textoAgente(s) { return esc(String(s || '')).replace(/&lt;(\/?)b&gt;/g, '<$1b>'); }
+function htmlRelatorioAgente(id) {
+  const r = relatorioAgente(id); if (!r) return ccBloco('Relatório do agente', '<p class="cc-txt">O primeiro relatório sai na próxima rodada automática (todo dia às 7h).</p>');
+  return ccBloco(`Relatório do agente · ${esc(isoParaBR(r.dia || ''))}${r.velho ? ' (anterior)' : ''}`, `<div class="cc-relatorio">${r.alerta ? `<p class="cc-alerta">⚠️ ${textoAgente(r.alerta)}</p>` : ''}<p class="cc-txt">${textoAgente(r.manchete)}</p>${(r.pontos || []).length ? `<ul class="cc-regras cc-pontos">${r.pontos.map(p => `<li>${textoAgente(p)}</li>`).join('')}</ul>` : ''}${(r.acoes || []).length ? `<h5>Para esta semana</h5><ul class="cc-regras cc-acoes">${r.acoes.map(p => `<li>${textoAgente(p)}</li>`).join('')}</ul>` : ''}</div>`);
+}
+function estadoAgenteBase(a) {
   const pc = primosCentral;
   if (a.id === 'contabil') {
     if (!pc || !pc.caixa) return { nivel: 'sem', metrica: 'Sem dados do cofre' };
@@ -7062,6 +7075,7 @@ function htmlAgenteContabil(a) {
   const receitaAno = ritmo * 12;
   const pctRec = invest ? Math.min(100, vl.total / invest * 100) : 0;
   return cabecalhoAgente(a)
+    + htmlRelatorioAgente(a.id)
     + ccNums([[reais(vl.total), 'recebido (líquido)'], [reais(invest), 'investido'], [reais(cx.saldo), 'caixa', (cx.saldo || 0) < 0 ? '#ff453a' : '#30d158'], [reais(cx.contasPagar), 'contas a pagar']])
     + ccBloco('Payback', `<div class="cc-barra"><i style="width:${pctRec.toFixed(1)}%"></i></div><p class="cc-txt"><b>${pctRec.toFixed(1).replace('.', ',')}%</b> do investimento já voltou. Falta <b>${reais(falta)}</b>.${payback !== null ? ` No ritmo atual (~${reais(ritmo)}/mês), leva <b>${payback > 120 ? 'mais de 10 anos' : Math.ceil(payback) + ' meses'}</b>.` : ' Ainda sem vendas para medir o ritmo.'}</p>`)
     + ccBloco('Quanto vale a empresa (estimativa)', ccNums([[reais(patrimonial), 'pelo patrimônio<br>(máquinas − depreciação + estoque)'], [reais(receitaAno * 1.5), 'pela receita<br>(1,5 × o ano no ritmo atual)']]) + '<p class="cc-nota">Estimativa didática, não é laudo. Empresa nova vale quase só o patrimônio; o valor pela receita cresce com as vendas.</p>')
@@ -7075,6 +7089,7 @@ function htmlAgenteMarketing(a) {
   if (!pc.tiktokPerfil && !pc.marketing) return cabecalhoAgente(a) + ccBloco('Sem dados', '<p class="cc-txt">Ainda não li o TikTok. Peça “atualizar marketing” pelo chat.</p>');
   const temas = (t.temas || []).slice().sort((x, y) => (y.taxa || 0) - (x.taxa || 0)).slice(0, 3);
   return cabecalhoAgente(a, mk.atualizadoEm ? `<small class="cc-quando">lido em ${esc(isoParaBR(mk.atualizadoEm))}</small>` : '')
+    + htmlRelatorioAgente(a.id)
     + ccNums([[tk.seguidores ?? '—', 'seguidores'], [p7.views ? (p7.views / 1000).toFixed(1).replace('.', ',') + ' mil' : '—', `views 7 dias ${p7.varViews ? `<em class="cc-up">${esc(p7.varViews)}</em>` : ''}`], [tk.curtidas ?? '—', 'curtidas'], [tk.videos ?? '—', 'vídeos']])
     + (mk.manchete ? ccBloco('O que fazer agora', `<p class="cc-txt">${mk.manchete}</p>`) : '')
     + (temas.length ? ccBloco('O que engaja (curtidas por view)', `<ul class="cc-lista">${temas.map(x => `<li><span><b>${esc(x.tema)}</b><small>${esc(x.leitura || '')}</small></span><em class="cc-pct">${String(x.taxa).replace('.', ',')}%</em></li>`).join('')}</ul>`) : '')
@@ -7102,6 +7117,7 @@ function htmlAgenteEstoque(a) {
   const opcoes = e.cores.map((c, i) => `<option value="${i}">${esc(c.material)} · ${esc(c.cor)}</option>`).join('');
   const hist = estoquePrimos.slice(-8).reverse();
   return cabecalhoAgente(a)
+    + htmlRelatorioAgente(a.id)
     + ccNums([[fmtKg(e.total), 'em estoque'], [e.cores.filter(c => c.kg < 0.3).length, 'cores para repor', e.cores.some(c => c.kg < 0.3) ? '#ff9f0a' : ''], [e.caminho.length, 'compras a caminho']])
     + ccBloco('Filamento por cor', `<ul class="cc-estoque">${e.cores.map(c => `<li class="${c.kg < 0.3 ? 'baixo' : ''}"><span><b>${esc(c.cor)}</b><small>${esc(c.material)}${c.usado ? ` · usado ${fmtKg(c.usado)}` : ''}</small></span><div class="cc-barra"><i style="width:${Math.max(0, Math.min(100, c.kg / max * 100)).toFixed(0)}%"></i></div><strong>${fmtKg(c.kg)}</strong></li>`).join('') || '<li><span><small>Nenhum filamento ainda.</small></span></li>'}</ul><p class="cc-nota">Compras da Central contam como já entregues. O que você registra aqui só entra no estoque quando marcar “Chegou”.</p>`)
     + (e.caminho.length ? ccBloco('A caminho', `<ul class="cc-lista">${e.caminho.map(m => `<li><span><b>${esc(m.material)} · ${esc(m.cor)}</b><small>${fmtKg(Number(m.kg) || 0)}${m.valor ? ' · ' + reais(Number(m.valor)) : ''} · pedido em ${esc(isoParaBR(m.data))}</small></span><button type="button" class="cc-mini" onclick="chegouEstoque(${m.id})">Chegou ✓</button></li>`).join('')}</ul>`) : '')
