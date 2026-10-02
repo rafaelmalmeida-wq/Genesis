@@ -4202,7 +4202,7 @@ async function enviarUmPedido(req) {
   try {
     const resumo = req.text.replace(/\s+/g, ' ');
     const jarvis = req.canal === 'jarvis'; // mensagem da barra do JARVIS (página inicial)
-    const issue = await gh('/issues', { method: 'POST', body: JSON.stringify({ title: (jarvis ? '✳ JARVIS: ' : '✳ ') + resumo.slice(0, 70) + (resumo.length > 70 ? '…' : ''), body: `**Página do app:** ${req.page}${req.area ? `\n**Área:** ${req.area}` : ''}\n\n**${jarvis ? 'Mensagem para o JARVIS' : 'Pedido'} (ditado no app):**\n${req.text}${req.resumo ? `\n\n**O que o J.A.R.V.I.S. pede ao computador:**\n${req.resumo}` : ''}${(req.caminhos || []).length ? '\n\n**Prints:**\n'+ req.caminhos.map(c => '📎 ' + c).join('\n') : ''}` }) });
+    const issue = await gh('/issues', { method: 'POST', body: JSON.stringify({ title: (jarvis ? '✳ JARVIS: ' : '✳ ') + resumo.slice(0, 70) + (resumo.length > 70 ? '…' : ''), body: `**Página do app:** ${req.page}${req.area ? `\n**Área:** ${req.area}` : ''}\n\n**${jarvis ? 'Mensagem para o JARVIS' : 'Pedido'} (ditado no app):**\n${req.text}${req.resumo ? `\n\n**O que o J.A.R.V.I.S. pede ao computador:**\n${req.resumo}` : ''}${jarvis ? `\n\n**Permissão:** ${req.permissao === 'leitura' ? '🔎 automático — SÓ LEITURA (não gravar nada)' : req.permissao === 'confirmado' ? '✔ gravação confirmada pelo Rafael no app' : '👤 pedido feito pelo Rafael'}` : ''}${(req.caminhos || []).length ? '\n\n**Prints:**\n'+ req.caminhos.map(c => '📎 ' + c).join('\n') : ''}` }) });
     req.issue = issue.number; req.status = 'enviado'; salvar('clauderequests', claudeReqs);
     toast(req.canal === 'jarvis' ? 'Enviado ao Claude no computador. O J.A.R.V.I.S. pisca enquanto ele trabalha.' : '✳ Enviado para o computador! Pode sair desta tela — o ✳ gira enquanto o Claude trabalha.', 6000);
   } catch (e) { toast(`Não consegui enviar agora (${e.message}). O pedido ficou guardado.`, 6000); }
@@ -5115,7 +5115,7 @@ function verNoCerebroMenu(id) { fecharMenuArea(); irParaNoJarvis(id); }
 // ============================================================================
 /** Texto vindo do cofre/arquivo: escapa tudo e só devolve o negrito <b>. */
 function negritoSeguro(s) { return s ? esc(s).replace(/&lt;(\/?)b&gt;/g, '<$1b>') : ''; }
-function pct(x) { return x === null || x === undefined || isNaN(x) ? '—' : (x * 100).toFixed(1).replace('.', ',') + '%'; }
+function pctFr(x) { return x === null || x === undefined || isNaN(x) ? '—' : (x * 100).toFixed(1).replace('.', ',') + '%'; }
 function reais(v) { return v === null || v === undefined || isNaN(v) ? '—' : formatCurrency(v); }
 function milhar(n) { return n === null || n === undefined ? '—' : Number(n).toLocaleString('pt-BR'); }
 function alertasPrimos(pc) {
@@ -5250,7 +5250,7 @@ function primosJarvis(pc) {
   x += `<div class="jvp-chips">${['Como está o caixa?', 'O que faço hoje para vender mais?', 'Quanto cobrar num chaveiro personalizado?', 'Analise meus expositores', 'Plano de Natal (brindes corporativos)', 'Estou dentro do limite do MEI?'].map(s => `<button type="button" onclick="perguntarPrimos(null, ${JSON.stringify(s).replace(/"/g, '&quot;')})">${esc(s)}</button>`).join('')}</div>`;
   if (!pc) return x + htmlSemCentral();
   const cx = pc.caixa || {}, ex = totaisExpositores(pc), vl = vendasLiquidasPrimos(pc);
-  x += indicadoresHTML([[formatCurrency(cx.totalGasto), 'investido até agora'], [formatCurrency(vl.total), `recuperado · ${pct(cx.totalGasto ? vl.total / cx.totalGasto : 0)}`], [formatCurrency(cx.saldo), 'caixa estimado'], [`${ex.vendidos}/${ex.colocados}`, 'chaveiros vendidos nos expositores']]);
+  x += indicadoresHTML([[formatCurrency(cx.totalGasto), 'investido até agora'], [formatCurrency(vl.total), `recuperado · ${pctFr(cx.totalGasto ? vl.total / cx.totalGasto : 0)}`], [formatCurrency(cx.saldo), 'caixa estimado'], [`${ex.vendidos}/${ex.colocados}`, 'chaveiros vendidos nos expositores']]);
   const conv = jarvisChat.filter(m => m.de === 'eu' && /primos/i.test(m.ctx || '')).slice(-3).reverse();
   if (conv.length) x += `<div class="jv-bloco"><h5>Últimas perguntas sobre a Primos</h5>${tabelaHTML(conv.map(m => linhaTab(esc(m.t.slice(0, 90)), `<button type="button" class="jvp-pedir" onclick="abrirChatJarvis({contexto:'Primos 3D', area:'primos'})">abrir</button>`, isoParaBR(m.q.slice(0, 10)).slice(0, 5))))}</div>`;
   return x;
@@ -5372,7 +5372,7 @@ function primosAnalise(pc) {
   const itens = (pc.custoPeca || []).filter(p => p.custo && p.preco && p.lucro > 0);
   let x = falaHTML(`Você colocou <b>${formatCurrency(invest)}</b> na Primos e recuperou <b>${formatCurrency(vl.total)}</b>. Para pagar o investimento em <b>${meses} meses</b>, a empresa precisa gerar <b>${formatCurrency(lucroMes)}</b> de lucro por mês (já contando DAS e site).`);
   x += `<div class="jv-bloco"><h5>Payback — em quanto tempo quer recuperar?</h5><div class="jvp-seg">${[6, 12, 18, 24].map(m => `<button type="button" class="${m === meses ? 'on' : ''}" onclick="jv.payback=${m}; renderPrimosPagina()">${m} meses</button>`).join('')}</div>`;
-  x += `<div class="jvp-progresso"><i style="width:${Math.min(100, invest ? vl.total / invest * 100 : 0).toFixed(1)}%"></i></div><p class="jv-dica">${pct(invest ? vl.total / invest : 0)} recuperado · faltam ${formatCurrency(falta)} · custos fixos ${formatCurrency(fixos)}/mês</p>`;
+  x += `<div class="jvp-progresso"><i style="width:${Math.min(100, invest ? vl.total / invest * 100 : 0).toFixed(1)}%"></i></div><p class="jv-dica">${pctFr(invest ? vl.total / invest : 0)} recuperado · faltam ${formatCurrency(falta)} · custos fixos ${formatCurrency(fixos)}/mês</p>`;
   x += itens.length ? tabelaHTML(itens.sort((a, b) => b.lucro - a.lucro).slice(0, 6).map(p => { const un = Math.ceil(lucroMes / p.lucro); return linhaTab(esc(p.produto), `${milhar(un)}/mês`, `≈ ${milhar(Math.ceil(un / 30))} por dia · lucro ${reais(p.lucro)} cada (${esc(p.canal)})`); })) : '<p class="jv-dica">Preencha preço de venda na aba Custo por Peça da planilha para eu calcular quantas peças por mês.</p>';
   x += '<p class="jv-dica">Leia assim: vendendo só aquele produto, é o que precisaria sair por mês. Na prática é a soma de vários.</p></div>';
   // calculadora
@@ -5392,8 +5392,8 @@ function primosAnalise(pc) {
   // rentabilidade
   const comCusto = (pc.custoPeca || []).filter(p => p.custo);
   if (comCusto.length) {
-    x += `<div class="jv-bloco"><h5>Rentabilidade por produto</h5>${tabelaHTML(comCusto.slice().sort((a, b) => ((b.lucro || 0) * (b.pecasLote || 1) / (b.horasLote || 1)) - ((a.lucro || 0) * (a.pecasLote || 1) / (a.horasLote || 1))).map(p => { const lh = p.lucro && p.horasLote ? p.lucro * (p.pecasLote || 1) / p.horasLote : null; return linhaTab(esc(p.produto), p.preco ? `${reais(p.lucro)} · ${pct(p.margem)}` : 'sem preço', `custo ${reais(p.custo)}${p.preco ? ` · preço ${reais(p.preco)}` : ''} · ${esc(p.canal)}${lh ? ` · <b>${reais(lh)} por hora de máquina</b>` : ''}`); }))}</div>`;
-    x += `<div class="jv-bloco"><h5>Preço mínimo por canal (margem de ${pct(par.margemAlvo || 0.4)})</h5><div class="jvp-grade"><div class="jvp-grade-cab"><span>Produto</span><span>Direto</span><span>Expositor</span><span>Shopee</span></div>${comCusto.slice(0, 12).map(p => `<div><span>${esc(p.produto)}</span><span>${reais(precoMinimo(par, 'Direto', p.custo))}</span><span>${reais(precoMinimo(par, 'Consignado', p.custo))}</span><span>${reais(precoMinimo(par, 'Shopee', p.custo))}</span></div>`).join('')}</div>
+    x += `<div class="jv-bloco"><h5>Rentabilidade por produto</h5>${tabelaHTML(comCusto.slice().sort((a, b) => ((b.lucro || 0) * (b.pecasLote || 1) / (b.horasLote || 1)) - ((a.lucro || 0) * (a.pecasLote || 1) / (a.horasLote || 1))).map(p => { const lh = p.lucro && p.horasLote ? p.lucro * (p.pecasLote || 1) / p.horasLote : null; return linhaTab(esc(p.produto), p.preco ? `${reais(p.lucro)} · ${pctFr(p.margem)}` : 'sem preço', `custo ${reais(p.custo)}${p.preco ? ` · preço ${reais(p.preco)}` : ''} · ${esc(p.canal)}${lh ? ` · <b>${reais(lh)} por hora de máquina</b>` : ''}`); }))}</div>`;
+    x += `<div class="jv-bloco"><h5>Preço mínimo por canal (margem de ${pctFr(par.margemAlvo || 0.4)})</h5><div class="jvp-grade"><div class="jvp-grade-cab"><span>Produto</span><span>Direto</span><span>Expositor</span><span>Shopee</span></div>${comCusto.slice(0, 12).map(p => `<div><span>${esc(p.produto)}</span><span>${reais(precoMinimo(par, 'Direto', p.custo))}</span><span>${reais(precoMinimo(par, 'Consignado', p.custo))}</span><span>${reais(precoMinimo(par, 'Shopee', p.custo))}</span></div>`).join('')}</div>
       <p class="jv-dica">O expositor leva 30%; a Shopee, 20% + R$ 4 por item até R$ 79,99. Por isso a mesma peça precisa de preços diferentes em cada canal.</p></div>`;
   }
   const hMes = (par.capacidadeMes || 720), chavLote = (pc.custoPeca || []).find(p => /chaveiro expositor r\$ ?15/i.test(p.produto));
@@ -5406,7 +5406,7 @@ function htmlCalc(pc) {
   const c = jv.calc, r = calcularPeca(pc, c);
   let x = `<div class="jvp-calc-res"><div><small>Custo por peça</small><strong>${reais(r.custo)}</strong></div><div><small>Preço mínimo (${esc(c.canal)})</small><strong>${reais(r.minimo)}</strong></div><div class="dest"><small>Sugestão de preço</small><strong>${reais(r.sugerido)}</strong></div></div>`;
   x += `<p class="jv-dica">Filamento ${reais(r.fil)} · máquina ${reais(r.maq)} · mão de obra ${reais(r.mao)} · falhas ${reais(r.fal)}${r.aces ? ` · acessórios ${reais(r.aces)}` : ''}${r.emb ? ` · caixinha ${reais(r.emb)}` : ''}</p>`;
-  if (r.preco) x += `<div class="jvp-calc-lucro ${r.lucro >= 0 ? (r.margem >= ((pc.parametros || {}).margemAlvo || 0.4) - 0.001 ? 'bom' : 'ok') : 'ruim'}">A <b>${reais(r.preco)}</b>: taxa do canal ${reais(r.taxa)} · lucro <b>${reais(r.lucro)}</b> por peça (${pct(r.margem)})${r.lucroH !== null ? ` · <b>${reais(r.lucroH)}</b> por hora de máquina` : ''}</div>`;
+  if (r.preco) x += `<div class="jvp-calc-lucro ${r.lucro >= 0 ? (r.margem >= ((pc.parametros || {}).margemAlvo || 0.4) - 0.001 ? 'bom' : 'ok') : 'ruim'}">A <b>${reais(r.preco)}</b>: taxa do canal ${reais(r.taxa)} · lucro <b>${reais(r.lucro)}</b> por peça (${pctFr(r.margem)})${r.lucroH !== null ? ` · <b>${reais(r.lucroH)}</b> por hora de máquina` : ''}</div>`;
   x += `<button type="button" class="btn jv-mais" onclick="perguntarCalcJarvis()">Perguntar ao J.A.R.V.I.S. sobre este preço</button>`;
   return x;
 }
@@ -5513,7 +5513,7 @@ function primosContabil(pc) {
     const abertura = par.inicioMEI || '2026-08-01', [ya, ma] = abertura.split('-').map(Number);
     const lim = ya === hoje.getFullYear() ? limAno / 12 * (12 - ma + 1) : limAno;
     const venc = new Date(hoje.getFullYear(), hoje.getMonth() + (dia > 20 ? 1 : 0), 20);
-    x += indicadoresHTML([[reais(fat), `faturado em ${hoje.getFullYear()}`], [pct(fat / lim), `do limite de ${reais(lim)}${lim < limAno ? ' (proporcional)' : ''}`], [reais(limAno / 12), 'média mensal permitida'], [isoParaBR(isoDe(venc)).slice(0, 5), `próximo DAS (${reais(par.das || 82.05)})`]]);
+    x += indicadoresHTML([[reais(fat), `faturado em ${hoje.getFullYear()}`], [pctFr(fat / lim), `do limite de ${reais(lim)}${lim < limAno ? ' (proporcional)' : ''}`], [reais(limAno / 12), 'média mensal permitida'], [isoParaBR(isoDe(venc)).slice(0, 5), `próximo DAS (${reais(par.das || 82.05)})`]]);
     if (lim < limAno) x += `<p class="jv-dica">Como a Primos abriu em ${isoParaBR(abertura).slice(3)}, o teto de ${ya} é ${reais(lim)} (${12 - ma + 1} meses × ${reais(limAno / 12)}). Se a data de abertura for outra, me avise.</p>`;
     x += `<div class="jvp-progresso"><i style="width:${Math.min(100, fat / lim * 100).toFixed(1)}%"></i></div>`;
     x += `<div class="jv-bloco"><h5>Obrigações do MEI</h5><ul class="jv-lista">
@@ -6076,14 +6076,14 @@ function dadosPrimosIA() {
   L.push(`CAIXA: aportes do sócio ${R$(cx.aportes)} (3 PIX); total gasto ${R$(cx.totalGasto)} (filamento ${R$(cx.gastoFilamento)}, outras despesas ${R$(cx.outrasDespesas)}); caixa estimado ${R$(cx.saldo)} (negativo = parte foi paga pelo CPF do Rafael e pela conta do MEI, ainda não registrada como aporte); contas a pagar já contratadas ${R$(cx.contasPagar)}; faturamento registrado em 2026 ${R$(ct.receitaBruta)}.`);
   L.push(`ONDE ESTÁ O DINHEIRO: imobilizado (máquinas, ferramentas, estrutura, elétrica) ${R$(ct.imobilizado)}; estoques (filamento, insumos, embalagens) ${R$(ct.estoques)}; despesas já realizadas (marketing/site, serviços, fretes, a conferir) ${R$(ct.despesasRealizadas)}. Depreciação estimada (linear 5 anos) até hoje ${R$(ct.depreciacao)}. Resultado acumulado estimado ${R$(ct.resultado)}.`);
   L.push('GASTOS POR CATEGORIA: ' + (pc.categorias || []).filter(c => c.valor).sort((a, b) => b.valor - a.valor).map(c => `${c.nome} ${R$(c.valor)}`).join('; ') + '.');
-  L.push(`PARÂMETROS: energia R$ ${n1(par.tarifaKWh)}/kWh; PLA médio ${R$(par.custoMedioPLA)}/kg; hora de trabalho ${R$(par.horaTrabalho)}; reserva p/ falhas ${pct(par.reservaFalhas)}; argola ${R$(par.argola)}; embalagem ${R$(par.embalagem)}; comissão do expositor ${pct(par.comissaoExpositor)}; Shopee ${pct(par.shopeeComissao)} + ${R$(par.shopeeFixa)}/item até R$ 79,99 (14% + R$ 16/20/26 acima); DAS ${R$(par.das)}/mês (vence dia 20); limite MEI ${R$(par.limiteMEI)}/ano; margem-alvo ${pct(par.margemAlvo)}; ${par.horasDia} h/dia por máquina; capacidade ~${par.capacidadeMes} h/mês.`);
+  L.push(`PARÂMETROS: energia R$ ${n1(par.tarifaKWh)}/kWh; PLA médio ${R$(par.custoMedioPLA)}/kg; hora de trabalho ${R$(par.horaTrabalho)}; reserva p/ falhas ${pctFr(par.reservaFalhas)}; argola ${R$(par.argola)}; embalagem ${R$(par.embalagem)}; comissão do expositor ${pctFr(par.comissaoExpositor)}; Shopee ${pctFr(par.shopeeComissao)} + ${R$(par.shopeeFixa)}/item até R$ 79,99 (14% + R$ 16/20/26 acima); DAS ${R$(par.das)}/mês (vence dia 20); limite MEI ${R$(par.limiteMEI)}/ano; margem-alvo ${pctFr(par.margemAlvo)}; ${par.horasDia} h/dia por máquina; capacidade ~${par.capacidadeMes} h/mês.`);
   L.push('MÁQUINAS: ' + (pc.maquinas || []).map(m => `${m.nome} (${m.modelo || ''}) custo ${R$(m.custoH)}/h [energia ${R$(m.energiaH)}, depreciação ${R$(m.deprecH)}, manutenção ${R$(m.manutH)}], ${m.potenciaW || '?'} W, pago ${R$(m.preco)}`).join('; ') + '.');
   const kgMat = {}; (pc.filamentos || []).forEach(f => { const k = `${f.material} ${f.cor}`; kgMat[k] = (kgMat[k] || 0) + (f.kg || 0); });
   const porLoja = {}; (pc.filamentos || []).filter(f => f.custoKg).forEach(f => { const l = porLoja[f.loja] = porLoja[f.loja] || { kg: 0, c: 0 }; l.kg += f.kg || 0; l.c += f.total || 0; });
   L.push('ROLOS COMPRADOS (data · loja · material · cor · kg · total pago · R$/kg): ' + (pc.filamentos || []).slice().sort((a, b) => (b.data || '').localeCompare(a.data || '')).slice(0, 30).map(f => `${isoParaBR(f.data || '').slice(0, 5)} ${f.loja || ''} ${f.material || ''} ${f.cor || ''} ${n1(f.kg)} kg ${R$(f.total)} (${f.custoKg ? R$(f.custoKg) + '/kg' : '—'})`).join('; ') + '.');
   L.push(`FILAMENTO:${n1(Object.values(kgMat).reduce((s, v) => s + v, 0))} kg comprados (consumo ainda não medido). Por cor: ${Object.entries(kgMat).map(([k, v]) => `${k} ${n1(v)} kg`).join('; ')}. Custo real por fornecedor: ${Object.entries(porLoja).map(([l, v]) => `${l} ${R$(v.c / v.kg)}/kg`).join('; ')}.`);
   const cp = (pc.custoPeca || []).filter(p => p.custo);
-  L.push('CUSTO POR PEÇA (produto | canal | custo/un | preço | lucro/un | margem | lucro por hora de máquina | preço mínimo p/ margem-alvo): ' + cp.map(p => { const lh = p.lucro && p.horasLote ? p.lucro * (p.pecasLote || 1) / p.horasLote : null; return `${p.produto} | ${p.canal} | ${R$(p.custo)} | ${p.preco ? R$(p.preco) : 'sem preço'} | ${p.lucro ? R$(p.lucro) : '—'} | ${p.margem ? pct(p.margem) : '—'} | ${lh ? R$(lh) + '/h' : '—'} | ${R$(p.precoMin)}`; }).join(' ;; ') + '.');
+  L.push('CUSTO POR PEÇA (produto | canal | custo/un | preço | lucro/un | margem | lucro por hora de máquina | preço mínimo p/ margem-alvo): ' + cp.map(p => { const lh = p.lucro && p.horasLote ? p.lucro * (p.pecasLote || 1) / p.horasLote : null; return `${p.produto} | ${p.canal} | ${R$(p.custo)} | ${p.preco ? R$(p.preco) : 'sem preço'} | ${p.lucro ? R$(p.lucro) : '—'} | ${p.margem ? pctFr(p.margem) : '—'} | ${lh ? R$(lh) + '/h' : '—'} | ${R$(p.precoMin)}`; }).join(' ;; ') + '.');
   const semPreco = (pc.custoPeca || []).filter(p => !p.custo).map(p => p.produto); if (semPreco.length) L.push(`PRODUTOS AINDA SEM TEMPO/GRAMAS/PREÇO (Shopee): ${semPreco.join(', ')}.`);
   const ex = pc.expositores || {}, te = totaisExpositores(pc);
   if (ex.inicio) L.push(`EXPOSITORES DE CHAVEIROS (consignação, desde ${isoParaBR(ex.inicio)}, comissão 30%, visitas a cada ~15 dias): ${te.colocados} peças colocadas, ${te.vendidos} vendidas, potencial líquido se vender tudo ${R$(te.potencial)}. ` + (ex.resumo || []).map(r => `${r.local}: ${r.qtd} peças, ${r.vendidos || 0} vendidas, potencial ${R$(r.potencial)}; modelos: ${(ex.itens || []).filter(i => i.local === r.local).map(i => `${i.chaveiro} (${R$(i.preco)}, ${i.vendidos || 0}/${i.qtd})`).join(', ') || '—'}`).join(' || ') + '.');
@@ -6343,7 +6343,7 @@ async function conversarJarvis(texto, anexos = []) {
   const historico = jarvisChat.filter(m => (m.de === 'eu' || m.de === 'jv' || m.de === 'pc') && m.id !== eu.id && m.id !== resp.id && m.t).slice(-14)
     .map(m => ({ role: m.de === 'eu' ? 'user' : 'model', parts: [{ text: (m.de === 'pc' ? '[Resposta do Claude no computador] ' : '') + anonimizar(m.t, mapa) }] }));
   while (historico.length && historico[0].role !== 'user') historico.shift();
-  const partes = [{ text: texto || 'Analise este print.' }]; anexos.forEach(a => partes.push({ inlineData: { mimeType: 'image/jpeg', data: a.dados.split(',')[1] } }));
+  const partes = [{ text: texto ? anonimizar(texto, mapa) : 'Analise este print.' }]; anexos.forEach(a => partes.push({ inlineData: { mimeType: 'image/jpeg', data: a.dados.split(',')[1] } }));
   jv.controle = typeof AbortController !== 'undefined' ? new AbortController() : null;
   let pronto = null;
   try {
@@ -6360,7 +6360,7 @@ async function conversarJarvis(texto, anexos = []) {
     resp.t = t; resp.fontes = pronto.fontes; resp.acoes = [];
     const abrir = ordens.find(o => o[0] === 'ABRIR'); if (abrir && DESTINOS_JARVIS[abrir[1]]) resp.acoes.push([DESTINOS_JARVIS[abrir[1]][0], `irDestinoJarvis('${abrir[1]}')`]);
     const pc = ordens.find(o => o[0] === 'PC');
-    if (pc) { resp.escalou = true; await enviarAoComputador(texto, anexos, jv.contexto, jv.areaMsg, desanonimizar(pc[1], mapa) + '\n\nResumo do J.A.R.V.I.S. (Gemini): ' + desanonimizar(t, mapa).slice(0, 1500)); }
+    if (pc) { resp.escalou = true; await enviarAoComputadorAuto(texto, anexos, jv.contexto, jv.areaMsg, desanonimizar(pc[1], mapa) + '\n\nResumo do J.A.R.V.I.S. (Gemini): ' + desanonimizar(t, mapa).slice(0, 1500)); }
     if (jvConfig.voz) falarTexto(desanonimizar(t, mapa));
   }
   gravarChat(); atualizarPensandoJarvis(); renderChatJarvis();
@@ -6395,9 +6395,29 @@ function falarMsgJarvis(id) { const m = jarvisChat.find(x => x.id === id); if (!
 // COMPUTADOR — o que precisa do PC vai para o Claude pelo COFRE PRIVADO (issue "✳ JARVIS:", prints em entrada/).
 // ============================================================================
 function conversasJarvis() { return claudeReqs.filter(r => r.canal === 'jarvis'); }
-async function enviarAoComputador(texto, anexos = [], contexto = '', area = null, resumo = '') {
+
+// ---- PORTÃO DE SEGURANÇA (fase 6, decisão do Rafael 02/10/2026) ----
+// O que a IA (chat, voz, rede de segurança) manda SOZINHA ao computador passa por aqui:
+// proibido (dinheiro, compras, enviar e-mail/mensagem, postar) → não vai · grava/altera → só com o OK do Rafael · leitura → vai direto.
+const PC_PROIBIDO = /\b(comprar|compre|compra\s+(isso|para|pra)|(fazer|efetuar|finalizar|fechar)\s+(a\s+|uma\s+|o\s+)?(compra|pedido\s+na|pagamento)|(?<!a\s)pagar|pague|pix\s+(para|pra)|fa(zer|[cç]a)\s+(um\s+|o\s+)?pix|transferir|transfira|transfer[eê]ncia|sacar|resgatar|vender\s+(a[cç][oõ]es|bitcoin|cripto)|(enviar|envie|mandar|mande|responder|responda|encaminhar)\s+(um\s+|o\s+|a\s+|esse\s+|este\s+)?(e-?mail|mensagem|whats\w*|dm|direct|sms)|(postar|poste|publicar|publique)\s+(no|na|um|o|a)\s*(tiktok|instagram|insta|reels|story|stories|v[ií]deo|post))/i;
+const PC_GRAVA = /\b(lan[cç]\w*|registr\w*|atualiz\w*|grav\w*|anot\w*|alter\w*|mud\w*|adicion\w*|acrescent\w*|cri[ae]\w*|edit\w*|inser\w*|cadastr\w*|mov[ae]\w*|copi\w*|salv\w*|preench\w*|escrev\w*|corrig\w*|troc\w*|remov\w*|apag\w*|exclu\w*|delet\w*|publi\w*|som[ae]\w*|baix[ae]\w*|marc[ae]\w*|coloc\w*|p[oô]r)\b/i;
+function classificarPedidoPC(...t) { const s = t.join(' '); return PC_PROIBIDO.test(s) ? 'proibido' : PC_GRAVA.test(s) ? 'grava' : 'leitura'; }
+async function enviarAoComputadorAuto(texto, anexos = [], contexto = '', area = null, resumo = '') {
+  const tipo = classificarPedidoPC(texto, resumo);
+  if (tipo === 'leitura') return enviarAoComputador(texto, anexos, contexto, area, resumo, 'leitura');
+  if (tipo === 'proibido') { msgChat({ de: 'jv', t: '🛡️ Isso eu **não faço**, nem peço ao computador: compras, pagamentos, Pix, transferências, enviar ou responder e-mail/mensagem e postar nas redes ficam só com você. Posso te ajudar a preparar (lista, texto, comparação) para você mesmo fazer.' }); gravarChat(); renderChatJarvis(); toast('🛡️ Bloqueado: o J.A.R.V.I.S. não faz compras, pagamentos nem envia mensagens.', 5000); return null; }
+  const id = novoId(); jv.pcPendentes = jv.pcPendentes || {}; jv.pcPendentes[id] = { texto, anexos, contexto, area, resumo };
+  msgChat({ de: 'jv', pcConfirma: id, t: '🛡️ **Preciso do seu OK.** Quero pedir ao computador algo que **grava ou altera** dados:', cartao: `<p>${esc(String(resumo || texto).slice(0, 400))}</p>`, acoes: [['✔ Confirmar e enviar', `confirmarPedidoPC(${id})`], ['Cancelar', `cancelarPedidoPC(${id})`]] });
+  gravarChat(); renderChatJarvis(); toast('🛡️ O J.A.R.V.I.S. quer gravar algo no computador — confirme no chat.', 5000);
+  return null;
+}
+function fecharCartaoPC(id, aviso) { const m = jarvisChat.find(x => x.pcConfirma === id); if (m) { m.acoes = []; m.cartao = (m.cartao || '') + `<p class="jvc-ok">${aviso}</p>`; } gravarChat(); renderChatJarvis(); }
+async function confirmarPedidoPC(id) { const p = (jv.pcPendentes || {})[id]; if (!p) { fecharCartaoPC(id, 'Este pedido expirou (o app foi fechado). Peça de novo.'); return; } delete jv.pcPendentes[id]; fecharCartaoPC(id, '✔ Confirmado por você — enviado.'); await enviarAoComputador(p.texto, p.anexos, p.contexto, p.area, p.resumo, 'confirmado'); }
+function cancelarPedidoPC(id) { if (jv.pcPendentes) delete jv.pcPendentes[id]; fecharCartaoPC(id, '✕ Cancelado — nada foi enviado.'); }
+
+async function enviarAoComputador(texto, anexos = [], contexto = '', area = null, resumo = '', permissao = 'rafael') {
   const txt = String(texto || '').trim(); if (!txt && !anexos.length && !resumo) return null;
-  const req = { id: novoId(), date: hojeISO(), page: contexto || nomePaginaJarvis(), canal: 'jarvis', area: area || null, text: txt || `📎 ${plural(anexos.length, 'print', 'prints')}`, status: 'fila', anexos: anexos.length, resumo: resumo || '' };
+  const req = { id: novoId(), date: hojeISO(), page: contexto || nomePaginaJarvis(), canal: 'jarvis', area: area || null, text: txt || `📎 ${plural(anexos.length, 'print', 'prints')}`, status: 'fila', anexos: anexos.length, resumo: resumo || '', permissao };
   claudeReqs.unshift(req); salvar('clauderequests', claudeReqs);
   const aviso = msgChat({ de: 'sis', t: 'Enviado ao Claude no computador', req: req.id });
   if (!claudeConfigurado()) { aviso.t = 'Isso precisa do computador, e o app ainda não está conectado a ele. Guardei o pedido.'; aviso.botao = ['Conectar', "abrirAjustesJarvis('pc')"]; gravarChat(); renderChatJarvis(); atualizarPensandoJarvis(); return req; }
@@ -6682,8 +6702,7 @@ function redeDeSegurancaVoz(ele) {
   vz.pediuEm = Date.now();
   const conversa = jarvisChat.filter(m => (m.de === 'eu' || m.de === 'jv') && m.t).slice(-10).map(m => `${m.de === 'eu' ? 'Rafael' : 'J.A.R.V.I.S.'}: ${desanonimizar(String(m.t), vz.mapa)}`).join('\n');
   const pedido = jarvisChat.filter(m => m.de === 'eu' && m.t).slice(-3).map(m => m.t).join(' / ');
-  enviarAoComputador(pedido || 'Pedido feito na conversa por voz', [], vz.contexto, vz.area, `${desanonimizar(frases.join(' '), vz.mapa)}\n\n(Enviado automaticamente: o J.A.R.V.I.S. prometeu na conversa por voz.)\n\nConversa (voz):\n${conversa}`.slice(0, 3500));
-  toast('📤 Mandei ao Claude no computador o que o J.A.R.V.I.S. prometeu.', 4500);
+  enviarAoComputadorAuto(pedido || 'Pedido feito na conversa por voz', [], vz.contexto, vz.area, `${desanonimizar(frases.join(' '), vz.mapa)}\n\n(Enviado automaticamente: o J.A.R.V.I.S. prometeu na conversa por voz.)\n\nConversa (voz):\n${conversa}`.slice(0, 3500));
 }
 function executarFerramentasVoz(chamadas) {
   const respostas = chamadas.map(c => {
@@ -6691,7 +6710,7 @@ function executarFerramentasVoz(chamadas) {
     try {
       if (c.name === 'abrir_tela' && DESTINOS_JARVIS[a.destino]) { const d = a.destino; setTimeout(() => irDestinoJarvis(d), 0); r = { ok: true, aberto: DESTINOS_JARVIS[d][0] }; }
       else if (c.name === 'lembrar_sobre_rafael' && a.fato) { guardarMemoria({ tipo: 'perfil', texto: String(a.fato).slice(0, 240) }); r = { ok: true }; }
-      else if (c.name === 'pedir_ao_computador' && a.tarefa && claudeConfigurado()) { vz.pediuEm = Date.now(); enviarAoComputador(desanonimizar(vz.legEu || a.tarefa, vz.mapa), [], vz.contexto, vz.area, desanonimizar(String(a.tarefa), vz.mapa)); r = { ok: true, aviso: 'Pedido enviado ao Claude no computador; a resposta aparece no chat do app.' }; }
+      else if (c.name === 'pedir_ao_computador' && a.tarefa && claudeConfigurado()) { vz.pediuEm = Date.now(); const tipo = classificarPedidoPC(String(a.tarefa)); enviarAoComputadorAuto(desanonimizar(vz.legEu || a.tarefa, vz.mapa), [], vz.contexto, vz.area, desanonimizar(String(a.tarefa), vz.mapa)); r = tipo === 'proibido' ? { ok: false, erro: 'Bloqueado pela segurança: compras, pagamentos, enviar mensagens/e-mails e postar ficam só com o Rafael. Diga isso a ele.' } : tipo === 'grava' ? { ok: true, aviso: 'Isso grava dados: apareceu no chat um cartão para o Rafael confirmar. Diga a ele para tocar em Confirmar no chat.' } : { ok: true, aviso: 'Pedido de leitura enviado ao Claude no computador; a resposta aparece no chat do app.' }; }
       else r = { ok: false, erro: 'não consegui fazer isso' };
     } catch (e) { r = { ok: false, erro: String(e.message || e) }; }
     return { id: c.id, name: c.name, response: r };
@@ -6775,9 +6794,10 @@ function personaIA() {
   return `Você é o J.A.R.V.I.S., o assistente pessoal do ${nome} (engenheiro civil e empreendedor de impressão 3D, no Brasil). Este é o SUBPLANO: um canto reservado para curiosidades, ideias e desabafos. Personalidade: o JARVIS do Homem de Ferro com o Alfred do Batman — brilhante, gentil, direto, humor leve. Português do Brasil, curto (até 120 palavras). Curiosidade: explique de um jeito simples e interessante. Desabafo: acolha primeiro, sem julgar; no máximo uma pergunta ou sugestão pequena; se houver qualquer sinal de crise ou risco, recomende com carinho o CVV (ligue 188, 24 h, grátis) ou um profissional. Não invente fatos. Nunca peça senhas ou dados bancários.`;
 }
 async function perguntarIA(texto) {
-  const historico = memorias.filter(m => m.origem === 'ia' && m.resposta).slice(0, 4).reverse().flatMap(m => [{ role: 'user', parts: [{ text: m.texto }] }, { role: 'model', parts: [{ text: m.resposta }] }]);
-  const r = await gerarGemini({ sistema: personaIA(), conteudos: [...historico, { role: 'user', parts: [{ text: texto }] }], busca: /\?/.test(texto) });
-  return r.texto;
+  const mapa = mapaAnonimo();
+  const historico = memorias.filter(m => m.origem === 'ia' && m.resposta).slice(0, 4).reverse().flatMap(m => [{ role: 'user', parts: [{ text: anonimizar(m.texto, mapa) }] }, { role: 'model', parts: [{ text: anonimizar(m.resposta, mapa) }] }]);
+  const r = await gerarGemini({ sistema: personaIA(), conteudos: [...historico, { role: 'user', parts: [{ text: anonimizar(texto, mapa) }] }], busca: /\?/.test(texto) });
+  return desanonimizar(r.texto, mapa);
 }
 async function enviarSubplano(ev) {
   if (ev) ev.preventDefault();
