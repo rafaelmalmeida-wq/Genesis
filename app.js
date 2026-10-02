@@ -6102,6 +6102,9 @@ function dadosPrimosIA() {
   if (mk.manchete) L.push(`MARKETING: ${String(mk.manchete).replace(/<\/?b>/g, '')} TikTok @primos3dltda: ${(pc.tiktokPerfil || {}).seguidores || '?'} seguidores, ${(pc.tiktokPerfil || {}).curtidas || '?'} curtidas; últimos 7 dias ${p7.views || '?'} visualizações (${p7.varViews || ''}). Temas: ${(tk.temas || []).map(t => `${t.tema} ${t.views} views, ${t.taxa}% curtidas`).join('; ')}. E-mail: ${(mk.email || {}).resumo || '—'}`);
   const an = pc.analise || {};
   if (an.manchete) L.push(`ANÁLISE DO CLAUDE (analista no PC, ${an.geradaEm || ''}): ${String(an.manchete).replace(/<\/?b>/g, '')} Pontos: ${(an.pontos || []).join(' | ')} Ações (o Rafael marca ✓ no app quando faz): ${(an.acoes || []).map(a => { const f = planoFeito(a); return `[${a.prazo}] ${a.texto}${f ? ` (JÁ FEITO em ${isoParaBR(f.feito).slice(0, 5)})` : ""}`; }).join(' | ')} Oportunidades: ${(an.oportunidades || []).map(o => `${o.titulo}: ${o.texto}`).join(' | ')}`);
+  const ra = relatoriosAgentes; // o que os agentes da Central disseram (nuvem, 1×/dia) — você (J.A.R.V.I.S.) é o mastermind deles
+  if (ra && ra.jarvis) L.unshift(`SEU FILTRO DO DIA (${isoParaBR(ra.jarvis.dia || '')}, feito com os relatórios dos agentes): ${String(ra.jarvis.manchete || '').replace(/<\/?b>/g, '')} Prioridades: ${(ra.jarvis.prioridades || []).map(p => `[${p.urgencia}] ${p.texto}`).join(' | ')}. Pode esperar: ${(ra.jarvis.podeEsperar || []).join(' | ')}. ${ra.jarvis.valuation || ''} ${ra.jarvis.retorno || ''}`.replace(/<\/?b>/g, ''));
+  if (ra && ra.agentes) L.splice(1, 0, 'AGENTES: ' + Object.entries(ra.agentes).map(([id, r]) => `${id}: ${String(r.manchete || '').replace(/<\/?b>/g, '')}${r.alerta ? ' ALERTA: ' + r.alerta : ''}`).join(' || '));
   const txt = L.join('\n');
   return anonimizar(txt.length > 14000 ? txt.slice(0, 14000) + '…' : txt);
 }
@@ -6927,9 +6930,12 @@ const SETORES_CENTRAL = [
   { id: 'outros', nome: 'Outros', cor: '#8e8e93', ico: '●' }
 ];
 const AGENTES_BASE = [
-  { id: 'contabil', setor: 'primos', nome: 'Contabilidade', funcao: 'Caixa, payback e valor da empresa', skills: ['Fluxo de caixa', 'DRE gerencial', 'Payback', 'Valuation', 'MEI'] },
+  { id: 'contabil', setor: 'primos', nome: 'Financeiro', funcao: 'Custos, preços, caixa, retorno e MEI', skills: ['Custeio de impressão 3D', 'Precificação e margem', 'Compras e estoque', 'Fluxo de caixa e resultados', 'Rentabilidade e planejamento'] },
   { id: 'marketing', setor: 'primos', nome: 'Marketing', funcao: 'TikTok, Instagram e público', skills: ['TikTok', 'Instagram', 'Público-alvo', 'Tendências', 'Datas comerciais'] },
-  { id: 'estoque', setor: 'primos', nome: 'Estoque', funcao: 'Filamento por cor, compras a caminho', skills: ['Filamento por cor', 'Pedidos a caminho', 'Consumo por impressão', 'Reposição'] },
+  { id: 'estoque', setor: 'primos', nome: 'Estoque', funcao: 'Filamentos, insumos e reposição', skills: ['Cadastro e padronização', 'Entradas e saídas', 'Filamentos e insumos', 'Planejamento de reposição', 'Inventário e disponibilidade'] },
+  { id: 'producao', setor: 'primos', nome: 'Impressão e Produção', funcao: 'Fila, máquinas e consumo por peça', skills: ['Fila de produção', 'Tempo de máquina', 'Consumo de filamento', 'Falhas e perdas'], aba: 'producao' },
+  { id: 'vendas', setor: 'primos', nome: 'Captação e Vendas', funcao: 'Canais, clientes e prospecção', skills: ['Canais de venda', 'B2B e brindes', 'Shopee', 'Prospecção'], aba: 'vendas' },
+  { id: 'consignacao', setor: 'primos', nome: 'Consignação', funcao: 'Expositores, acertos e reposição', skills: ['Estoque nos expositores', 'Acerto de comissão', 'Giro por modelo', 'Licenças'], aba: 'chaveiros' },
   { id: 'mercado', setor: 'mercado', nome: 'Analista de mercado', funcao: 'Bitcoin, dólar e ações', skills: ['Bitcoin', 'Câmbio', 'Ações BR/EUA'] },
   { id: 'treino', setor: 'academia', nome: 'Treinador', funcao: 'Treinos da semana e constância', skills: ['Plano semanal', 'Constância', 'Hidratação'] }
 ];
@@ -6981,6 +6987,7 @@ function estadoAgenteBase(a) {
     const baixo = e.cores.filter(c => c.kg < 0.3).length;
     return { nivel: baixo ? 'atencao' : 'ok', metrica: `${fmtKg(e.total)} em estoque${e.caminho.length ? ` · ${e.caminho.length} a caminho` : ''}` };
   }
+  if (a.aba) { const r = relatorioAgente(a.id); return r ? { nivel: 'ok', metrica: `Relatório de ${isoParaBR(r.dia || '').slice(0, 5)}` } : { nivel: 'sem', metrica: 'Aguardando o 1º relatório' }; }
   if (a.id === 'mercado') return { nivel: 'ok', metrica: 'Cotações ao vivo' };
   if (a.id === 'treino') { const n = workouts.filter(w => { const d = w.date || w.data; return d && diasEntre(d, hojeISO()) <= 7; }).length; return { nivel: n >= 3 ? 'ok' : 'atencao', metrica: `${plural(n, 'treino', 'treinos')} em 7 dias` }; }
   return { nivel: 'sem', metrica: 'Em preparação' };
@@ -7000,7 +7007,7 @@ function renderCentral() {
   };
   const doSetor = ag.filter(a => a.setor === cc.setor);
   $j('cc-nos').innerHTML = `
-    <div class="cc-nivel"><button type="button" class="cc-no cc-jarvis${cc.agente === 'jarvis' ? ' sel' : ''}" data-no="jarvis" onclick="abrirAgenteCentral('jarvis')"><img src="icon-180.png" alt=""><span><b>J.A.R.V.I.S.</b><small>${plural(ag.length, 'agente', 'agentes')} · ${plural(SETORES_CENTRAL.length, 'setor', 'setores')}</small></span></button></div>
+    <div class="cc-nivel"><button type="button" class="cc-no cc-jarvis${cc.agente === 'jarvis' ? ' sel' : ''}" data-no="jarvis" onclick="abrirAgenteCentral('jarvis')"><img src="icon-180.png" alt=""><span><b>J.A.R.V.I.S.</b><small>${relatoriosAgentes && relatoriosAgentes.jarvis ? `${plural((relatoriosAgentes.jarvis.prioridades || []).filter(p => p.urgencia === 'hoje').length, 'prioridade', 'prioridades')} hoje · toque para ver` : `${plural(ag.length, 'agente', 'agentes')} · ${plural(SETORES_CENTRAL.length, 'setor', 'setores')}`}</small></span></button></div>
     <div class="cc-nivel cc-setores">${SETORES_CENTRAL.map(s => { const n = ag.filter(a => a.setor === s.id); const at = n.some(a => estadoAgente(a).nivel === 'atencao');
       return `<button type="button" class="cc-no cc-setor${cc.setor === s.id ? ' sel' : ''}" data-no="s:${s.id}" data-pai="jarvis" style="--cor:${s.cor}" onclick="escolherSetorCentral('${s.id}')"><span class="cc-ico">${s.ico}</span><b>${esc(s.nome)}</b><small>${n.length ? plural(n.length, 'agente', 'agentes') : 'sem agentes'}${at ? ' · <i class="cc-luz atencao"></i>' : ''}</small></button>`; }).join('')}</div>
     <div class="cc-nivel cc-agentes">${doSetor.map(noAgente).join('')}<button type="button" class="cc-no cc-add" data-no="add" data-pai="s:${cc.setor}" onclick="cc.novo=true; cc.agente=null; renderCentral()">＋<small>Novo agente em ${esc(setorCentral(cc.setor).nome)}</small></button></div>`;
@@ -7044,7 +7051,8 @@ function conversarComAgente(id) {
 function htmlPainelAgente(id) {
   if (id === 'jarvis') {
     const ag = todosAgentes();
-    return `<header class="cc-p-topo"><button type="button" class="cc-x" onclick="fecharPainelCentral()" aria-label="Fechar">✕</button><small>comando</small><h3><i class="cc-luz ok"></i>J.A.R.V.I.S.</h3><p>Coordena os agentes. Eles leem os seus dados e te mostram o essencial. Nenhum compra, paga, envia mensagem ou posta.</p></header>`
+    return `<header class="cc-p-topo"><button type="button" class="cc-x" onclick="fecharPainelCentral()" aria-label="Fechar">✕</button><small>comando · mastermind da Primos 3D</small><h3><i class="cc-luz ok"></i>J.A.R.V.I.S.</h3><p>Lê o relatório de todos os agentes e te entrega só o que importa. Nenhum agente compra, paga, envia mensagem ou posta.</p></header>`
+      + htmlMastermind()
       + ccBloco('Situação dos agentes', `<ul class="cc-lista">${ag.map(a => { const st = estadoAgente(a); return `<li onclick="cc.setor='${a.setor}'; abrirAgenteCentral('${esc(a.id)}')"><i class="cc-luz ${st.nivel}"></i><span><b>${esc(a.nome)}</b><small>${esc(setorCentral(a.setor).nome)} · ${esc(st.metrica)}</small></span><em>›</em></li>`; }).join('')}</ul>`)
       + ccBloco('🛡️ Regras de segurança', `<ul class="cc-regras"><li>Ler e analisar: automático</li><li>Gravar ou alterar: só com o seu OK</li><li>Compras, pagamentos, Pix, e-mails, mensagens e posts: nunca</li></ul>`);
   }
@@ -7052,6 +7060,7 @@ function htmlPainelAgente(id) {
   if (a.id === 'contabil') return htmlAgenteContabil(a);
   if (a.id === 'marketing') return htmlAgenteMarketing(a);
   if (a.id === 'estoque') return htmlAgenteEstoque(a);
+  if (a.aba) return cabecalhoAgente(a) + htmlRelatorioAgente(a.id) + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('${a.aba}')">Abrir ${esc(a.nome)} na Primos</button>` + botaoConversarAgente(a);
   if (a.id === 'mercado') return cabecalhoAgente(a) + `<div class="cc-embed">${typeof htmlMercado === 'function' ? htmlMercado(true) : ''}</div>` + botaoConversarAgente(a);
   if (a.id === 'treino') {
     const sem = workouts.filter(w => { const d = w.date || w.data; return d && diasEntre(d, hojeISO()) <= 7; });
@@ -7063,7 +7072,18 @@ function htmlPainelAgente(id) {
     + botaoConversarAgente(a) + `<button type="button" class="cc-btn perigo" onclick="removerAgente('${esc(a.id)}')">Remover agente</button>`;
 }
 
-// --- agente CONTABILIDADE ---
+// --- J.A.R.V.I.S. MASTERMIND: o filtro do dia (relatoriosAgentes.jarvis, feito na nuvem depois dos agentes) ---
+const URGENCIA_JV = { hoje: ['Hoje', '#ff453a'], semana: ['Semana', '#ff9f0a'], mes: ['Mês', '#8e8e93'] };
+function htmlMastermind() {
+  const j = relatoriosAgentes && relatoriosAgentes.jarvis; if (!j) return ccBloco('O que importa hoje', '<p class="cc-txt">O meu primeiro filtro sai na próxima rodada dos agentes (todo dia às 7h).</p>');
+  const nome = id => { const a = todosAgentes().find(x => x.id === id); return a ? a.nome : ''; };
+  return ccBloco(`O que importa · ${esc(isoParaBR(j.dia || ''))}${j.velho ? ' (anterior)' : ''}`, `<div class="cc-relatorio cc-mm"><p class="cc-txt">${textoAgente(j.manchete)}</p>
+    <ul class="cc-prio">${(j.prioridades || []).map(p => { const u = URGENCIA_JV[p.urgencia] || URGENCIA_JV.semana; return `<li${p.agente ? ` onclick="abrirAgenteCentral('${esc(p.agente)}')"` : ''}><em style="--u:${u[1]}">${u[0]}</em><span>${textoAgente(p.texto)}${p.agente ? `<small>${esc(nome(p.agente))} ›</small>` : ''}</span></li>`; }).join('')}</ul>
+    ${j.valuation ? `<h5>Quanto vale</h5><p class="cc-txt">${textoAgente(j.valuation)}</p>` : ''}${j.retorno ? `<h5>Retorno</h5><p class="cc-txt">${textoAgente(j.retorno)}</p>` : ''}
+    ${(j.podeEsperar || []).length ? `<h5>Pode esperar</h5><ul class="cc-regras cc-espera">${j.podeEsperar.map(p => `<li>${textoAgente(p)}</li>`).join('')}</ul>` : ''}</div>`);
+}
+
+// --- agente FINANCEIRO (id contabil) ---
 function htmlAgenteContabil(a) {
   const pc = primosCentral; if (!pc || !pc.caixa) return cabecalhoAgente(a) + ccBloco('Sem dados', '<p class="cc-txt">Conecte o computador (Ajustes do J.A.R.V.I.S. → 2) para eu ler a Central.</p>');
   const cx = pc.caixa, vl = vendasLiquidasPrimos(pc), k = contabilidadePrimos(pc);
@@ -7071,14 +7091,18 @@ function htmlAgenteContabil(a) {
   const datas = (pc.vendas || []).map(v => v.data).filter(Boolean).sort();
   const meses = datas.length ? Math.max(1, diasEntre(datas[0], hojeISO()) / 30) : 1;
   const ritmo = vl.total / meses; const payback = ritmo > 0 ? falta / ritmo : null;
-  const patrimonial = Math.max(0, k.imobilizado - k.depreciacao) + k.estoques;
+  const N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}; // números do motor dos agentes (mesma conta para o app e para a IA)
+  const patrimonial = N.valuationPatrimonial ?? (Math.max(0, k.imobilizado - k.depreciacao) + k.estoques);
   const receitaAno = ritmo * 12;
+  const extra = (N.pontoEquilibrioPecasMes ? ccBloco('Ponto de equilíbrio', ccNums([[reais(N.custoFixoMensalEstimado), 'custo fixo por mês'], [plural(N.pontoEquilibrioPecasMes, 'peça', 'peças') + '/mês', `para empatar (lucro médio ${reais(N.lucroMedioPorPeca)} · margem ${String(N.margemMedia).replace('.', ',')}%)`]])) : '')
+    + (N.mei ? ccBloco('MEI 2026', `<div class="cc-barra"><i style="width:${Math.min(100, N.mei.faturado2026 / N.mei.limiteProporcional2026 * 100).toFixed(1)}%"></i></div><p class="cc-txt">Faturou <b>${reais(N.mei.faturado2026)}</b> de <b>${reais(N.mei.limiteProporcional2026)}</b> (limite proporcional desde ${esc(isoParaBR(N.mei.inicio))}). DAS ${reais(N.mei.das)}/mês. A declaração anual (DASN-SIMEI) vence em 31/05 do ano seguinte — eu deixo os números prontos; quem envia é você.</p><p class="cc-nota">Confirme com o contador.</p>`) : '');
   const pctRec = invest ? Math.min(100, vl.total / invest * 100) : 0;
   return cabecalhoAgente(a)
     + htmlRelatorioAgente(a.id)
     + ccNums([[reais(vl.total), 'recebido (líquido)'], [reais(invest), 'investido'], [reais(cx.saldo), 'caixa', (cx.saldo || 0) < 0 ? '#ff453a' : '#30d158'], [reais(cx.contasPagar), 'contas a pagar']])
     + ccBloco('Payback', `<div class="cc-barra"><i style="width:${pctRec.toFixed(1)}%"></i></div><p class="cc-txt"><b>${pctRec.toFixed(1).replace('.', ',')}%</b> do investimento já voltou. Falta <b>${reais(falta)}</b>.${payback !== null ? ` No ritmo atual (~${reais(ritmo)}/mês), leva <b>${payback > 120 ? 'mais de 10 anos' : Math.ceil(payback) + ' meses'}</b>.` : ' Ainda sem vendas para medir o ritmo.'}</p>`)
     + ccBloco('Quanto vale a empresa (estimativa)', ccNums([[reais(patrimonial), 'pelo patrimônio<br>(máquinas − depreciação + estoque)'], [reais(receitaAno * 1.5), 'pela receita<br>(1,5 × o ano no ritmo atual)']]) + '<p class="cc-nota">Estimativa didática, não é laudo. Empresa nova vale quase só o patrimônio; o valor pela receita cresce com as vendas.</p>')
+    + extra
     + ccBloco('Últimas entradas', `<ul class="cc-lista">${(pc.vendas || []).slice().sort((x, y) => String(y.data).localeCompare(String(x.data))).slice(0, 5).map(v => `<li><span><b>${reais(v.liquido || v.bruto)}</b><small>${esc(isoParaBR(v.data || ''))} · ${esc(v.canal || '')} · ${esc(String(v.produto || '').slice(0, 40))}</small></span></li>`).join('') || '<li><span><small>Sem vendas ainda</small></span></li>'}</ul>`)
     + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('contabil')">Abrir a contabilidade completa</button>` + botaoConversarAgente(a);
 }
