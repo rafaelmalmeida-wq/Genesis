@@ -2501,3 +2501,68 @@ body.jv-em-voz #cerebro .jv-central-btn { opacity: 0; pointer-events: none; }
 .cc-prio small { display: block; color: #8e8e93; font-size: 0.72rem; margin-top: 2px; }
 .cc-espera li::before { background: #636366 !important; }
 .cc-mm { background: linear-gradient(160deg, rgba(255,214,10,0.08), rgba(255,255,255,0.03)); box-shadow: inset 0 0 0 0.5px rgba(255,214,10,0.25); }
+/* --- Central: animações de rolagem, gráficos do Financeiro e a secadora 3D do Estoque --- */
+.cc-rev { opacity: 0; transform: translateY(18px) scale(0.985); transition: opacity .55s ease, transform .65s cubic-bezier(.2,.8,.2,1); }
+.cc-rev.vis { opacity: 1; transform: none; }
+.cc-barra i { transition: width 1.2s cubic-bezier(.2,.8,.2,1); }
+.cc-rev:not(.vis) .cc-barra i { width: 0 !important; }
+.cc-progresso { position: absolute; z-index: 5; right: 0; top: 0; width: 420px; height: 2px; transform-origin: left; transform: scaleX(0); background: #f2f2f7; box-shadow: 0 0 10px currentColor; transition: transform .08s linear; pointer-events: none; }
+.cc:not(.com-painel) .cc-progresso { display: none; }
+.cc-p-topo { transition: padding .25s ease; }
+.cc-p-topo h3 { transition: font-size .25s ease; }
+.cc-p-topo.compacto { padding-bottom: 8px; }
+.cc-p-topo.compacto h3 { font-size: 1.05rem; }
+.cc-p-topo.compacto > p, .cc-p-topo.compacto .cc-tags { display: none; }
+.cc-no.entra { animation: ccNoEntra .5s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes ccNoEntra { from { opacity: 0; transform: translateY(14px) scale(0.96); } }
+/* fluxo mensal */
+.cc-colunas { display: flex; align-items: flex-end; gap: 8px; height: 150px; padding: 6px 2px 0; }
+.cc-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; min-width: 0; }
+.cc-col-barras { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; gap: 3px; }
+.cc-col-barras i { width: 40%; max-width: 16px; height: var(--h); min-height: 2px; border-radius: 4px 4px 2px 2px; transform-origin: bottom; transition: transform 1s cubic-bezier(.2,.8,.2,1); }
+.cc-rev:not(.vis) .cc-col-barras i { transform: scaleY(0); }
+.cc-col-barras i.ent, .cc-legenda i.ent { background: linear-gradient(#30d158, #1f9d45); }
+.cc-col-barras i.sai, .cc-legenda i.sai { background: linear-gradient(#ff6b5e, #c9342a); }
+.cc-col small { color: #8e8e93; font-size: 0.68rem; }
+.cc-col em { font-style: normal; font-size: 0.62rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cc-col em.pos { color: #30d158; } .cc-col em.neg { color: #ff6b5e; }
+.cc-legenda { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0 0; font-size: 0.72rem; color: #8e8e93; }
+.cc-legenda i { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.cc-legenda i.cu, .cc-pilha i.cu { background: #636366; } .cc-legenda i.tx, .cc-pilha i.tx { background: #ff9f0a; } .cc-legenda i.lu, .cc-pilha i.lu { background: linear-gradient(90deg, #30d158, #5ee38a); }
+/* para onde foi o dinheiro */
+.cc-hbarras { list-style: none; margin: 0; padding: 0; }
+.cc-hbarras li { display: grid; grid-template-columns: 110px 1fr auto 34px; gap: 10px; align-items: center; padding: 6px 0; font-size: 0.8rem; }
+.cc-hbarras li span { color: #d1d1d6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-hbarras .cc-barra { margin: 0; }
+.cc-hbarras .cc-barra i { background: linear-gradient(90deg, #ff9f0a, #ffd60a); }
+.cc-hbarras strong { font-variant-numeric: tabular-nums; font-size: 0.8rem; font-weight: 500; }
+.cc-hbarras small { color: #636366; text-align: right; }
+/* sobra por produto */
+.cc-pilhas { list-style: none; margin: 0; padding: 0; }
+.cc-pilhas li { padding: 9px 0; border-bottom: 0.5px solid rgba(255,255,255,0.06); }
+.cc-pilha-topo { display: flex; justify-content: space-between; gap: 10px; font-size: 0.84rem; }
+.cc-pilha-topo b { font-weight: 500; }
+.cc-pilha { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin: 6px 0 4px; background: rgba(255,255,255,0.06); }
+.cc-pilha i { width: var(--w); transition: width 1.1s cubic-bezier(.2,.8,.2,1); }
+.cc-rev:not(.vis) .cc-pilha i { width: 0; }
+.cc-pilhas small { color: #8e8e93; font-size: 0.72rem; }
+.cc-pilhas small b { color: #30d158; font-weight: 600; }
+/* secadora 3D */
+.cc-seca { position: relative; height: 440px; margin: 0 -20px; background: radial-gradient(60% 55% at 50% 45%, rgba(255,214,150,0.10), rgba(0,0,0,0) 70%); overflow: hidden; }
+.cc-seca canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cc-seca-carregando { position: absolute; inset: 0; display: grid; place-items: center; color: #8e8e93; font-size: 0.84rem; }
+.cc-seca-dica { position: absolute; z-index: 2; display: flex; align-items: center; gap: 10px; min-width: 180px; padding: 9px 12px; border-radius: 14px; background: rgba(20,20,24,0.88); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.14), 0 10px 30px rgba(0,0,0,0.5); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); pointer-events: none; animation: ccEntra .2s ease-out; }
+.cc-seca-dica[hidden] { display: none; }
+.cc-seca-dica i { width: 22px; height: 22px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25); }
+.cc-seca-dica b { display: block; font-size: 0.86rem; } .cc-seca-dica small { color: #aeaeb2; font-size: 0.72rem; }
+.cc-amostras { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.cc-amostras span { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 6px; border-radius: 999px; background: rgba(255,255,255,0.05); font-size: 0.74rem; color: #e5e5ea; }
+.cc-amostras span.baixo { box-shadow: inset 0 0 0 1px rgba(255,159,10,0.6); }
+.cc-amostras i { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgba(0,0,0,0.25), 0 0 0 0.5px rgba(255,255,255,0.2); }
+.cc-amostras em { font-style: normal; color: #8e8e93; font-variant-numeric: tabular-nums; }
+@media (max-width: 800px) {
+  .cc-progresso { position: fixed; z-index: 9100; left: 0; right: 0; width: auto; top: env(safe-area-inset-top); }
+  .cc-seca { height: 400px; margin: 0 -16px; }
+  .cc-hbarras li { grid-template-columns: 88px 1fr auto; } .cc-hbarras small { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .cc-rev { opacity: 1; transform: none; transition: none; } .cc-no.entra { animation: none; } }

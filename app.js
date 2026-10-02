@@ -6952,7 +6952,8 @@ function abrirCentral(setor) {
 }
 function fecharCentral(daVolta) {
   const el = $j('jv-central'); if (!el || el.hidden) return;
-  el.hidden = true; document.body.classList.remove('cc-aberta'); cc.agente = null; cc.novo = false;
+  el.hidden = true; document.body.classList.remove('cc-aberta'); cc.agente = null; cc.novo = false; cc.ultimoQuadro = null;
+  if (cc.seca3d) cc.seca3d.renderer.domElement.remove();
   if (!daVolta) desempilharCamada('central');
 }
 function escolherSetorCentral(id) { cc.setor = id; cc.agente = null; cc.novo = false; renderCentral(); }
@@ -7016,6 +7017,8 @@ function renderCentral() {
   else if (cc.agente) { p.hidden = false; p.innerHTML = htmlPainelAgente(cc.agente); p.scrollTop = 0; }
   else { p.hidden = true; p.innerHTML = ''; }
   el.classList.toggle('com-painel', !p.hidden);
+  if (cc.agente === 'estoque') montarSecadora3D(); else if (cc.seca3d) cc.seca3d.renderer.domElement.remove(); // o 3D só anda com o Estoque aberto
+  animarPainelCentral(); animarQuadroCentral();
   requestAnimationFrame(desenharFiosCentral); setTimeout(desenharFiosCentral, 260); // de novo depois que as fontes/painel assentam
 }
 /** Fios tracejados do pai (embaixo, no meio) ao filho (em cima, no meio), recalculados a cada desenho. */
@@ -7033,6 +7036,43 @@ function desenharFiosCentral() {
   svg.innerHTML = fios.join('');
 }
 window.addEventListener('resize', () => { if ($j('jv-central') && !$j('jv-central').hidden) desenharFiosCentral(); });
+
+// --- ANIMAÇÕES DE ROLAGEM (painel dos agentes): blocos surgem ao entrar na tela, números contam até o valor,
+//     barras e gráficos crescem, o cabeçalho encolhe e uma linha fina na cor do setor mostra o quanto já rolou. ---
+const reduzMovimento = () => window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+function contarNumero(el) {
+  if (el.dataset.contado) return; el.dataset.contado = '1';
+  const txt = el.textContent, m = txt.match(/-?\d{1,3}(?:\.\d{3})*(?:,\d+)?|-?\d+(?:,\d+)?/); if (!m || reduzMovimento()) return;
+  const bruto = m[0], dec = (bruto.split(',')[1] || '').length, alvo = parseFloat(bruto.replace(/\./g, '').replace(',', '.')); if (!isFinite(alvo) || alvo === 0) return;
+  const antes = txt.slice(0, m.index), depois = txt.slice(m.index + bruto.length), t0 = performance.now(), dur = 900;
+  const fmt = v => v.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  const passo = agora => { const k = Math.min(1, (agora - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = antes + fmt(alvo * e) + depois; if (k < 1) requestAnimationFrame(passo); else el.textContent = txt; };
+  requestAnimationFrame(passo);
+}
+function animarPainelCentral() {
+  const p = $j('cc-painel'); if (!p || p.hidden) return;
+  const itens = [...p.querySelectorAll('.cc-bloco, .cc-nums > div, .cc-btn, .cc-relatorio')];
+  if (reduzMovimento() || !window.IntersectionObserver) { itens.forEach(i => i.classList.add('vis')); return; }
+  if (cc.obsPainel) cc.obsPainel.disconnect();
+  const largo = window.innerWidth > 800; // no PC o painel rola sozinho; no celular também (é fixo em tela cheia)
+  cc.obsPainel = new IntersectionObserver(ents => ents.forEach(en => {
+    if (!en.isIntersecting) return; const el = en.target; el.classList.add('vis'); cc.obsPainel.unobserve(el);
+    el.querySelectorAll('.cc-nums strong, .cc-num').forEach(contarNumero); if (el.matches('.cc-nums > div')) el.querySelectorAll('strong').forEach(contarNumero);
+  }), { root: p, threshold: 0.12, rootMargin: largo ? '0px 0px -6% 0px' : '0px 0px -4% 0px' });
+  let k = 0; itens.forEach(i => { i.classList.add('cc-rev'); i.style.transitionDelay = (Math.min(k++, 6) * 55) + 'ms'; cc.obsPainel.observe(i); });
+  if (!p.dataset.rolagem) { p.dataset.rolagem = '1'; p.addEventListener('scroll', () => {
+    const topo = p.querySelector('.cc-p-topo'), max = p.scrollHeight - p.clientHeight, pr = $j('cc-progresso');
+    if (topo) topo.classList.toggle('compacto', p.scrollTop > 40);
+    if (pr) pr.style.transform = `scaleX(${max > 0 ? Math.min(1, p.scrollTop / max) : 0})`;
+  }, { passive: true }); }
+  const pr = $j('cc-progresso'); if (pr) { pr.style.transform = 'scaleX(0)'; const ag = todosAgentes().find(x => x.id === cc.agente); pr.style.background = ag ? setorCentral(ag.setor).cor : '#f2f2f7'; }
+}
+/** Ao abrir a Central ou trocar de setor, os cartões entram em cascata. */
+function animarQuadroCentral() {
+  if (reduzMovimento()) return; const chave = cc.setor + (cc.agente ? '' : '');
+  if (cc.ultimoQuadro === chave) return; cc.ultimoQuadro = chave;
+  [...document.querySelectorAll('#cc-nos .cc-no')].forEach((n, i) => { n.classList.remove('entra'); void n.offsetWidth; n.style.animationDelay = (i * 35) + 'ms'; n.classList.add('entra'); });
+}
 
 function cabecalhoAgente(a, extra) {
   const s = setorCentral(a.setor), st = a.id === 'jarvis' ? { nivel: 'ok' } : estadoAgente(a);
@@ -7083,6 +7123,23 @@ function htmlMastermind() {
     ${(j.podeEsperar || []).length ? `<h5>Pode esperar</h5><ul class="cc-regras cc-espera">${j.podeEsperar.map(p => `<li>${textoAgente(p)}</li>`).join('')}</ul>` : ''}</div>`);
 }
 
+/** Gráficos do Financeiro (HTML/CSS puros, animam ao entrar na tela): fluxo mensal, para onde foi o dinheiro, sobra por produto. */
+function graficosFinanceiro(pc) {
+  const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const fluxo = fluxoMensalPrimos(pc).slice(-6), maxF = Math.max(1, ...fluxo.flatMap(f => [f.ent, f.sai]));
+  const g1 = fluxo.length ? ccBloco('Fluxo de caixa por mês', `<div class="cc-colunas">${fluxo.map(f => `<div class="cc-col" title="${esc(f.mes)}: entrou ${reais(f.ent)} · saiu ${reais(f.sai)}">
+      <div class="cc-col-barras"><i class="ent" style="--h:${(f.ent / maxF * 100).toFixed(1)}%"></i><i class="sai" style="--h:${(f.sai / maxF * 100).toFixed(1)}%"></i></div>
+      <small>${MES[Number(f.mes.slice(5, 7)) - 1] || f.mes}</small><em class="${f.ent - f.sai >= 0 ? 'pos' : 'neg'}">${f.ent - f.sai >= 0 ? '+' : '−'}${reais(Math.abs(f.ent - f.sai)).replace('R$', '').trim()}</em></div>`).join('')}</div>
+    <p class="cc-legenda"><span><i class="ent"></i>entrou (vendas + aportes)</span><span><i class="sai"></i>saiu</span></p>`) : '';
+  const cats = (pc.categorias || []).filter(c => c.valor > 0).sort((a, b) => b.valor - a.valor).slice(0, 7), maxC = Math.max(1, ...cats.map(c => c.valor)), totC = cats.reduce((s, c) => s + c.valor, 0);
+  const g2 = cats.length ? ccBloco('Para onde foi o dinheiro', `<ul class="cc-hbarras">${cats.map(c => `<li><span>${esc(c.nome)}</span><div class="cc-barra"><i style="width:${(c.valor / maxC * 100).toFixed(1)}%"></i></div><strong>${reais(c.valor)}</strong><small>${(c.valor / totC * 100).toFixed(0)}%</small></li>`).join('')}</ul>`) : '';
+  const prods = (pc.custoPeca || []).filter(p => p.preco && p.custo).map(p => ({ ...p, sobra: (p.lucro ?? (p.preco - p.custo)) })).sort((a, b) => b.sobra / b.preco - a.sobra / a.preco).slice(0, 5);
+  const g3 = prods.length ? ccBloco('Quanto sobra em cada produto', `<ul class="cc-pilhas">${prods.map(p => { const cu = Math.min(100, p.custo / p.preco * 100), tx = Math.min(100 - cu, (p.taxa || 0) / p.preco * 100), lu = Math.max(0, 100 - cu - tx);
+      return `<li><div class="cc-pilha-topo"><b>${esc(String(p.produto).slice(0, 38))}</b><strong>${reais(p.preco)}</strong></div><div class="cc-pilha"><i class="cu" style="--w:${cu.toFixed(1)}%"></i>${tx ? `<i class="tx" style="--w:${tx.toFixed(1)}%"></i>` : ''}<i class="lu" style="--w:${lu.toFixed(1)}%"></i></div><small>custo ${reais(p.custo)}${p.taxa ? ` · taxas ${reais(p.taxa)}` : ''} · sobra <b>${reais(p.sobra)}</b> (${(lu).toFixed(0)}%) · ${esc(p.canal || '')}</small></li>`; }).join('')}</ul>
+    <p class="cc-legenda"><span><i class="cu"></i>custo de impressão</span><span><i class="tx"></i>taxas</span><span><i class="lu"></i>sobra</span></p>`) : '';
+  return g1 + g2 + g3;
+}
+
 // --- agente FINANCEIRO (id contabil) ---
 function htmlAgenteContabil(a) {
   const pc = primosCentral; if (!pc || !pc.caixa) return cabecalhoAgente(a) + ccBloco('Sem dados', '<p class="cc-txt">Conecte o computador (Ajustes do J.A.R.V.I.S. → 2) para eu ler a Central.</p>');
@@ -7103,6 +7160,7 @@ function htmlAgenteContabil(a) {
     + ccBloco('Payback', `<div class="cc-barra"><i style="width:${pctRec.toFixed(1)}%"></i></div><p class="cc-txt"><b>${pctRec.toFixed(1).replace('.', ',')}%</b> do investimento já voltou. Falta <b>${reais(falta)}</b>.${payback !== null ? ` No ritmo atual (~${reais(ritmo)}/mês), leva <b>${payback > 120 ? 'mais de 10 anos' : Math.ceil(payback) + ' meses'}</b>.` : ' Ainda sem vendas para medir o ritmo.'}</p>`)
     + ccBloco('Quanto vale a empresa (estimativa)', ccNums([[reais(patrimonial), 'pelo patrimônio<br>(máquinas − depreciação + estoque)'], [reais(receitaAno * 1.5), 'pela receita<br>(1,5 × o ano no ritmo atual)']]) + '<p class="cc-nota">Estimativa didática, não é laudo. Empresa nova vale quase só o patrimônio; o valor pela receita cresce com as vendas.</p>')
     + extra
+    + graficosFinanceiro(pc)
     + ccBloco('Últimas entradas', `<ul class="cc-lista">${(pc.vendas || []).slice().sort((x, y) => String(y.data).localeCompare(String(x.data))).slice(0, 5).map(v => `<li><span><b>${reais(v.liquido || v.bruto)}</b><small>${esc(isoParaBR(v.data || ''))} · ${esc(v.canal || '')} · ${esc(String(v.produto || '').slice(0, 40))}</small></span></li>`).join('') || '<li><span><small>Sem vendas ainda</small></span></li>'}</ul>`)
     + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('contabil')">Abrir a contabilidade completa</button>` + botaoConversarAgente(a);
 }
@@ -7136,14 +7194,53 @@ function calcularEstoque() {
   const caminho = estoquePrimos.filter(m => m.tipo === 'compra' && m.status === 'caminho');
   return { cores, caminho, total: cores.reduce((s, c) => s + Math.max(0, c.kg), 0) };
 }
+/** Cor de verdade a partir do nome do filamento ("PLA Basic Cinza", "Silk Dourado"...). brilho: 'seda'/'metal' para o 3D. */
+const CORES_BOBINA = [[/rosa.?beb|baby.?pink/, '#f3b5c9'], [/oliva|olive|militar/, '#6f7a3c'], [/marmor|stone|granit|pedra/, '#a39d93'], [/off.?white|perola|p[eé]rola/, '#ece6d8'], [/preto|black|negro/, '#1d1d20'], [/branco|white|marfim/, '#f1f1ee'], [/cinza|gray|grey|grafite|chumbo/, '#8a8d93'], [/vermelh|red/, '#d3262a'], [/vinho|bord[oô]/, '#7b1e2b'],
+  [/laranja|orange/, '#ff7a1a'], [/amarel|yellow/, '#f6c51d'], [/verde.?(lim|neon)/, '#9be22d'], [/verde|green/, '#1f9d55'], [/azul.?(claro|c[eé]u|beb)|ciano|cyan|turquesa/, '#29b6e8'], [/azul|blue|navy|marinho/, '#2457c5'],
+  [/roxo|violeta|purple|lil[aá]s/, '#7a4fe0'], [/rosa|pink|magenta/, '#e64d97'], [/marrom|brown|caf[eé]|chocolate/, '#6e4428'], [/bege|areia|nude|skin|pele/, '#d9c3a0'], [/madeira|wood/, '#a87b4f'],
+  [/dourad|ouro|gold/, '#d4a53c'], [/prata|silver|cromad/, '#c3c6cc'], [/cobre|copper|bronze/, '#b8733d'], [/natural|transparen|clear|cristal/, '#e7e3d6']];
+function corFilamento(nome) {
+  const s = semAcentoCer(nome); const achou = CORES_BOBINA.find(([re]) => re.test(s));
+  return { cor: achou ? achou[1] : '#8e8e93', brilho: /silk|seda|metal|dourad|ouro|gold|prata|silver|cobre|bronze|cromad/.test(s) ? 'seda' : '' };
+}
+/** As bobinas da secadora: cada kg vira uma bobina (a última, parcial). */
+function bobinasEstoque(e) {
+  const lista = [];
+  e.cores.filter(c => c.kg > 0.01).forEach(c => { const { cor, brilho } = corFilamento(c.cor + ' ' + c.material); let resta = c.kg;
+    while (resta > 0.01) { const kg = Math.min(1, resta); lista.push({ nome: c.cor, material: c.material, cor, brilho, kg, capacidade: 1 }); resta -= kg; } });
+  return lista;
+}
+function montarSecadora3D() {
+  const host = $j('cc-seca'); if (!host) return;
+  const e = calcularEstoque(), dados = { bobinas: bobinasEstoque(e), temp: '45°C', umid: '18%' };
+  const pronto = () => { const c = host.querySelector('.cc-seca-carregando'); if (c) c.remove(); };
+  if (!window.Secadora3D) {
+    if (!cc.secaCarregando) { cc.secaCarregando = true; import('./secadora3d.js').then(() => { cc.secaCarregando = false; if (cc.agente === 'estoque') montarSecadora3D(); }).catch(() => { cc.secaCarregando = false; const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }); }
+    return;
+  }
+  try { if (cc.seca3d) { cc.seca3d.anexar(host); cc.seca3d.atualizar(dados); } else cc.seca3d = window.Secadora3D.montar(host, dados, tocarBobina3D); pronto(); }
+  catch (err) { const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }
+}
+function tocarBobina3D(b, x, y) {
+  const t = $j('cc-seca-dica'); if (!t) return;
+  if (!b) { t.hidden = true; return; }
+  t.innerHTML = `<i style="background:${esc(b.cor)}"></i><span><b>${esc(b.nome)}</b><small>${esc(b.material)} · ${fmtKg(b.kg)} nesta bobina</small></span>`;
+  t.hidden = false; t.style.left = Math.max(8, Math.min(x - 90, (t.parentElement.clientWidth || 300) - 200)) + 'px'; t.style.top = Math.max(8, y - 70) + 'px';
+  clearTimeout(cc.dicaT); cc.dicaT = setTimeout(() => { t.hidden = true; }, 3200);
+}
 function htmlAgenteEstoque(a) {
   const e = calcularEstoque(); const max = Math.max(1, ...e.cores.map(c => c.comprado));
+  const nBob = bobinasEstoque(e).length;
+  const secadora = `<section class="cc-bloco cc-seca-bloco"><h4>Secadora · Dry Box 48</h4><div id="cc-seca" class="cc-seca"><div class="cc-seca-carregando"><span class="spin"></span> Montando a secadora…</div><div id="cc-seca-dica" class="cc-seca-dica" hidden></div></div>
+    <p class="cc-nota">${nBob} de 48 lugares ocupados${nBob > 48 ? ` · ${nBob - 48} bobina(s) fora da secadora` : ''} · arraste para girar, toque numa bobina para ver, toque no vidro para abrir/fechar. Temperatura e umidade são ilustrativas.</p>
+    <div class="cc-amostras">${e.cores.filter(c => c.kg > 0.01).map(c => { const f = corFilamento(c.cor + ' ' + c.material); return `<span class="${c.kg < 0.3 ? 'baixo' : ''}"><i style="background:${f.cor}"></i>${esc(c.cor.replace(/^(PLA|PETG|TPU|ABS|ASA)\s+/i, ''))}<em>${fmtKg(c.kg)}</em></span>`; }).join('')}</div></section>`;
   const opcoes = e.cores.map((c, i) => `<option value="${i}">${esc(c.material)} · ${esc(c.cor)}</option>`).join('');
   const hist = estoquePrimos.slice(-8).reverse();
   return cabecalhoAgente(a)
+    + secadora
     + htmlRelatorioAgente(a.id)
     + ccNums([[fmtKg(e.total), 'em estoque'], [e.cores.filter(c => c.kg < 0.3).length, 'cores para repor', e.cores.some(c => c.kg < 0.3) ? '#ff9f0a' : ''], [e.caminho.length, 'compras a caminho']])
-    + ccBloco('Filamento por cor', `<ul class="cc-estoque">${e.cores.map(c => `<li class="${c.kg < 0.3 ? 'baixo' : ''}"><span><b>${esc(c.cor)}</b><small>${esc(c.material)}${c.usado ? ` · usado ${fmtKg(c.usado)}` : ''}</small></span><div class="cc-barra"><i style="width:${Math.max(0, Math.min(100, c.kg / max * 100)).toFixed(0)}%"></i></div><strong>${fmtKg(c.kg)}</strong></li>`).join('') || '<li><span><small>Nenhum filamento ainda.</small></span></li>'}</ul><p class="cc-nota">Compras da Central contam como já entregues. O que você registra aqui só entra no estoque quando marcar “Chegou”.</p>`)
+    + ccBloco('Filamento por cor', `<ul class="cc-estoque">${e.cores.map(c => `<li class="${c.kg < 0.3 ? 'baixo' : ''}"><span><b>${esc(c.cor)}</b><small>${esc(c.material)}${c.usado ? ` · usado ${fmtKg(c.usado)}` : ''}</small></span><div class="cc-barra"><i style="width:${Math.max(0, Math.min(100, c.kg / max * 100)).toFixed(0)}%; background:${corFilamento(c.cor + ' ' + c.material).cor}"></i></div><strong>${fmtKg(c.kg)}</strong></li>`).join('') || '<li><span><small>Nenhum filamento ainda.</small></span></li>'}</ul><p class="cc-nota">Compras da Central contam como já entregues. O que você registra aqui só entra no estoque quando marcar “Chegou”.</p>`)
     + (e.caminho.length ? ccBloco('A caminho', `<ul class="cc-lista">${e.caminho.map(m => `<li><span><b>${esc(m.material)} · ${esc(m.cor)}</b><small>${fmtKg(Number(m.kg) || 0)}${m.valor ? ' · ' + reais(Number(m.valor)) : ''} · pedido em ${esc(isoParaBR(m.data))}</small></span><button type="button" class="cc-mini" onclick="chegouEstoque(${m.id})">Chegou ✓</button></li>`).join('')}</ul>`) : '')
     + ccBloco('Registrar impressão (gasto de filamento)', e.cores.length ? `<form class="cc-form" onsubmit="registrarConsumoEstoque(event)"><select id="cc-cons-cor">${opcoes}</select><input id="cc-cons-g" type="number" min="1" step="1" placeholder="gramas (veja no Bambu Studio)" required><input id="cc-cons-peca" placeholder="peça (opcional)"><button type="submit" class="cc-btn">Descontar do estoque</button></form>` : '<p class="cc-txt">Registre uma compra primeiro.</p>')
     + ccBloco('Registrar compra de filamento', `<form class="cc-form" onsubmit="registrarCompraEstoque(event)"><select id="cc-comp-mat">${MATERIAIS_ESTOQUE.map(m => `<option>${m}</option>`).join('')}</select><input id="cc-comp-cor" list="cc-cores" placeholder="cor (ex.: PLA Basic Preto)" required><datalist id="cc-cores">${[...new Set(e.cores.map(c => c.cor))].map(c => `<option value="${esc(c)}">`).join('')}</datalist><input id="cc-comp-kg" type="number" min="0.1" step="0.1" placeholder="kg (1 rolo = 1)" required><input id="cc-comp-valor" type="number" min="0" step="0.01" placeholder="valor total R$ (opcional)"><label class="cc-check"><input id="cc-comp-chegou" type="checkbox"> Já chegou</label><button type="submit" class="cc-btn">Registrar compra</button></form>`)
