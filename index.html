@@ -58,6 +58,7 @@
           <div id="jv-heroi" class="jv-heroi" hidden></div>
         </header>
         <button type="button" class="jv-menu" onclick="abrirBaseJarvis()" aria-label="Abrir a base (todas as abas)" title="Base"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><circle cx="6" cy="6" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="18" cy="12" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="12" cy="18" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+        <button type="button" class="jv-central-btn" onclick="abrirCentral()" aria-label="Central de Comando dos agentes" title="Central de Comando"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="5" r="2.2"/><circle cx="5" cy="18" r="2.2"/><circle cx="12" cy="18" r="2.2"/><circle cx="19" cy="18" r="2.2"/><path d="M12 7.2v8.6M12 11c-4 0-7 1.5-7 4.8M12 11c4 0 7 1.5 7 4.8" stroke-dasharray="2 2"/></svg></button>
         <nav id="jv-areas" class="jv-areas" aria-label="Áreas e nível de informação do JARVIS"></nav>
         <div id="jv-painel" class="jv-painel" hidden></div>
         <div class="jv-rodape">
@@ -1425,6 +1426,11 @@
     </div>
   </div>
 
+  <!-- CENTRAL DE COMANDO (fase 6): J.A.R.V.I.S. → setores → agentes. Desenhada por renderCentral() no app.js. -->
+  <div id="jv-central" class="cc" hidden>
+    <header class="cc-topo"><button type="button" class="cc-voltar" onclick="fecharCentral()" aria-label="Voltar">‹</button><div><h2>Central de Comando</h2><small id="cc-sub"></small></div><button type="button" class="cc-novo" onclick="cc.novo=true; cc.agente=null; renderCentral()">＋ Agente</button></header>
+    <div class="cc-corpo"><div id="cc-quadro" class="cc-quadro"><svg id="cc-fios" class="cc-fios" aria-hidden="true"></svg><div id="cc-nos" class="cc-nos"></div></div><aside id="cc-painel" class="cc-painel" hidden></aside></div>
+  </div>
   <div id="jv-base" class="modal-overlay">
     <div class="modal-content jv-base-conteudo">
       <div class="modal-header"><h3>Base · todas as abas</h3><button class="close-modal" onclick="fecharBaseJarvis()">✕</button></div>

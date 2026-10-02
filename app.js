@@ -45,7 +45,9 @@ let claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || []
 let primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; // JARVIS: retrato da "Primos 3D Central" — CACHE do que vem do cofre privado (não sincroniza pela planilha)
 let familia = JSON.parse(localStorage.getItem('lifeos_familia')) || [];     // JARVIS: área Família (fotos, datas especiais, recados)
 let memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || [];   // JARVIS: o "subplano" (curiosidades, desabafos, conversas)
-let primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; // Primos: ações do plano do J.A.R.V.I.S. marcadas como feitas (✓) — { id, chave, texto, prazo, feito }
+let primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || [];
+let agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; // Central de Comando: agentes criados pelo Rafael — { id, setor, nome, missao, skills: [], criado }
+let estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; setTimeout(renderCentral, 0); // Estoque da Primos (o que o app registra além da Central) — { id, data, tipo: compra|consumo|ajuste, material, cor, kg, valor, status: caminho|chegou, obs } // Primos: ações do plano do J.A.R.V.I.S. marcadas como feitas (✓) — { id, chave, texto, prazo, feito }
 let jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; // J.A.R.V.I.S.: a conversa do chat (curta: as mais recentes, sincroniza)
 let media = JSON.parse(localStorage.getItem('lifeos_media')) || [];         // filmes, séries, docs
 let playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || []; // atalhos de música
@@ -6902,11 +6904,242 @@ function comandoJarvis(ev) {
 function abrirBaseJarvis() {
   const botoes = [...document.querySelectorAll('.tabs .tab-btn')].filter(b => b.id !== 'btn-cerebro' && !b.hidden);
   $j('jv-base-grade').innerHTML = botoes.map(b => `<button type="button" class="jv-app" onclick="fecharBaseJarvis(); changeTab('${b.id.slice(4)}')">${b.querySelector('.tab-ico').outerHTML.replace(' id="sync-dot"', '')}<span>${esc(b.querySelector('.tab-lbl').textContent)}</span></button>`).join('');
-  $j('jv-base-extra').innerHTML = `<button type="button" class="btn" onclick="fecharBaseJarvis(); abrirAjustesJarvis()">⚙︎ Ajustes do J.A.R.V.I.S. (cérebro, computador, temas)</button>`;
+  $j('jv-base-extra').innerHTML = `<button type="button" class="btn" onclick="fecharBaseJarvis(); abrirCentral()">◈ Central de Comando (agentes)</button><button type="button" class="btn" onclick="fecharBaseJarvis(); abrirAjustesJarvis()">⚙︎ Ajustes do J.A.R.V.I.S. (cérebro, computador, temas)</button>`;
   if ($j('jv-base').style.display !== 'flex') empilharCamada('base', fecharBaseJarvis);
   $j('jv-base').style.display = 'flex';
 }
 function fecharBaseJarvis(daVolta) { const el = $j('jv-base'); if (!el || el.style.display !== 'flex') return; el.style.display = 'none'; if (!daVolta) desempilharCamada('base'); }
+
+// ============================================================================
+// CENTRAL DE COMANDO (fase 6) — o J.A.R.V.I.S. comanda agentes por setor. Quadro em hierarquia
+// (J.A.R.V.I.S. → setores → agentes) ligado por fios tracejados; tocar num agente abre o painel dele.
+// Agentes SÓ LEEM e mostram; gravar é sempre um toque do Rafael (ou o portão de segurança).
+// Agentes criados pelo Rafael: módulo `agentes`. Estoque da Primos: módulo `estoqueprimos` (+ compras da Central).
+// ============================================================================
+const SETORES_CENTRAL = [
+  { id: 'primos', nome: 'Primos 3D', cor: '#ff9f0a', ico: '◆' },
+  { id: 'mercado', nome: 'Mercado', cor: '#ffd60a', ico: '₿' },
+  { id: 'academia', nome: 'Treino', cor: '#30d158', ico: '▲' },
+  { id: 'eng', nome: 'Engenharia', cor: '#0a84ff', ico: '▣' },
+  { id: 'sst', nome: 'Segurança', cor: '#ff453a', ico: '✚' },
+  { id: 'outros', nome: 'Outros', cor: '#8e8e93', ico: '●' }
+];
+const AGENTES_BASE = [
+  { id: 'contabil', setor: 'primos', nome: 'Contabilidade', funcao: 'Caixa, payback e valor da empresa', skills: ['Fluxo de caixa', 'DRE gerencial', 'Payback', 'Valuation', 'MEI'] },
+  { id: 'marketing', setor: 'primos', nome: 'Marketing', funcao: 'TikTok, Instagram e público', skills: ['TikTok', 'Instagram', 'Público-alvo', 'Tendências', 'Datas comerciais'] },
+  { id: 'estoque', setor: 'primos', nome: 'Estoque', funcao: 'Filamento por cor, compras a caminho', skills: ['Filamento por cor', 'Pedidos a caminho', 'Consumo por impressão', 'Reposição'] },
+  { id: 'mercado', setor: 'mercado', nome: 'Analista de mercado', funcao: 'Bitcoin, dólar e ações', skills: ['Bitcoin', 'Câmbio', 'Ações BR/EUA'] },
+  { id: 'treino', setor: 'academia', nome: 'Treinador', funcao: 'Treinos da semana e constância', skills: ['Plano semanal', 'Constância', 'Hidratação'] }
+];
+const MATERIAIS_ESTOQUE = ['PLA', 'PETG', 'TPU', 'ABS', 'ASA', 'Outro'];
+const cc = { setor: 'primos', agente: null, novo: false };
+function todosAgentes() { return [...AGENTES_BASE, ...agentesJv.map(a => ({ ...a, proprio: true }))]; }
+function setorCentral(id) { return SETORES_CENTRAL.find(s => s.id === id) || SETORES_CENTRAL[SETORES_CENTRAL.length - 1]; }
+
+function abrirCentral(setor) {
+  const el = $j('jv-central'); if (!el) return;
+  if (setor) cc.setor = setor;
+  if (el.hidden) empilharCamada('central', fecharCentral);
+  el.hidden = false; document.body.classList.add('cc-aberta'); renderCentral();
+}
+function fecharCentral(daVolta) {
+  const el = $j('jv-central'); if (!el || el.hidden) return;
+  el.hidden = true; document.body.classList.remove('cc-aberta'); cc.agente = null; cc.novo = false;
+  if (!daVolta) desempilharCamada('central');
+}
+function escolherSetorCentral(id) { cc.setor = id; cc.agente = null; cc.novo = false; renderCentral(); }
+function abrirAgenteCentral(id) { cc.agente = id; cc.novo = false; renderCentral(); }
+function fecharPainelCentral() { cc.agente = null; cc.novo = false; renderCentral(); }
+
+/** Situação de cada agente: nível (ok | atencao | sem) + o número que aparece no cartão. */
+function estadoAgente(a) {
+  const pc = primosCentral;
+  if (a.id === 'contabil') {
+    if (!pc || !pc.caixa) return { nivel: 'sem', metrica: 'Sem dados do cofre' };
+    const vl = vendasLiquidasPrimos(pc); return { nivel: (pc.caixa.saldo || 0) < 0 ? 'atencao' : 'ok', metrica: `${reais(vl.total)} recebido` };
+  }
+  if (a.id === 'marketing') {
+    const tk = (pc || {}).tiktokPerfil, mk = (pc || {}).marketing; if (!tk && !mk) return { nivel: 'sem', metrica: 'Sem leitura do TikTok' };
+    const p7 = ((mk || {}).tiktok || {}).periodo7d; const velho = mk && mk.atualizadoEm && diasEntre(mk.atualizadoEm, hojeISO()) > 7;
+    return { nivel: velho ? 'atencao' : 'ok', metrica: `${tk ? tk.seguidores + ' seguidores' : ''}${p7 ? ` · ${(Math.round(p7.views / 100) / 10).toLocaleString('pt-BR')} mil views/7d` : ''}` };
+  }
+  if (a.id === 'estoque') {
+    const e = calcularEstoque(); if (!e.cores.length) return { nivel: 'sem', metrica: 'Nada registrado' };
+    const baixo = e.cores.filter(c => c.kg < 0.3).length;
+    return { nivel: baixo ? 'atencao' : 'ok', metrica: `${fmtKg(e.total)} em estoque${e.caminho.length ? ` · ${e.caminho.length} a caminho` : ''}` };
+  }
+  if (a.id === 'mercado') return { nivel: 'ok', metrica: 'Cotações ao vivo' };
+  if (a.id === 'treino') { const n = workouts.filter(w => { const d = w.date || w.data; return d && diasEntre(d, hojeISO()) <= 7; }).length; return { nivel: n >= 3 ? 'ok' : 'atencao', metrica: `${plural(n, 'treino', 'treinos')} em 7 dias` }; }
+  return { nivel: 'sem', metrica: 'Em preparação' };
+}
+
+function renderCentral() {
+  const el = $j('jv-central'); if (!el || el.hidden) return;
+  const pc = primosCentral, ag = todosAgentes();
+  $j('cc-sub').textContent = pc && pc.geradoEm ? `Dados da Central lidos em ${isoParaBR(String(pc.geradoEm).slice(0, 10))} · agentes só leem` : 'Agentes só leem · gravar sempre pede o seu OK';
+  const noAgente = a => {
+    const s = setorCentral(a.setor), st = estadoAgente(a);
+    return `<button type="button" class="cc-no cc-agente${cc.agente === a.id ? ' sel' : ''}" data-no="a:${esc(a.id)}" data-pai="s:${esc(a.setor)}" style="--cor:${s.cor}" onclick="abrirAgenteCentral('${esc(a.id)}')">
+      <span class="cc-no-topo"><i class="cc-luz ${st.nivel}"></i><b>${esc(a.nome)}</b></span>
+      <small>${esc(a.funcao || a.missao || '')}</small>
+      <strong class="cc-metrica">${esc(st.metrica)}</strong>
+      <span class="cc-tags">${(a.skills || []).slice(0, 3).map(k => `<em>${esc(k)}</em>`).join('')}</span></button>`;
+  };
+  const doSetor = ag.filter(a => a.setor === cc.setor);
+  $j('cc-nos').innerHTML = `
+    <div class="cc-nivel"><button type="button" class="cc-no cc-jarvis${cc.agente === 'jarvis' ? ' sel' : ''}" data-no="jarvis" onclick="abrirAgenteCentral('jarvis')"><img src="icon-180.png" alt=""><span><b>J.A.R.V.I.S.</b><small>${plural(ag.length, 'agente', 'agentes')} · ${plural(SETORES_CENTRAL.length, 'setor', 'setores')}</small></span></button></div>
+    <div class="cc-nivel cc-setores">${SETORES_CENTRAL.map(s => { const n = ag.filter(a => a.setor === s.id); const at = n.some(a => estadoAgente(a).nivel === 'atencao');
+      return `<button type="button" class="cc-no cc-setor${cc.setor === s.id ? ' sel' : ''}" data-no="s:${s.id}" data-pai="jarvis" style="--cor:${s.cor}" onclick="escolherSetorCentral('${s.id}')"><span class="cc-ico">${s.ico}</span><b>${esc(s.nome)}</b><small>${n.length ? plural(n.length, 'agente', 'agentes') : 'sem agentes'}${at ? ' · <i class="cc-luz atencao"></i>' : ''}</small></button>`; }).join('')}</div>
+    <div class="cc-nivel cc-agentes">${doSetor.map(noAgente).join('')}<button type="button" class="cc-no cc-add" data-no="add" data-pai="s:${cc.setor}" onclick="cc.novo=true; cc.agente=null; renderCentral()">＋<small>Novo agente em ${esc(setorCentral(cc.setor).nome)}</small></button></div>`;
+  const p = $j('cc-painel');
+  if (cc.novo) { p.hidden = false; p.innerHTML = htmlNovoAgente(); }
+  else if (cc.agente) { p.hidden = false; p.innerHTML = htmlPainelAgente(cc.agente); p.scrollTop = 0; }
+  else { p.hidden = true; p.innerHTML = ''; }
+  el.classList.toggle('com-painel', !p.hidden);
+  requestAnimationFrame(desenharFiosCentral); setTimeout(desenharFiosCentral, 260); // de novo depois que as fontes/painel assentam
+}
+/** Fios tracejados do pai (embaixo, no meio) ao filho (em cima, no meio), recalculados a cada desenho. */
+function desenharFiosCentral() {
+  const q = $j('cc-quadro'), svg = $j('cc-fios'); if (!q || !svg) return;
+  const r0 = q.getBoundingClientRect(); svg.setAttribute('width', q.scrollWidth); svg.setAttribute('height', q.scrollHeight);
+  const pos = el => { const r = el.getBoundingClientRect(); return { x: r.left - r0.left + q.scrollLeft + r.width / 2, t: r.top - r0.top + q.scrollTop, b: r.bottom - r0.top + q.scrollTop }; };
+  const celular = window.innerWidth <= 800; // no celular só o caminho ativo (J.A.R.V.I.S. → setor escolhido); os agentes ganham um trilho na lateral (CSS)
+  const fios = [...q.querySelectorAll('[data-pai]')].filter(f => !celular || f.dataset.no === 's:' + cc.setor).map(f => {
+    const pai = q.querySelector(`[data-no="${f.dataset.pai}"]`); if (!pai) return '';
+    const a = pos(pai), b = pos(f), m = (a.b + b.t) / 2;
+    const ativo = f.classList.contains('sel') || (f.dataset.pai !== 'jarvis') || f.dataset.no === 's:' + cc.setor;
+    return `<path class="${ativo ? 'ativo' : ''}" d="M${a.x},${a.b} C${a.x},${m} ${b.x},${m} ${b.x},${b.t}"/>`;
+  });
+  svg.innerHTML = fios.join('');
+}
+window.addEventListener('resize', () => { if ($j('jv-central') && !$j('jv-central').hidden) desenharFiosCentral(); });
+
+function cabecalhoAgente(a, extra) {
+  const s = setorCentral(a.setor), st = a.id === 'jarvis' ? { nivel: 'ok' } : estadoAgente(a);
+  return `<header class="cc-p-topo" style="--cor:${s.cor}"><button type="button" class="cc-x" onclick="fecharPainelCentral()" aria-label="Fechar">✕</button>
+    <small>${esc(s.nome)} · agente</small><h3><i class="cc-luz ${st.nivel}"></i>${esc(a.nome)}</h3>
+    <p>${esc(a.funcao || a.missao || '')}</p><div class="cc-tags">${(a.skills || []).map(k => `<em>${esc(k)}</em>`).join('')}</div>${extra || ''}</header>`;
+}
+function ccNums(lista) { return `<div class="cc-nums">${lista.map(([v, r, cor]) => `<div><strong${cor ? ` style="color:${cor}"` : ''}>${v}</strong><small>${r}</small></div>`).join('')}</div>`; }
+function ccBloco(titulo, corpo) { return `<section class="cc-bloco"><h4>${titulo}</h4>${corpo}</section>`; }
+function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente('${esc(a.id)}')">Perguntar a este agente</button>`; }
+function conversarComAgente(id) {
+  const a = todosAgentes().find(x => x.id === id); if (!a) return;
+  abrirChatJarvis({ contexto: `Central de Comando › ${setorCentral(a.setor).nome} › agente ${a.nome} (especialista em: ${(a.skills || []).join(', ')}${a.missao ? '; missão: ' + a.missao : ''}). Responda como esse especialista.`, area: a.setor === 'outros' ? null : a.setor });
+}
+
+function htmlPainelAgente(id) {
+  if (id === 'jarvis') {
+    const ag = todosAgentes();
+    return `<header class="cc-p-topo"><button type="button" class="cc-x" onclick="fecharPainelCentral()" aria-label="Fechar">✕</button><small>comando</small><h3><i class="cc-luz ok"></i>J.A.R.V.I.S.</h3><p>Coordena os agentes. Eles leem os seus dados e te mostram o essencial. Nenhum compra, paga, envia mensagem ou posta.</p></header>`
+      + ccBloco('Situação dos agentes', `<ul class="cc-lista">${ag.map(a => { const st = estadoAgente(a); return `<li onclick="cc.setor='${a.setor}'; abrirAgenteCentral('${esc(a.id)}')"><i class="cc-luz ${st.nivel}"></i><span><b>${esc(a.nome)}</b><small>${esc(setorCentral(a.setor).nome)} · ${esc(st.metrica)}</small></span><em>›</em></li>`; }).join('')}</ul>`)
+      + ccBloco('🛡️ Regras de segurança', `<ul class="cc-regras"><li>Ler e analisar: automático</li><li>Gravar ou alterar: só com o seu OK</li><li>Compras, pagamentos, Pix, e-mails, mensagens e posts: nunca</li></ul>`);
+  }
+  const a = todosAgentes().find(x => x.id === id); if (!a) return '';
+  if (a.id === 'contabil') return htmlAgenteContabil(a);
+  if (a.id === 'marketing') return htmlAgenteMarketing(a);
+  if (a.id === 'estoque') return htmlAgenteEstoque(a);
+  if (a.id === 'mercado') return cabecalhoAgente(a) + `<div class="cc-embed">${typeof htmlMercado === 'function' ? htmlMercado(true) : ''}</div>` + botaoConversarAgente(a);
+  if (a.id === 'treino') {
+    const sem = workouts.filter(w => { const d = w.date || w.data; return d && diasEntre(d, hojeISO()) <= 7; });
+    return cabecalhoAgente(a) + ccNums([[sem.length, 'treinos em 7 dias'], [workouts.length, 'treinos registrados']])
+      + ccBloco('Próximo passo', `<p class="cc-txt">O plano semanal e a dieta entram aqui assim que você me disser como quer montar. Por enquanto, registre os treinos na aba Saúde.</p><button type="button" class="cc-btn sec" onclick="fecharCentral(); changeTab('health')">Abrir Saúde</button>`) + botaoConversarAgente(a);
+  }
+  return cabecalhoAgente(a) + ccBloco('Missão', `<p class="cc-txt">${esc(a.missao || 'Sem missão definida.')}</p>`)
+    + ccBloco('Situação', `<p class="cc-txt">Este agente já existe e conversa pelo chat com as skills acima. Os painéis próprios dele (números e rotinas) eu monto quando você pedir.</p>`)
+    + botaoConversarAgente(a) + `<button type="button" class="cc-btn perigo" onclick="removerAgente('${esc(a.id)}')">Remover agente</button>`;
+}
+
+// --- agente CONTABILIDADE ---
+function htmlAgenteContabil(a) {
+  const pc = primosCentral; if (!pc || !pc.caixa) return cabecalhoAgente(a) + ccBloco('Sem dados', '<p class="cc-txt">Conecte o computador (Ajustes do J.A.R.V.I.S. → 2) para eu ler a Central.</p>');
+  const cx = pc.caixa, vl = vendasLiquidasPrimos(pc), k = contabilidadePrimos(pc);
+  const invest = cx.totalGasto || 0, falta = Math.max(0, invest - vl.total);
+  const datas = (pc.vendas || []).map(v => v.data).filter(Boolean).sort();
+  const meses = datas.length ? Math.max(1, diasEntre(datas[0], hojeISO()) / 30) : 1;
+  const ritmo = vl.total / meses; const payback = ritmo > 0 ? falta / ritmo : null;
+  const patrimonial = Math.max(0, k.imobilizado - k.depreciacao) + k.estoques;
+  const receitaAno = ritmo * 12;
+  const pctRec = invest ? Math.min(100, vl.total / invest * 100) : 0;
+  return cabecalhoAgente(a)
+    + ccNums([[reais(vl.total), 'recebido (líquido)'], [reais(invest), 'investido'], [reais(cx.saldo), 'caixa', (cx.saldo || 0) < 0 ? '#ff453a' : '#30d158'], [reais(cx.contasPagar), 'contas a pagar']])
+    + ccBloco('Payback', `<div class="cc-barra"><i style="width:${pctRec.toFixed(1)}%"></i></div><p class="cc-txt"><b>${pctRec.toFixed(1).replace('.', ',')}%</b> do investimento já voltou. Falta <b>${reais(falta)}</b>.${payback !== null ? ` No ritmo atual (~${reais(ritmo)}/mês), leva <b>${payback > 120 ? 'mais de 10 anos' : Math.ceil(payback) + ' meses'}</b>.` : ' Ainda sem vendas para medir o ritmo.'}</p>`)
+    + ccBloco('Quanto vale a empresa (estimativa)', ccNums([[reais(patrimonial), 'pelo patrimônio<br>(máquinas − depreciação + estoque)'], [reais(receitaAno * 1.5), 'pela receita<br>(1,5 × o ano no ritmo atual)']]) + '<p class="cc-nota">Estimativa didática, não é laudo. Empresa nova vale quase só o patrimônio; o valor pela receita cresce com as vendas.</p>')
+    + ccBloco('Últimas entradas', `<ul class="cc-lista">${(pc.vendas || []).slice().sort((x, y) => String(y.data).localeCompare(String(x.data))).slice(0, 5).map(v => `<li><span><b>${reais(v.liquido || v.bruto)}</b><small>${esc(isoParaBR(v.data || ''))} · ${esc(v.canal || '')} · ${esc(String(v.produto || '').slice(0, 40))}</small></span></li>`).join('') || '<li><span><small>Sem vendas ainda</small></span></li>'}</ul>`)
+    + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('contabil')">Abrir a contabilidade completa</button>` + botaoConversarAgente(a);
+}
+
+// --- agente MARKETING ---
+function htmlAgenteMarketing(a) {
+  const pc = primosCentral || {}, tk = pc.tiktokPerfil || {}, mk = pc.marketing || {}, t = mk.tiktok || {}, p7 = t.periodo7d || {}, pub = t.publico || {};
+  if (!pc.tiktokPerfil && !pc.marketing) return cabecalhoAgente(a) + ccBloco('Sem dados', '<p class="cc-txt">Ainda não li o TikTok. Peça “atualizar marketing” pelo chat.</p>');
+  const temas = (t.temas || []).slice().sort((x, y) => (y.taxa || 0) - (x.taxa || 0)).slice(0, 3);
+  return cabecalhoAgente(a, mk.atualizadoEm ? `<small class="cc-quando">lido em ${esc(isoParaBR(mk.atualizadoEm))}</small>` : '')
+    + ccNums([[tk.seguidores ?? '—', 'seguidores'], [p7.views ? (p7.views / 1000).toFixed(1).replace('.', ',') + ' mil' : '—', `views 7 dias ${p7.varViews ? `<em class="cc-up">${esc(p7.varViews)}</em>` : ''}`], [tk.curtidas ?? '—', 'curtidas'], [tk.videos ?? '—', 'vídeos']])
+    + (mk.manchete ? ccBloco('O que fazer agora', `<p class="cc-txt">${mk.manchete}</p>`) : '')
+    + (temas.length ? ccBloco('O que engaja (curtidas por view)', `<ul class="cc-lista">${temas.map(x => `<li><span><b>${esc(x.tema)}</b><small>${esc(x.leitura || '')}</small></span><em class="cc-pct">${String(x.taxa).replace('.', ',')}%</em></li>`).join('')}</ul>`) : '')
+    + (pub.faixa ? ccBloco('Seu público hoje', `<p class="cc-txt">${pub.homens}% homens · ${esc(pub.faixa)} · pico ${esc(pub.pico || '')}</p>`) : '')
+    + ((t.buscas || []).length ? ccBloco('O que as pessoas buscam', `<div class="cc-tags solto">${t.buscas.map(b => `<em>${esc(b)}</em>`).join('')}</div>`) : '')
+    + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('marketing')">Abrir o marketing completo</button>` + botaoConversarAgente(a);
+}
+
+// --- agente ESTOQUE: compras da Central (já chegaram) + o que o app registra (compra a caminho/chegou, impressões) ---
+function fmtKg(kg) { return (Math.round(kg * 100) / 100).toLocaleString('pt-BR') + ' kg'; }
+function chaveCor(material, cor) { return semAcentoCer(material) + '|' + semAcentoCer(cor); }
+function calcularEstoque() {
+  const g = {}; const add = (material, cor, kg) => { const k = chaveCor(material, cor); const x = g[k] = g[k] || { material, cor, comprado: 0, usado: 0, kg: 0 }; if (kg > 0) x.comprado += kg; else x.usado -= kg; x.kg += kg; };
+  ((primosCentral || {}).filamentos || []).forEach(f => { if (!/caminho|transit|aguard/i.test(f.status || '')) add(f.material || 'PLA', f.cor || 'Sem cor', Number(f.kg) || 0); });
+  estoquePrimos.forEach(m => { const kg = Number(m.kg) || 0;
+    if (m.tipo === 'compra' && m.status === 'chegou') add(m.material, m.cor, kg);
+    else if (m.tipo === 'consumo') add(m.material, m.cor, -kg);
+    else if (m.tipo === 'ajuste') add(m.material, m.cor, kg); });
+  const cores = Object.values(g).sort((a, b) => a.material.localeCompare(b.material) || a.kg - b.kg);
+  const caminho = estoquePrimos.filter(m => m.tipo === 'compra' && m.status === 'caminho');
+  return { cores, caminho, total: cores.reduce((s, c) => s + Math.max(0, c.kg), 0) };
+}
+function htmlAgenteEstoque(a) {
+  const e = calcularEstoque(); const max = Math.max(1, ...e.cores.map(c => c.comprado));
+  const opcoes = e.cores.map((c, i) => `<option value="${i}">${esc(c.material)} · ${esc(c.cor)}</option>`).join('');
+  const hist = estoquePrimos.slice(-8).reverse();
+  return cabecalhoAgente(a)
+    + ccNums([[fmtKg(e.total), 'em estoque'], [e.cores.filter(c => c.kg < 0.3).length, 'cores para repor', e.cores.some(c => c.kg < 0.3) ? '#ff9f0a' : ''], [e.caminho.length, 'compras a caminho']])
+    + ccBloco('Filamento por cor', `<ul class="cc-estoque">${e.cores.map(c => `<li class="${c.kg < 0.3 ? 'baixo' : ''}"><span><b>${esc(c.cor)}</b><small>${esc(c.material)}${c.usado ? ` · usado ${fmtKg(c.usado)}` : ''}</small></span><div class="cc-barra"><i style="width:${Math.max(0, Math.min(100, c.kg / max * 100)).toFixed(0)}%"></i></div><strong>${fmtKg(c.kg)}</strong></li>`).join('') || '<li><span><small>Nenhum filamento ainda.</small></span></li>'}</ul><p class="cc-nota">Compras da Central contam como já entregues. O que você registra aqui só entra no estoque quando marcar “Chegou”.</p>`)
+    + (e.caminho.length ? ccBloco('A caminho', `<ul class="cc-lista">${e.caminho.map(m => `<li><span><b>${esc(m.material)} · ${esc(m.cor)}</b><small>${fmtKg(Number(m.kg) || 0)}${m.valor ? ' · ' + reais(Number(m.valor)) : ''} · pedido em ${esc(isoParaBR(m.data))}</small></span><button type="button" class="cc-mini" onclick="chegouEstoque(${m.id})">Chegou ✓</button></li>`).join('')}</ul>`) : '')
+    + ccBloco('Registrar impressão (gasto de filamento)', e.cores.length ? `<form class="cc-form" onsubmit="registrarConsumoEstoque(event)"><select id="cc-cons-cor">${opcoes}</select><input id="cc-cons-g" type="number" min="1" step="1" placeholder="gramas (veja no Bambu Studio)" required><input id="cc-cons-peca" placeholder="peça (opcional)"><button type="submit" class="cc-btn">Descontar do estoque</button></form>` : '<p class="cc-txt">Registre uma compra primeiro.</p>')
+    + ccBloco('Registrar compra de filamento', `<form class="cc-form" onsubmit="registrarCompraEstoque(event)"><select id="cc-comp-mat">${MATERIAIS_ESTOQUE.map(m => `<option>${m}</option>`).join('')}</select><input id="cc-comp-cor" list="cc-cores" placeholder="cor (ex.: PLA Basic Preto)" required><datalist id="cc-cores">${[...new Set(e.cores.map(c => c.cor))].map(c => `<option value="${esc(c)}">`).join('')}</datalist><input id="cc-comp-kg" type="number" min="0.1" step="0.1" placeholder="kg (1 rolo = 1)" required><input id="cc-comp-valor" type="number" min="0" step="0.01" placeholder="valor total R$ (opcional)"><label class="cc-check"><input id="cc-comp-chegou" type="checkbox"> Já chegou</label><button type="submit" class="cc-btn">Registrar compra</button></form>`)
+    + (hist.length ? ccBloco('Últimos registros no app', `<ul class="cc-lista">${hist.map(m => `<li><span><b>${m.tipo === 'consumo' ? '− ' : '+ '}${fmtKg(Number(m.kg) || 0)} · ${esc(m.cor)}</b><small>${esc(isoParaBR(m.data))} · ${m.tipo === 'consumo' ? 'impressão' + (m.obs ? ': ' + esc(m.obs) : '') : m.status === 'caminho' ? 'compra a caminho' : 'compra recebida'}</small></span><button type="button" class="cc-mini sec" onclick="removerEstoque(${m.id})" aria-label="Apagar">✕</button></li>`).join('')}</ul>`) : '')
+    + botaoConversarAgente(a);
+}
+function registrarCompraEstoque(ev) {
+  ev.preventDefault(); const kg = parseFloat($j('cc-comp-kg').value); const cor = $j('cc-comp-cor').value.trim(); if (!cor || !(kg > 0)) return;
+  estoquePrimos.push({ id: novoId(), data: hojeISO(), tipo: 'compra', material: $j('cc-comp-mat').value, cor, kg, valor: parseFloat($j('cc-comp-valor').value) || null, status: $j('cc-comp-chegou').checked ? 'chegou' : 'caminho', obs: '' });
+  salvar('estoqueprimos', estoquePrimos); toast('Compra registrada.'); renderCentral();
+}
+function chegouEstoque(id) { const m = estoquePrimos.find(x => x.id === id); if (!m) return; m.status = 'chegou'; m.chegouEm = hojeISO(); salvar('estoqueprimos', estoquePrimos); toast('Entrou no estoque.'); renderCentral(); }
+function registrarConsumoEstoque(ev) {
+  ev.preventDefault(); const c = calcularEstoque().cores[Number($j('cc-cons-cor').value)]; const g = parseFloat($j('cc-cons-g').value); if (!c || !(g > 0)) return;
+  estoquePrimos.push({ id: novoId(), data: hojeISO(), tipo: 'consumo', material: c.material, cor: c.cor, kg: g / 1000, obs: $j('cc-cons-peca').value.trim() });
+  salvar('estoqueprimos', estoquePrimos); toast(`Descontei ${g} g de ${c.cor}.`); renderCentral();
+}
+function removerEstoque(id) { const m = estoquePrimos.find(x => x.id === id); if (!m || !confirm('Apagar este registro do estoque?')) return; estoquePrimos = estoquePrimos.filter(x => x.id !== id); salvar('estoqueprimos', estoquePrimos); renderCentral(); }
+
+// --- novo agente (do Rafael) ---
+function htmlNovoAgente() {
+  const s = setorCentral(cc.setor);
+  return `<header class="cc-p-topo" style="--cor:${s.cor}"><button type="button" class="cc-x" onclick="fecharPainelCentral()" aria-label="Fechar">✕</button><small>${esc(s.nome)}</small><h3>Novo agente</h3><p>Diga o setor, a missão e as skills. Ele já conversa com você pelo chat como especialista. Os painéis próprios eu monto depois.</p></header>
+    <form class="cc-form" onsubmit="salvarNovoAgente(event)">
+      <select id="cc-ag-setor">${SETORES_CENTRAL.map(x => `<option value="${x.id}"${x.id === cc.setor ? ' selected' : ''}>${esc(x.nome)}</option>`).join('')}</select>
+      <input id="cc-ag-nome" placeholder="Nome (ex.: Vendas Shopee)" required maxlength="40">
+      <textarea id="cc-ag-missao" rows="3" placeholder="Missão (ex.: acompanhar anúncios, preços e avaliações da loja)" maxlength="300"></textarea>
+      <input id="cc-ag-skills" placeholder="Skills, separadas por vírgula (ex.: Shopee, precificação, anúncios)" maxlength="200">
+      <button type="submit" class="cc-btn">Criar agente</button></form>`;
+}
+function salvarNovoAgente(ev) {
+  ev.preventDefault(); const nome = $j('cc-ag-nome').value.trim(); if (!nome) return;
+  const a = { id: 'u' + novoId(), setor: $j('cc-ag-setor').value, nome, missao: $j('cc-ag-missao').value.trim(), skills: $j('cc-ag-skills').value.split(',').map(x => x.trim()).filter(Boolean).slice(0, 8), criado: hojeISO() };
+  agentesJv.push(a); salvar('agentes', agentesJv); cc.setor = a.setor; cc.novo = false; cc.agente = a.id; toast(`Agente ${nome} criado.`); renderCentral();
+}
+function removerAgente(id) { const a = agentesJv.find(x => x.id === id); if (!a || !confirm(`Remover o agente "${a.nome}"?`)) return; agentesJv = agentesJv.filter(x => x.id !== id); salvar('agentes', agentesJv); cc.agente = null; renderCentral(); }
 
 // ============================================================================
 // AJUSTES DO J.A.R.V.I.S. — tudo guiado, passo a passo, em seções independentes (cada uma salva sozinha):
@@ -7131,8 +7364,8 @@ function migrarEntregasDePedidos() {
 }
 
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -9345,7 +9578,7 @@ if (_vndProd) _vndProd.addEventListener('change', previaVenda);
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'agentes', 'estoqueprimos', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -9477,7 +9710,7 @@ function redesenharTudo() {
   entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || [];
   orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
   claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || [];
-  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; if (typeof renderChatJarvis === 'function') renderChatJarvis();
+  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; setTimeout(renderCentral, 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
   media = JSON.parse(localStorage.getItem('lifeos_media')) || []; playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || [];
   trips = JSON.parse(localStorage.getItem('lifeos_trips')) || []; contacts = JSON.parse(localStorage.getItem('lifeos_contacts')) || [];
   devnotes = JSON.parse(localStorage.getItem('lifeos_devnotes')) || {};
