@@ -3132,3 +3132,12 @@ body.ag-aberta { overflow: hidden; }
 .rt-trilho i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #25f4ee, #ff2d55); }
 .rt-barra b { grid-area: num; font-size: 12.5px; }
 .rt-barra small { grid-area: cor; opacity: .6; }
+/* ===== DESENVOLVEDOR (fase 8): abas por nicho ===== */
+.dev-abas { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0 10px; scrollbar-width: none; }
+.dev-abas button { flex: 0 0 auto; border: 0; border-radius: 999px; padding: 7px 13px; font: inherit; font-size: 13px; background: rgba(127,127,127,.12); color: inherit; cursor: pointer; }
+.dev-abas button small { margin-left: 6px; opacity: .55; }
+.dev-abas button.on { background: #0a84ff; color: #fff; }
+.dev-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.dev-lista li { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border-radius: 12px; background: rgba(127,127,127,.08); }
+.dev-lista small { opacity: .65; font-size: 12px; }
+.dev-etapa { align-self: flex-start; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }

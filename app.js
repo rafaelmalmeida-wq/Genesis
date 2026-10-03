@@ -5983,6 +5983,7 @@ async function sincronizarCofre(forcar) {
     } else if (forcar) toast('A Primos 3D já está com os dados mais novos.', 3500);
     try { const k = await (await cofreBruto('dados/conteudo.json')).json(); if (k && k.tipo === 'jarvis-conteudo' && (!conteudoMkt || k.atualizadoEm !== conteudoMkt.atualizadoEm)) { conteudoMkt = k; try { localStorage.setItem('lifeos_conteudo', JSON.stringify(k)); } catch (e) { } if (cc.agente === 'marketing') renderCentral(); } } catch (e) { }
     try { const b = await (await cofreBruto('dados/impressoes.json')).json(); if (b && b.tipo === 'jarvis-impressoes' && (!impressoesBambu || b.lidoEm !== impressoesBambu.lidoEm)) { impressoesBambu = b; try { localStorage.setItem('lifeos_impressoes', JSON.stringify(b)); } catch (e) { } if (cc.agente === 'producao') montarFabrica3D(); } } catch (e) { }
+    try { const dv = await (await cofreBruto('dados/dev.json')).json(); if (dv && dv.tipo === 'jarvis-dev') { devDados = dv; try { localStorage.setItem('lifeos_dev', JSON.stringify(dv)); } catch (e) { } } } catch (e) { } // projetos do Desenvolvedor (fase 8)
     try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
     try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } renderCentral(); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
   } catch (e) { if (forcar) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
@@ -8140,6 +8141,25 @@ function cabecalhoAgente(a, extra) {
     <p>${esc(a.funcao || a.missao || '')}</p><div class="cc-tags">${(a.skills || []).map(k => `<em>${esc(k)}</em>`).join('')}</div>${extra || ''}</header>`;
 }
 function ccNums(lista) { return `<div class="cc-nums">${lista.map(([v, r, cor]) => `<div><strong${cor ? ` style="color:${cor}"` : ''}>${v}</strong><small>${r}</small></div>`).join('')}</div>`; }
+// --- DESENVOLVEDOR (fase 8): abas por nicho; cada projeto segue ideia → imagem (o Rafael aprova) → 3MF editável → feito.
+//     Fonte: cofre dados/dev.json (o PC mantém em .claude/jarvis/dev/projetos.json) → CACHE local lifeos_dev.
+let devDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_dev')); } catch (e) { return null; } })();
+const ABAS_DEV = [['agro', 'Agro'], ['empresas', 'Empresas'], ['religioso', 'Religioso'], ['esportes', 'Esportes'], ['kids', 'Kids'], ['pet', 'Pet']];
+const ETAPAS_DEV = { ideia: ['Ideia', '#8e8e93'], imagem: ['Imagem para aprovar', '#ff9f0a'], aprovado: ['Aprovado', '#0a84ff'], '3mf': ['3MF pronto', '#bf5af2'], feito: ['Feito', '#30d158'] };
+function abaDev(k) { cc.devAba = k; renderCentral(); renderPaginaAgente(); }
+function htmlAgenteDev(a) {
+  const ps = (devDados && devDados.projetos) || [], aba = cc.devAba || 'agro', doNicho = ps.filter(p => (p.categoria || 'empresas') === aba);
+  const ordem = ['imagem', 'aprovado', '3mf', 'ideia', 'feito'], lista = doNicho.slice().sort((x, y) => ordem.indexOf(x.status || 'ideia') - ordem.indexOf(y.status || 'ideia'));
+  const conta = k => ps.filter(p => (p.categoria || 'empresas') === k).length;
+  return cabecalhoAgente(a)
+    + ccNums([[ps.filter(p => p.status === 'imagem').length, 'para você aprovar'], [ps.filter(p => p.status === '3mf').length, '3MF prontos'], [ps.length, 'projetos']])
+    + `<nav class="dev-abas">${ABAS_DEV.map(([k, n]) => `<button type="button" class="${aba === k ? 'on' : ''}" onclick="abaDev('${k}')">${esc(n)}<small>${conta(k)}</small></button>`).join('')}</nav>`
+    + ccBloco(`${esc((ABAS_DEV.find(x => x[0] === aba) || [, ''])[1])} · ${plural(lista.length, 'projeto', 'projetos')}`, lista.length ? `<ul class="dev-lista">${lista.map(p => { const e = ETAPAS_DEV[p.status || 'ideia'] || ETAPAS_DEV.ideia;
+        return `<li><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b>${p.personaliza ? `<small>Personaliza: ${esc(p.personaliza)}</small>` : ''}<small>${esc(p.codigo)} ${esc(p.versao || '')} · falta: ${esc(p.falta || '—')}</small></li>`; }).join('')}</ul>`
+      : '<p class="cc-txt">Nenhum projeto neste nicho ainda. Peça uma ideia ao Desenvolvedor.</p>')
+    + ccBloco('Como ele trabalha', `<p class="cc-txt">${esc((devDados && devDados.fluxo) || 'ideia → imagem (você aprova) → 3MF editável → feito')}. Ele monta a imagem de apresentação (com o Estúdio de fotos), espera o seu “pode seguir” e só então faz o 3MF com o texto editável no Bambu Studio.</p>`)
+    + botaoConversarAgente(a);
+}
 function ccBloco(titulo, corpo) { return `<section class="cc-bloco"><h4>${titulo}</h4>${corpo}</section>`; }
 function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente('${esc(a.id)}')">Perguntar a este agente</button>`; }
 const VOZ_AGENTES = {
@@ -8196,7 +8216,8 @@ function htmlPainelAgenteBase(id) {
     return cabecalhoAgente(a) + ccNums([[sem.length, 'treinos em 7 dias'], [workouts.length, 'treinos registrados']])
       + ccBloco('Próximo passo', `<p class="cc-txt">O plano semanal e a dieta entram aqui assim que você me disser como quer montar. Por enquanto, registre os treinos na aba Saúde.</p><button type="button" class="cc-btn sec" onclick="fecharCentral(); changeTab('health')">Abrir Saúde</button>`) + botaoConversarAgente(a);
   }
-  if (a.id === 'dev' || a.id === 'shopee') return cabecalhoAgente(a) + ccBloco('Aguardando as skills', '<p class="cc-txt">O agente ' + esc(a.nome) + ' já tem o lugar dele na Central. Assim que você me disser as skills, eu monto o manual dele, os painéis e a rodada automática na nuvem.</p>') + botaoConversarAgente(a);
+  if (a.id === 'dev') return htmlAgenteDev(a);
+  if (a.id === 'shopee') return cabecalhoAgente(a) + ccBloco('Aguardando as skills', '<p class="cc-txt">O agente ' + esc(a.nome) + ' já tem o lugar dele na Central. Assim que você me disser as skills, eu monto o manual dele, os painéis e a rodada automática na nuvem.</p>') + botaoConversarAgente(a);
   return cabecalhoAgente(a) + ccBloco('Missão', `<p class="cc-txt">${esc(a.missao || 'Sem missão definida.')}</p>`)
     + ccBloco('Situação', `<p class="cc-txt">Este agente já existe e conversa pelo chat com as skills acima. Os painéis próprios dele (números e rotinas) eu monto quando você pedir.</p>`)
     + botaoConversarAgente(a) + (a.proprio ? `<button type="button" class="cc-btn perigo" onclick="removerAgente('${esc(a.id)}')">Remover agente</button>` : '');
