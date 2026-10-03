@@ -3083,3 +3083,34 @@ body.ag-aberta { overflow: hidden; }
 #jvpg-marca { position: relative; }
 #jvpg-marca::after { content: ""; position: absolute; left: calc(100% + 10px); top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 8px 2px #fff, 0 0 18px 6px rgba(255,255,255,0.4); opacity: 0; transform: scale(0.3); transition: opacity .35s, transform .35s; animation: jvfRespira 3.9s ease-in-out infinite; }
 #jvpg-marca.pousada::after { opacity: 1; transform: scale(1); }
+
+/* FASE 7 (v3): no comando central desce SÓ a bolinha branca (sem o brilho em volta), suave, pela margem */
+.jvpg-ponto { position: absolute; z-index: 7; left: 0; top: 0; width: 11px; height: 11px; border-radius: 50%; background: #fff; box-shadow: 0 0 6px 1px rgba(255,255,255,0.9); pointer-events: none; opacity: 0; transition: opacity .4s; will-change: transform; }
+#jvpg-marca.pousada::after { display: none; }
+
+/* ============================================================================
+   FASE 7 — PÁGINA DO ESTOQUE: a secadora é a estrela (grande, interativa), cores, contagem
+   ============================================================================ */
+.ag-rolo.est { background: radial-gradient(110% 70% at 50% 10%, rgba(100,210,255,0.08), transparent 60%), #000; }
+.est-heroi { position: relative; padding: calc(env(safe-area-inset-top) + 92px) 4vw 10px; max-width: 1100px; margin: 0 auto; }
+.est-tit small { color: #64d2ff; letter-spacing: 0.16em; text-transform: uppercase; font-size: 0.72rem; } .est-tit h1 { margin: 4px 0 2px; font-size: clamp(2.2rem, 6vw, 3.6rem); letter-spacing: -0.03em; } .est-tit p { margin: 0; color: #aeaeb2; }
+.est-seca { position: relative; height: min(78vh, 760px) !important; min-height: 460px; margin-top: 8px; border-radius: 28px; background: radial-gradient(80% 70% at 50% 45%, rgba(255,214,150,0.08), transparent 70%); }
+.est-seca canvas { width: 100% !important; height: 100% !important; touch-action: pan-y; }
+.cc-seca-dica.grande { position: relative !important; left: auto !important; top: auto !important; margin: 12px auto 0; max-width: 560px; display: grid; grid-template-columns: 34px 1fr; gap: 6px 12px; align-items: center; padding: 16px 18px; border-radius: 22px; background: rgba(255,255,255,0.07); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.16); animation: mktEntra .45s cubic-bezier(.2,.8,.2,1) both; --k: 0; }
+.cc-seca-dica.grande[hidden] { display: none; }
+.cc-seca-dica.grande > i { width: 30px; height: 30px; border-radius: 50%; box-shadow: inset 0 0 0 3px rgba(0,0,0,0.25), 0 0 14px rgba(255,255,255,0.15); }
+.cc-seca-dica.grande b { font-size: 1.1rem; } .cc-seca-dica.grande small { color: #a1a1a6; }
+.est-dados { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+.est-dados div { padding: 10px; border-radius: 14px; background: rgba(255,255,255,0.05); } .est-dados strong { display: block; font-size: 0.98rem; } .est-dados small { font-size: 0.68rem; }
+.est-x { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border: 0; border-radius: 50%; background: rgba(255,255,255,0.12); color: #fff; cursor: pointer; }
+.cc-seca-dica .est-dados, .cc-seca-dica .est-x { display: none; } .cc-seca-dica.grande .est-dados { display: grid; } .cc-seca-dica.grande .est-x { display: block; }
+.est-cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.est-cor { display: grid; grid-template-columns: 26px 1fr auto; gap: 10px; align-items: center; padding: 12px 14px; border: 0; border-radius: 18px; background: rgba(255,255,255,0.05); color: #fff; text-align: left; cursor: pointer; transition: background .2s, transform .2s; }
+.est-cor i { width: 24px; height: 24px; border-radius: 50%; box-shadow: inset 0 0 0 2px rgba(0,0,0,0.25); } .est-cor span { display: grid; } .est-cor small { color: #8e8e93; font-size: 0.72rem; } .est-cor em { font-style: normal; color: #64d2ff; font-weight: 600; }
+.est-cor.baixo em { color: #ff9f0a; } .est-cor.on { background: rgba(100,210,255,0.16); transform: translateY(-2px); } .est-cor:hover { background: rgba(255,255,255,0.09); }
+.est-cont { display: grid; gap: 8px; }
+.est-cont label { display: grid; grid-template-columns: 22px 1fr 110px; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,0.04); }
+.est-cont label i { width: 20px; height: 20px; border-radius: 50%; } .est-cont label span { display: grid; font-size: 0.92rem; } .est-cont label small { color: #8e8e93; font-size: 0.72rem; }
+.est-cont input { padding: 10px 12px; border: 0; border-radius: 12px; background: rgba(255,255,255,0.08); color: #fff; font: inherit; text-align: right; }
+.est-cont-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; } .est-salvar { background: #64d2ff !important; color: #00131c !important; }
+@media (max-width: 800px) { .est-seca { height: 70vh !important; min-height: 420px; border-radius: 22px; } .est-dados { grid-template-columns: repeat(2, 1fr); } .est-heroi { padding-left: 12px; padding-right: 12px; } .est-cont label { grid-template-columns: 22px 1fr 92px; } }

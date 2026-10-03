@@ -123,7 +123,7 @@ class Secadora {
     [this.flanges, this.fios, this.fiosBrilho, this.miolos].forEach(o => { if (o) { this.caixa.remove(o); o.dispose(); } });
     const lista = (dados.bobinas || []).slice(0, PRAT.length * POR_FILA * FILAS);
     const lugares = [];
-    for (let p = PRAT.length - 1; p >= 0; p--) for (let f = 0; f < FILAS; f++) for (let i = 0; i < POR_FILA; i++) lugares.push({ p, f, i });
+    for (let f = 0; f < FILAS; f++) for (let p = PRAT.length - 1; p >= 0; p--) for (let i = 0; i < POR_FILA; i++) lugares.push({ p, f, i }); // fase 7: a frente de todas as prateleiras primeiro (tudo à vista)
     const usados = lista.map((b, k) => ({ b, ...lugares[k] }));
     const brilho = usados.filter(u => u.b.brilho), fosco = usados.filter(u => !u.b.brilho);
     this.flanges = new THREE.InstancedMesh(this.geoFlange, this.matFlange, Math.max(1, usados.length * 2));
@@ -145,7 +145,7 @@ class Secadora {
       const cheio = Math.max(0.04, Math.min(1, (u.b.kg || 0) / (u.b.capacidade || 1)));
       const raio = R_MIOLO + 0.2 + (R_FLANGE - 0.7 - R_MIOLO) * Math.sqrt(cheio); // volume ∝ área: raio cresce com a raiz
       m.scale.set(raio, 1, raio); m.updateMatrix();
-      const alvo = u.b.brilho ? this.fiosBrilho : this.fios, idx = u.b.brilho ? iB.n++ : iF.n++;
+      const alvo = u.b.brilho ? this.fiosBrilho : this.fios, idx = u.b.brilho ? iB.n++ : iF.n++; u.k = k; u.alvo = alvo; u.idx = idx; u.raio = raio;
       alvo.setMatrixAt(idx, m.matrix); alvo.setColorAt(idx, cor.set(u.b.cor || '#8e8e93')); m.scale.set(1, 1, 1);
     });
     [this.flanges, this.miolos, this.fios, this.fiosBrilho].forEach(o => { o.instanceMatrix.needsUpdate = true; if (o.instanceColor) o.instanceColor.needsUpdate = true; });
@@ -171,11 +171,20 @@ class Secadora {
     const hit = ray.intersectObjects([this.fios, this.fiosBrilho, this.flanges], false)[0];
     if (!hit || hit.instanceId === undefined) {
       const pt = ray.intersectObject(this.porta3d, true)[0]; if (pt) { this.porta(this.alvoPorta < 0.5); return; } // tocar no vidro abre/fecha
-      this.aoTocar(null); return;
+      this.escolher(null); this.aoTocar(null); return;
     }
     const u = hit.object === this.fios ? this.porFio[hit.instanceId] : hit.object === this.fiosBrilho ? this.porBrilho[hit.instanceId] : this.usados[Math.floor(hit.instanceId / 2)];
-    if (u) { this.destaque = { u, t: performance.now() }; this.aoTocar(u.b, e.clientX - r.left, e.clientY - r.top); this.tocar(); }
+    if (u) { if (this.sel === u) { this.escolher(null); this.aoTocar(null); return; } this.escolher(u); this.aoTocar(u.b, e.clientX - r.left, e.clientY - r.top, this.usados.indexOf(u)); }
   }
+  /** fase 7: a bobina escolhida DESLIZA para fora e sobe um pouco (como tirar da prateleira); as outras voltam ao lugar. */
+  posicionar(u, s) {
+    const m = new THREE.Object3D(), x = u.pos.x, y = u.pos.y + s * 3.2, z = u.pos.z + s * 14, giro = s * 0.5;
+    [-1, 1].forEach((d, j) => { m.position.set(x + d * (LARG_BOB / 2), y, z); m.rotation.set(giro, 0, 0); m.scale.set(1, 1, 1); m.updateMatrix(); this.flanges.setMatrixAt(u.k * 2 + j, m.matrix); });
+    m.position.set(x, y, z); m.rotation.set(giro, 0, Math.PI / 2); m.scale.set(1, 1, 1); m.updateMatrix(); this.miolos.setMatrixAt(u.k, m.matrix);
+    m.scale.set(u.raio, 1, u.raio); m.updateMatrix(); u.alvo.setMatrixAt(u.idx, m.matrix);
+    [this.flanges, this.miolos, u.alvo].forEach(o => { o.instanceMatrix.needsUpdate = true; });
+  }
+  escolher(u) { if (this.sel && this.sel !== u) { this.saindo = this.sel; this.saindoT = 1; } this.sel = u || null; this.selT = 0; this.mexeu = performance.now(); if (u) this.alvoPorta = 1; this.tocar(); }
   /** A rolagem da página gira a secadora (estilo Apple): v em radianos. */
   rolar(v) { this.ang = Math.max(-1.1, Math.min(1.1, v)); this.vel = 0; this.mexeu = performance.now(); this.tocar(); }
   porta(aberta) { this.alvoPorta = aberta ? 1 : 0; this.mexeu = performance.now(); this.tocar(); }
@@ -191,7 +200,7 @@ class Secadora {
   }
   atualizar(dados) {
     if (dados.temp !== this.temp || dados.umid !== this.umid) { this.temp = dados.temp; this.umid = dados.umid; if (this.matVisor.map) this.matVisor.map.dispose(); this.matVisor.map = texturaVisor(dados.temp, dados.umid); this.matVisor.needsUpdate = true; }
-    this.bobinas(dados); this.tocar();
+    this.sel = null; this.saindo = null; this.bobinas(dados); this.tocar();
   }
   tocar() { if (!this.raf && !this.solto) this.raf = requestAnimationFrame(() => this.quadro()); }
   quadro() {
@@ -205,14 +214,20 @@ class Secadora {
     this.luzDentro.intensity = 900 * this.abertura; this.matLed.opacity = 0.25 + 0.75 * this.abertura;
     // bobina tocada "acende" por 1,2 s (o flange fica claro)
     this.caixa.rotation.y = this.ang;
+    if (this.sel) { this.selT = Math.min(1, (this.selT || 0) + 0.06); const s = 1 - Math.pow(1 - this.selT, 3); this.posicionar(this.sel, s); this.ang += (-0.12 - this.ang) * 0.05; } // a escolhida sai; a secadora vira de frente
+    if (this.saindo) { this.saindoT -= 0.08; if (this.saindoT <= 0) { this.posicionar(this.saindo, 0); this.saindo = null; } else this.posicionar(this.saindo, this.saindoT * this.saindoT); }
     const chegada = Math.min(1, desde / 1400), ease = 1 - Math.pow(1 - chegada, 3);
     const d = (this.dist || 260) * this.zoom * (1.35 - 0.35 * ease);
-    this.cam.position.set(0, 58 + d * 0.16, d); this.cam.lookAt(0, (A + TOPO_PAINEL) / 2, 0);
+    const foco = this.sel ? Math.min(1, this.selT || 0) : 0, alvoY = this.sel ? this.sel.pos.y : (A + TOPO_PAINEL) / 2; // aproxima da bobina escolhida
+    this.olhar = this.olhar === undefined ? (A + TOPO_PAINEL) / 2 : this.olhar + (alvoY - this.olhar) * 0.08; this.aprox = (this.aprox || 0) + (foco - (this.aprox || 0)) * 0.08;
+    this.cam.position.set(0, 58 + d * 0.16 - this.aprox * 20, d * (1 - this.aprox * 0.32)); this.cam.lookAt(0, this.olhar, 0);
     this.renderer.render(this.cena, this.cam);
-    const mexendo = Math.abs(this.vel) > 0.0004 || Math.abs(alvo - this.abertura) > 0.002 || chegada < 1;
+    const mexendo = Math.abs(this.vel) > 0.0004 || Math.abs(alvo - this.abertura) > 0.002 || chegada < 1 || !!this.saindo || (this.sel && this.selT < 1);
     this.raf = requestAnimationFrame(() => this.quadro()); if (!mexendo && !parado) return; // segue animando devagar quando parado
   }
   soltar() { this.solto = true; cancelAnimationFrame(this.raf); if (this.obs) this.obs.disconnect(); document.removeEventListener('visibilitychange', this.visivel); this.renderer.dispose(); this.renderer.forceContextLoss(); this.renderer.domElement.remove(); }
 }
 
+// fase 7: escolher por fora (lista do app): s.escolherPor(i) — i = índice da bobina nos dados
+Secadora.prototype.escolherPor = function (i) { const u = (this.usados || [])[i]; this.escolher(u || null); return u ? u.b : null; };
 window.Secadora3D = { montar: (host, dados, aoTocar) => { const s = new Secadora(host, dados, aoTocar); s.temp = dados.temp; s.umid = dados.umid; return s; } };

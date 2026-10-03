@@ -6757,6 +6757,7 @@ function ferramentasVoz() {
   const ids = agentesCentral().map(a => a.id);
   f.push({ name: 'avisar_agentes', description: 'O SEU FILTRO: quando o Rafael contar algo que importa a um agente da Primos 3D (gasto, compra, venda, cliente, meta, ideia de produto ou de vídeo, problema numa máquina, estoque...), registre um recado curto para o(s) agente(s) certo(s). Não precisa confirmar; diga de passagem quem você avisou. Mapa: ' + MAPA_FILTRO, parameters: { type: 'OBJECT', properties: { agentes: { type: 'ARRAY', items: { type: 'STRING', enum: ids } }, tipo: { type: 'STRING', enum: ['fato', 'gasto', 'compra', 'venda', 'meta', 'ideia', 'problema', 'pedido'] }, resumo: { type: 'STRING', description: 'o recado em 1 frase objetiva, com os números que ele disse' } }, required: ['agentes', 'resumo'] } });
   f.push({ name: 'registrar_compra_filamento', description: 'Quando ele disser que comprou filamento (ex.: comprei 2 kg de PLA preto por 180 reais): põe no estoque, avisa Estoque e Financeiro e, com o valor, manda lançar na planilha (ele confirma no cartão). Se faltar kg ou cor, pergunte antes.', parameters: { type: 'OBJECT', properties: { kg: { type: 'NUMBER' }, material: { type: 'STRING', description: 'PLA, PETG, TPU, ABS...' }, cor: { type: 'STRING' }, valor: { type: 'NUMBER', description: 'total pago em reais, se ele disse' }, loja: { type: 'STRING' }, chegou: { type: 'BOOLEAN', description: 'false se ainda está a caminho' } }, required: ['kg', 'cor'] } });
+  f.push({ name: 'registrar_contagem_estoque', description: 'Quando ele pesar os filamentos e disser quanto sobrou (ex.: PLA preto 650 gramas, PETG branco 1 quilo e 200): atualiza o estoque digital (secadora) com o peso real de cada cor. Pergunte a cor/material se ficar ambíguo.', parameters: { type: 'OBJECT', properties: { itens: { type: 'ARRAY', items: { type: 'OBJECT', properties: { material: { type: 'STRING' }, cor: { type: 'STRING' }, gramas: { type: 'NUMBER' } }, required: ['cor', 'gramas'] } } }, required: ['itens'] } });
   f.push({ name: 'adicionar_fila_impressao', description: 'Anota um item na FILA DE IMPRESSÃO da Primos 3D (o agente de Produção organiza a fila do dia). Use quando o Rafael disser que quer/precisa imprimir algo ou pedir para pôr na fila. Não precisa confirmar.', parameters: { type: 'OBJECT', properties: { titulo: { type: 'STRING', description: 'o que imprimir (ex.: chaveiro Nossa Senhora)' }, qtd: { type: 'NUMBER' }, material: { type: 'STRING' }, cor: { type: 'STRING' }, obs: { type: 'STRING' } }, required: ['titulo'] } });
   return f;
 }
@@ -6769,7 +6770,7 @@ function sistemaVoz() {
 PERSONALIDADE: ${vz.persona}
 COMO FALAR: português do Brasil, frases curtas feitas para ouvir (1 a 4), sem listas nem símbolos; números arredondados. Uma pergunta por vez. Nunca invente números: use o bloco DADOS.
 LIMITES: você não envia mensagens, não posta, não compra e não paga nada; isso é com ele.
-FERRAMENTAS: adicionar_fila_impressao quando ele quiser imprimir algo; abrir_tela para mostrar algo no app.
+FERRAMENTAS: adicionar_fila_impressao quando ele quiser imprimir algo; registrar_contagem_estoque quando ele disser o peso dos filamentos; registrar_compra_filamento quando comprou filamento; avisar_agentes para passar um recado a outro agente; abrir_tela para mostrar algo no app.
 AGORA: ${dia}, ${hora}.
 === DADOS ===
 ${dadosCompletosIA()}`;
@@ -6849,6 +6850,7 @@ function executarFerramentasVoz(chamadas) {
       else if (c.name === 'adicionar_fila_impressao' && a.titulo) { const it = adicionarFila({ titulo: String(a.titulo), qtd: a.qtd, material: a.material, cor: a.cor, obs: a.obs }, 'voz'); toast(`🖨️ Na fila: ${it.titulo} · ${it.qtd} un.`, 4000); r = { ok: true, aviso: 'Anotado na fila de impressão; o agente de Produção vai encaixar na fila do dia.' }; }
       else if (c.name === 'avisar_agentes' && a.resumo) { const rec = registrarRecado(a.agentes, a.resumo, a.tipo, 'voz'); r = rec ? { ok: true, avisados: rec.agentes } : { ok: false, erro: 'agente desconhecido' }; }
       else if (c.name === 'registrar_compra_filamento') r = registrarCompraFilamento(a, 'voz');
+      else if (c.name === 'registrar_contagem_estoque') { const f = contagemEstoque(a.itens, 'voz'); r = f.length ? { ok: true, atualizado: f } : { ok: false, erro: 'não entendi as cores/pesos' }; }
       else if (c.name === 'lembrar_sobre_rafael' && a.fato) { guardarMemoria({ tipo: 'perfil', texto: String(a.fato).slice(0, 240) }); r = { ok: true }; }
       else if (c.name === 'pedir_ao_computador' && a.tarefa && claudeConfigurado()) { vz.pediuEm = Date.now(); const tipo = classificarPedidoPC(String(a.tarefa)); enviarAoComputadorAuto(desanonimizar(vz.legEu || a.tarefa, vz.mapa), [], vz.contexto, vz.area, desanonimizar(String(a.tarefa), vz.mapa)); r = tipo === 'proibido' ? { ok: false, erro: 'Bloqueado pela segurança: compras, pagamentos, enviar mensagens/e-mails e postar ficam só com o Rafael. Diga isso a ele.' } : tipo === 'grava' ? { ok: true, aviso: 'Isso grava dados: apareceu no chat um cartão para o Rafael confirmar. Diga a ele para tocar em Confirmar no chat.' } : { ok: true, aviso: 'Pedido de leitura enviado ao Claude no computador; a resposta aparece no chat do app.' }; }
       else r = { ok: false, erro: 'não consegui fazer isso' };
@@ -7558,6 +7560,7 @@ function renderPaginaJarvis() {
       <button type="button" class="ag-falar" onclick="iniciarConversaVoz('Página do J.A.R.V.I.S.')">🎙 Falar</button></header>
     <i class="ag-progresso" id="ag-progresso" style="--cor:#ffffff"></i>
     <canvas id="jvpg-garg" class="jvpg-garg fixo" aria-hidden="true"></canvas>
+    <span class="jvpg-ponto" id="jvpg-ponto" aria-hidden="true"></span>
     <div class="ag-rolo jvpg" id="ag-rolo" style="--cor:#ffffff">
       <section class="ag-heroi jvpg-heroi">
         <div class="ag-heroi-txt"><small>Comando central · ${esc(isoParaBR(j.dia || hojeISO()))}</small><h1>${saud}</h1><p>${j.manchete ? textoAgente(j.manchete) : 'Estou lendo os relatórios dos agentes. O primeiro filtro do dia sai às 7h.'}</p></div>
@@ -7580,28 +7583,26 @@ function renderPaginaJarvis() {
  *  só cruza a tela no vão entre um bloco e outro (nunca em cima do texto); no celular fica pequeno, apagado e desfocado (fundo).
  *  No fim, encolhe e pousa ao lado de "J.A.R.V.I.S." no topo; subindo, volta ao tamanho da abertura. */
 function seguirJarvisPagina() {
-  const r = $j('ag-rolo'), g = $j('jvpg-garg'), pag = $j('ag-pag'); if (!r || !g || !pag) return;
-  const st = { x: 0, y: 0, s: 1, a: 1, ini: false }, liso = x => x * x * (3 - 2 * x), cl = x => Math.max(0, Math.min(1, x));
-  let vaos = [], medidoEm = 0;
-  const medir = () => { const top = r.getBoundingClientRect().top; vaos = []; const secs = [...r.querySelectorAll('.ag-sec, .ag-fim')];
-    for (let k = 0; k < secs.length - 1; k++) { const a = secs[k].getBoundingClientRect(), b = secs[k + 1].getBoundingClientRect(); vaos.push((a.bottom + b.top) / 2 - top + r.scrollTop); } medidoEm = performance.now(); };
+  // v3 (pedido do Rafael): o Gargantua FICA na abertura e se apaga; dele sai SÓ a bolinha branca (sem o brilho em volta),
+  // que desce suave pela MARGEM (nunca na frente do conteúdo), balançando pouco; no fim pousa ao lado de "J.A.R.V.I.S.".
+  const r = $j('ag-rolo'), g = $j('jvpg-garg'), o = $j('jvpg-ponto'), pag = $j('ag-pag'); if (!r || !g || !o || !pag) return;
+  const st = { x: 0, y: 0, s: 0, ini: false }, liso = x => x * x * (3 - 2 * x), cl = x => Math.max(0, Math.min(1, x));
   const passo = T => {
-    if (cc.pagina !== 'jarvis' || !g.isConnected) return;
-    if (performance.now() - medidoEm > 1500) medir();
+    if (cc.pagina !== 'jarvis' || !o.isConnected) return;
     const W = pag.clientWidth, H = r.clientHeight, max = Math.max(1, r.scrollHeight - H), y0 = r.scrollTop, t = T / 1000, cel = W < 800;
-    const h = cl(y0 / (H * 0.8)), fim = cl((y0 / max - 0.9) / 0.1);
-    // lados: no PC, o meio da margem (fora do texto); no celular, rente à borda (por trás, desfocado)
-    const margem = Math.max(0, (W - 980) / 2), esq = cel ? W * 0.1 : Math.max(60, margem / 2), dir = W - esq;
-    const ancora = y0 + H * 0.5; let n = 0, perto = null; vaos.forEach(v => { if (v < ancora) n++; if (perto === null || Math.abs(v - ancora) < Math.abs(perto - ancora)) perto = v; });
-    let x = n % 2 ? dir : esq; if (perto !== null && Math.abs(ancora - perto) < 90) { const k = liso(cl((ancora - perto + 90) / 180)), antes = ancora < perto ? n : n - 1; const de = antes % 2 ? dir : esq, para = antes % 2 ? esq : dir; x = de + (para - de) * k; } // cruza a tela só no vão entre dois blocos
-    let y = H * 0.5 + Math.sin(t * 1.1) * 8, s = cel ? 0.2 : 0.34, a = cel ? 0.45 : 0.95;
-    const k1 = liso(h); x = W / 2 + (x - W / 2) * k1; y = (H * 0.42 - y0 * 0.3) + (y - (H * 0.42 - y0 * 0.3)) * k1; s = 1 + (s - 1) * k1; a = 1 + (a - 1) * k1;
-    const m = $j('jvpg-marca'); if (m && fim > 0) { const b = m.getBoundingClientRect(), p = pag.getBoundingClientRect(), k2 = liso(fim); x += (b.right - p.left + 16 - x) * k2; y += (b.top - p.top + b.height / 2 - y) * k2; s += (0.05 - s) * k2; a *= 1 - k2 * 0.85; }
-    m && m.classList.toggle('pousada', fim > 0.9);
-    if (!st.ini) Object.assign(st, { x, y, s, a, ini: true });
-    st.x += (x - st.x) * 0.12; st.y += (y - st.y) * 0.12; st.s += (s - st.s) * 0.12; st.a += (a - st.a) * 0.12;
-    g.style.transform = `translate3d(${(st.x - W / 2).toFixed(1)}px, ${(st.y - H * 0.42).toFixed(1)}px, 0) scale(${st.s.toFixed(4)})`; g.style.opacity = st.a.toFixed(3);
-    g.style.filter = cel && k1 > 0.5 ? `blur(${(1.5 * k1).toFixed(1)}px)` : '';
+    const h = cl(y0 / (H * 0.7)), fim = cl((y0 / max - 0.92) / 0.08);
+    g.style.transform = `translate3d(0, ${(-y0 * 0.3).toFixed(1)}px, 0) scale(${(1 + h * 0.25).toFixed(3)})`; g.style.opacity = (1 - liso(h)).toFixed(3); // o Gargantua fica e se apaga
+    // a margem: no PC, o meio da faixa livre ao lado do conteúdo; no celular, rente à borda (o texto começa depois)
+    const conteudo = Math.min(980, W), faixa = (W - conteudo) / 2, lado = cel ? 9 : Math.max(26, faixa / 2);
+    const prog = y0 / max, x = lado + Math.sin(prog * Math.PI * 2.2) * (cel ? 1.5 : Math.min(18, faixa / 6)); // balança pouco, devagar
+    const yPath = H * 0.5 + Math.sin(t * 0.9) * 5, sPath = cel ? 7 : 11;
+    const k1 = liso(cl((h - 0.08) / 0.7)), x0 = W / 2, y0c = H * 0.42 - y0 * 0.3; // sai do miolo do Gargantua
+    let X = x0 + (x - x0) * k1, Y = y0c + (yPath - y0c) * k1, S = 26 + (sPath - 26) * k1;
+    const m = $j('jvpg-marca'); if (m && fim > 0) { const b = m.getBoundingClientRect(), p = pag.getBoundingClientRect(), k2 = liso(fim); X += (b.right - p.left + 12 - X) * k2; Y += (b.top - p.top + b.height / 2 - Y) * k2; S += (6 - S) * k2; }
+    if (!st.ini) Object.assign(st, { x: X, y: Y, s: S, ini: true });
+    const suave = 0.07; st.x += (X - st.x) * suave; st.y += (Y - st.y) * suave; st.s += (S - st.s) * suave;
+    o.style.transform = `translate3d(${(st.x - st.s / 2).toFixed(1)}px, ${(st.y - st.s / 2).toFixed(1)}px, 0)`; o.style.width = o.style.height = st.s.toFixed(1) + 'px';
+    o.style.opacity = (h < 0.05 ? 0 : cel ? 0.75 : 1).toString();
     cc.rafSegue = requestAnimationFrame(passo);
   };
   cancelAnimationFrame(cc.rafSegue); cc.rafSegue = requestAnimationFrame(passo);
@@ -7913,6 +7914,7 @@ function renderPaginaAgente() {
   if (id === 'jarvis') return renderPaginaJarvis();
   if (id === 'contabil') return renderPaginaFinanceiro();
   if (id === 'marketing') return renderPaginaMarketing();
+  if (id === 'estoque') return renderPaginaEstoque();
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -7945,7 +7947,7 @@ function animarPaginaAgente() {
     r.style.setProperty('--h', h.toFixed(3)); const topoR = r.getBoundingClientRect().top;
     r.querySelectorAll('.ag-rev:not(.vis)').forEach(x => { if (x.getBoundingClientRect().top - topoR < H * 0.94) { x.classList.add('vis'); x.querySelectorAll('.ag-conta, .cc-nums strong').forEach(contarNumero); if (x.matches('.ag-num')) x.querySelectorAll('.ag-conta').forEach(contarNumero); } }); const pr = $j('ag-progresso'); if (pr) pr.style.transform = `scaleX(${max > 0 ? r.scrollTop / max : 0})`;
     r.querySelectorAll('.ag-sec').forEach(sec => { const b = sec.getBoundingClientRect(), y = b.top - r.getBoundingClientRect().top; sec.style.setProperty('--p', Math.max(0, Math.min(1, (H - y) / (H * 0.9))).toFixed(3)); });
-    if (cc.pagina === 'estoque' && cc.seca3d && cc.seca3d.rolar) cc.seca3d.rolar(-0.9 + h * 1.8);
+    if (cc.pagina === 'estoque' && cc.seca3d && cc.seca3d.rolar && !cc.seca3d.sel && !$j('est-pagina')) cc.seca3d.rolar(-0.9 + h * 1.8);
     if (cc.pagina === 'producao' && cc.fab3d && cc.fab3d.rolar) cc.fab3d.rolar(-0.5 + h);
   };
   r.onscroll = () => { if (!cc.rafPag) cc.rafPag = requestAnimationFrame(() => { cc.rafPag = 0; passo(); }); };
@@ -8040,6 +8042,11 @@ function ccNums(lista) { return `<div class="cc-nums">${lista.map(([v, r, cor]) 
 function ccBloco(titulo, corpo) { return `<section class="cc-bloco"><h4>${titulo}</h4>${corpo}</section>`; }
 function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente('${esc(a.id)}')">Perguntar a este agente</button>`; }
 const VOZ_AGENTES = {
+  estoque: { voz: 'Alnilam', persona: 'Homem, voz firme e serena, presença forte. Centrado, confiável, companheiro e PERFECCIONISTA: conhece cada bobina da secadora (cor, marca, gramas, data e preço da compra), não deixa número solto e confere tudo duas vezes. Conduz a contagem de filamentos com calma (uma cor por vez, repete o peso para confirmar) e usa registrar_contagem_estoque; avisa o que está acabando e o que está parado há muito tempo.' },
+  contabil: { voz: 'Rasalgethi', persona: 'Homem, voz clara e segura, analista financeiro direto ao ponto. Fala de caixa, custo, preço, margem, payback e metas sempre com o número na mão, sem jargão. Honesto quando a notícia é ruim e sempre termina com a próxima ação.' },
+  vendas: { voz: 'Puck', persona: 'Homem, animado e persuasivo, vendedor de rua de Viçosa que conhece os clientes. Pensa em orçamento, pedido, prazo e follow-up; dá roteiros curtos de abordagem para WhatsApp e lojas.' },
+  consignacao: { voz: 'Sulafat', persona: 'Mulher, voz calorosa e organizada, cuida dos expositores e dos parceiros. Sabe quanto foi colocado, vendido e a receber em cada ponto, e sugere o mix e a próxima visita.' },
+  shopee: { voz: 'Laomedeia', persona: 'Mulher, energia alta e olho de e-commerce. Pensa em título, foto de capa, preço com as taxas da Shopee e no que os concorrentes fazem; nunca promete publicação nem aumenta gasto com anúncio.' },
   producao: { voz: 'Orus', persona: 'Homem, voz firme de chefe de fábrica. Criativo, mas totalmente centrado: você gerencia a produção inteira (fila, máquinas, prazos, filamento, qualidade). Fala com segurança, organiza as ideias do Rafael numa fila clara e sempre diz o próximo passo da produção. Quando ele falar algo que quer imprimir, anote na fila com a ferramenta.' },
   marketing: { voz: 'Aoede', persona: 'Mulher, extrovertida, animada e falante, com humor — obcecada por viralizar a Primos 3D no TikTok e no Instagram. Dá ideias de vídeo concretas (gancho, formato, áudio, horário), cita o que está bombando e avisa quando algo deve ir para a fila de impressão. Animada, mas sempre com dados.' },
   dev: { voz: 'Achird', persona: 'Homem, voz suave e calma, criativo de verdade — designer de produto que entende de tendência, de moda e de forma, mas com cabeça de engenheiro de impressão 3D (encaixe, folga, camada, cor, AMS). Fala com entusiasmo tranquilo, propõe ideias concretas (placas de profissão, carimbos, chaveiros com logo de comércio, kits empresariais, luminárias, camisa da marca), sempre diz em que etapa cada projeto está (conceito, modelo digital, fatiado, testado) e o que ele precisa do Rafael para seguir. Nunca diz que algo está aprovado sem teste físico.' },
@@ -8206,9 +8213,13 @@ function corFilamento(nome) {
 }
 /** As bobinas da secadora: cada kg vira uma bobina (a última, parcial). */
 function bobinasEstoque(e) {
+  // fase 7: cada bobina leva os dados da COMPRA (marca, loja, data, preço) — da planilha (Filamentos) e do que o app registrou
+  const compras = {}; ((primosCentral || {}).filamentos || []).forEach(f => { if (/caminho|transit|aguard/i.test(f.status || '')) return; const k = chaveCor(f.material || 'PLA', f.cor || 'Sem cor'); (compras[k] = compras[k] || []).push({ data: f.data, marca: f.marca, loja: f.loja, precoKg: f.custoKg, total: f.total, kg: f.kg }); });
+  estoquePrimos.filter(m => m.tipo === 'compra' && m.status === 'chegou').forEach(m => { const k = chaveCor(m.material, m.cor); (compras[k] = compras[k] || []).push({ data: m.chegouEm || m.data, marca: m.marca || '', loja: (m.obs || '').replace(/^loja: /, ''), precoKg: m.valor && m.kg ? m.valor / m.kg : null, total: m.valor, kg: m.kg }); });
   const lista = [];
-  e.cores.filter(c => c.kg > 0.01).forEach(c => { const { cor, brilho } = corFilamento(c.cor + ' ' + c.material); let resta = c.kg;
-    while (resta > 0.01) { const kg = Math.min(1, resta); lista.push({ nome: c.cor, material: c.material, cor, brilho, kg, capacidade: 1 }); resta -= kg; } });
+  e.cores.filter(c => c.kg > 0.01).forEach(c => { const { cor, brilho } = corFilamento(c.cor + ' ' + c.material); let resta = c.kg, n = 0;
+    const cs = (compras[chaveCor(c.material, c.cor)] || []).slice().sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
+    while (resta > 0.01) { const kg = Math.min(1, resta), cp = cs[Math.min(n, cs.length - 1)] || null; lista.push({ nome: c.cor, material: c.material, cor, brilho, kg, capacidade: 1, compra: cp, totalCor: c.kg, usado: c.usado, chave: chaveCor(c.material, c.cor) }); resta -= kg; n++; } });
   return lista;
 }
 function montarSecadora3D() {
@@ -8222,12 +8233,57 @@ function montarSecadora3D() {
   try { if (cc.seca3d) { cc.seca3d.anexar(host); cc.seca3d.atualizar(dados); } else cc.seca3d = window.Secadora3D.montar(host, dados, tocarBobina3D); pronto(); }
   catch (err) { const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }
 }
-function tocarBobina3D(b, x, y) {
+function tocarBobina3D(b, x, y, i) {
+  // fase 7: cartão completo da bobina (fica aberto até tocar de novo); na página do Estoque ele aparece embaixo da secadora
   const t = $j('cc-seca-dica'); if (!t) return;
+  document.querySelectorAll('.est-cor.on').forEach(el => el.classList.remove('on'));
   if (!b) { t.hidden = true; return; }
-  t.innerHTML = `<i style="background:${esc(b.cor)}"></i><span><b>${esc(b.nome)}</b><small>${esc(b.material)} · ${fmtKg(b.kg)} nesta bobina</small></span>`;
-  t.hidden = false; t.style.left = Math.max(8, Math.min(x - 90, (t.parentElement.clientWidth || 300) - 200)) + 'px'; t.style.top = Math.max(8, y - 70) + 'px';
-  clearTimeout(cc.dicaT); cc.dicaT = setTimeout(() => { t.hidden = true; }, 3200);
+  const cp = b.compra || {};
+  t.innerHTML = `<button type="button" class="est-x" onclick="tocarBobina3D(null); cc.seca3d && cc.seca3d.escolher(null)" aria-label="Fechar">✕</button><i style="background:${esc(b.cor)}"></i><span><b>${esc(b.nome)}</b><small>${esc(b.material)}${cp.marca ? ' · ' + esc(cp.marca) : ''}</small></span>
+    <div class="est-dados"><div><strong>${Math.round(b.kg * 1000)} g</strong><small>nesta bobina</small></div><div><strong>${fmtKg(b.totalCor || b.kg)}</strong><small>desta cor no total</small></div>
+      <div><strong>${cp.data ? esc(isoParaBR(cp.data)) : '—'}</strong><small>compra${cp.loja ? ' · ' + esc(cp.loja) : ''}</small></div><div><strong>${cp.precoKg ? reais(cp.precoKg) + '/kg' : '—'}</strong><small>${cp.total ? 'pago ' + reais(cp.total) : 'preço'}</small></div></div>`;
+  t.hidden = false; t.classList.toggle('grande', !!$j('est-pagina'));
+  if (!$j('est-pagina')) { t.style.left = Math.max(8, Math.min(x - 120, (t.parentElement.clientWidth || 300) - 280)) + 'px'; t.style.top = Math.max(8, y - 150) + 'px'; }
+  clearTimeout(cc.dicaT); if (!$j('est-pagina')) cc.dicaT = setTimeout(() => { t.hidden = true; }, 6000);
+  const li = document.querySelector(`.est-cor[data-chave="${CSS.escape(b.chave || '')}"]`); if (li) li.classList.add('on');
+}
+/** PÁGINA DO ESTOQUE (fase 7): a secadora é a estrela — grande, interativa (toque numa bobina: ela sai da prateleira e mostra
+ *  marca, cor, gramas, data e preço), as cores em lista (tocar também puxa a bobina), a CONTAGEM (pesar e lançar) e o resto atrás. */
+function renderPaginaEstoque() {
+  const el = $j('ag-pag'); if (!el) return; const a = todosAgentes().find(x => x.id === 'estoque'), e = calcularEstoque(), bob = bobinasEstoque(e), r = relatorioAgente('estoque') || {};
+  const primeira = {}; bob.forEach((b, i) => { if (primeira[b.chave] === undefined) primeira[b.chave] = i; });
+  const cores = e.cores.filter(c => c.kg > 0.01).sort((x, y) => y.kg - x.kg);
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
+      <button type="button" class="ag-falar" onclick="falarComAgente('estoque')">🎙 Falar</button></header>
+    <div class="ag-rolo est" id="ag-rolo" style="--cor:#64d2ff"><div id="est-pagina">
+      <section class="est-heroi"><div class="est-tit"><small>Estoque digital · Dry Box 48</small><h1>${fmtKg(e.total)}</h1><p>${cores.length} cores · ${bob.length} bobinas${e.caminho.length ? ` · ${e.caminho.length} compra(s) a caminho` : ''}. Toque numa bobina.</p></div>
+        <div id="cc-seca" class="cc-seca est-seca"><div class="cc-seca-carregando"><span class="spin"></span> Montando a secadora…</div></div>
+        <div id="cc-seca-dica" class="cc-seca-dica grande" hidden></div></section>
+      <section class="ag-sec est-sec"><h2 class="jvpg-tit">Suas cores</h2><div class="est-cores">${cores.map(c => { const { cor } = corFilamento(c.cor + ' ' + c.material), k = chaveCor(c.material, c.cor);
+        return `<button type="button" class="est-cor${c.kg < 0.3 ? ' baixo' : ''}" data-chave="${esc(k)}" onclick="escolherCorEstoque(${primeira[k] ?? -1})"><i style="background:${esc(cor)}"></i><span><b>${esc(c.cor)}</b><small>${esc(c.material)}</small></span><em>${fmtKg(c.kg)}</em></button>`; }).join('')}</div></section>
+      <section class="ag-sec est-sec"><h2 class="jvpg-tit">Fazer a contagem</h2><p class="ag-sub">Pesou as bobinas? Digite quanto sobrou de cada cor (só o filamento, sem o carretel) — ou toque em 🎙 e fale para o Estoque.</p>
+        <form class="est-cont" onsubmit="salvarContagemForm(event)">${cores.map(c => `<label><i style="background:${esc(corFilamento(c.cor + ' ' + c.material).cor)}"></i><span>${esc(c.cor)}<small>${esc(c.material)} · hoje ${Math.round(c.kg * 1000)} g</small></span><input type="number" inputmode="numeric" min="0" step="1" placeholder="g" data-mat="${esc(c.material)}" data-cor="${esc(c.cor)}"></label>`).join('')}
+          <div class="est-cont-acoes"><button type="submit" class="cc-btn est-salvar">Salvar contagem</button><button type="button" class="cc-btn" onclick="falarComAgente('estoque')">🎙 Contar por voz</button></div></form></section>
+      ${r.manchete ? `<section class="ag-sec est-sec"><h2 class="jvpg-tit">O Estoque diz</h2><p class="jvpg-txt">${textoAgente(r.manchete)}</p></section>` : ''}
+      <section class="ag-sec ag-corpo mkt-mais"><h2 class="jvpg-tit">Mais detalhes</h2>${detalheMkt('Compras, consumo e relatório do agente', htmlPainelAgente('estoque').replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<button type="button" class="cc-btn ag-abrir"[^>]*>[^<]*<\/button>/, '').replace(/<section class="cc-bloco cc-seca-bloco">[\s\S]*?<\/section>/, ''))}</section>
+      <footer class="ag-fim">J.A.R.V.I.S. · Estoque da Primos 3D</footer></div></div>`;
+  montarSecadora3D();
+}
+function escolherCorEstoque(i) { if (i < 0 || !cc.seca3d) return; const b = cc.seca3d.escolherPor(i); if (b) { tocarBobina3D(b, 0, 0, i); const s = $j('cc-seca'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
+/** Contagem de filamentos: o Rafael pesou e diz quanto tem de cada cor (gramas) — vira um AJUSTE no estoque. */
+function contagemEstoque(itens, origem) {
+  const e = calcularEstoque(), feitos = [];
+  (itens || []).forEach(it => { const g = Number(it.gramas); if (!(g >= 0) || !it.cor) return; const mat = String(it.material || 'PLA').toUpperCase();
+    const c = e.cores.find(x => chaveCor(x.material, x.cor) === chaveCor(mat, it.cor)) || e.cores.find(x => semAcentoCer(x.cor).includes(semAcentoCer(it.cor)) && semAcentoCer(x.material) === semAcentoCer(mat));
+    const atual = c ? c.kg : 0, dif = g / 1000 - atual; if (Math.abs(dif) < 0.001) { feitos.push(`${c ? c.cor : it.cor}: ok`); return; }
+    estoquePrimos.push({ id: novoId(), data: hojeISO(), tipo: 'ajuste', material: c ? c.material : mat, cor: c ? c.cor : it.cor, kg: dif, obs: `contagem (${origem || 'app'})` }); feitos.push(`${c ? c.cor : it.cor}: ${g} g`); });
+  if (feitos.length) { salvar('estoqueprimos', estoquePrimos); registrarRecado(['estoque'], `Contagem de filamentos (${isoParaBR(hojeISO())}): ${feitos.join(' · ')}`, 'fato', origem || 'app'); if (cc.pagina === 'estoque') renderPaginaEstoque(); else if (typeof renderCentral === 'function') renderCentral(); }
+  return feitos;
+}
+function salvarContagemForm(ev) {
+  ev.preventDefault(); const itens = [...document.querySelectorAll('.est-cont input')].filter(i => i.value !== '').map(i => ({ material: i.dataset.mat, cor: i.dataset.cor, gramas: Number(i.value) }));
+  if (!itens.length) { toast('Digite o peso (g) de pelo menos uma cor.'); return; }
+  const f = contagemEstoque(itens, 'app'); toast(`Contagem salva: ${f.length} cor(es).`, 3500);
 }
 function htmlAgenteEstoque(a) {
   const e = calcularEstoque(); const max = Math.max(1, ...e.cores.map(c => c.comprado));
