@@ -2898,3 +2898,62 @@ body.ag-aberta { overflow: hidden; }
 .jvpg-espera { color: #8e8e93; line-height: 1.6; padding-left: 18px; }
 .jvpg-acoes { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
 @media (max-width: 800px) { .jvpg-heroi { padding-bottom: 17vh; } .jvpg-recados li { grid-template-columns: 10px 1fr; } .jvpg-recados span { grid-column: 2; } }
+
+/* ============================================================================
+   FASE 7 — PÁGINA DO FINANCEIRO: cara de dinheiro (ouro), moeda com a logo da Primos, pizzas, metas e calculadora
+   ============================================================================ */
+.ag-rolo.fin { background: radial-gradient(120% 80% at 70% 0%, rgba(212,165,60,0.10), transparent 60%), #000; }
+.fin-moeda { position: relative; width: min(42vw, 300px); height: min(42vw, 300px); transform-style: preserve-3d; transform: rotateX(12deg) rotateY(calc(var(--h, 0) * 720deg - 22deg)); animation: finGira 9s linear infinite; }
+@keyframes finGira { from { rotate: y 0deg; } to { rotate: y 360deg; } }
+.fin-moeda i { position: absolute; inset: 0; border-radius: 50%; }
+.fin-moeda .f, .fin-moeda .v { display: grid; place-content: center; text-align: center; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  background: radial-gradient(circle at 35% 28%, #fff4c4, #f1c75a 28%, #c8901f 62%, #7d530c 100%); box-shadow: inset 0 0 0 6px rgba(255,236,170,0.55), inset 0 0 0 12px rgba(125,83,12,0.55), inset 0 0 30px rgba(0,0,0,0.35), 0 0 60px rgba(212,165,60,0.35); }
+.fin-moeda .f { transform: translateZ(9px); } .fin-moeda .v { transform: rotateY(180deg) translateZ(9px); }
+.fin-moeda .f img { width: 64%; height: 64%; object-fit: cover; border-radius: 50%; box-shadow: 0 0 0 3px rgba(125,83,12,0.7), 0 0 0 7px rgba(255,236,170,0.5); filter: sepia(0.35) saturate(1.2); justify-self: center; align-self: center; }
+.fin-moeda .v b { font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 800; color: #5b3a06; text-shadow: 0 1px 0 rgba(255,240,190,0.8); }
+.fin-moeda .v small { font-size: 0.85rem; font-weight: 600; color: #6b4708; letter-spacing: 0.08em; text-transform: uppercase; }
+.fin-moeda .b { background: linear-gradient(90deg, #5a3b06, #c8901f 30%, #ffe08a 50%, #c8901f 70%, #5a3b06); }
+.fin-orb { background: rgba(212,165,60,0.10) !important; box-shadow: inset 0 0 0 0.5px rgba(255,214,120,0.35) !important; } .fin-orb b { color: #ffe08a; }
+.fin-num { background: radial-gradient(120% 120% at 20% 0%, #2a2414, #0d0c09 60%) !important; box-shadow: inset 0 0 0 0.5px rgba(255,214,120,0.22) !important; }
+.fin-num strong { color: #ffe08a; }
+.fin-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.fin-link { border: 0; background: none; color: #d4a53c; font: inherit; font-size: 0.86rem; font-weight: 600; cursor: pointer; padding: 4px 0; }
+.fin-barra { height: 12px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.fin-barra i { display: block; height: 100%; width: var(--w); border-radius: inherit; background: linear-gradient(90deg, #7d530c, #d4a53c, #ffe08a); box-shadow: 0 0 14px rgba(212,165,60,0.6); }
+.fin-barra.fina { height: 6px; margin: 8px 0 4px; }
+.fin-volta p { color: #c7c7cc; margin: 10px 0 0; } .fin-volta b { color: #fff; }
+.fin-rosca-box { display: grid; grid-template-columns: minmax(180px, 240px) 1fr; gap: 28px; align-items: center; }
+.fin-rosca { aspect-ratio: 1; border-radius: 50%; background: var(--fatias); display: grid; place-items: center; animation: finRosca 1.2s cubic-bezier(.2,.8,.2,1) both; box-shadow: 0 0 40px rgba(212,165,60,0.15); }
+@keyframes finRosca { from { transform: rotate(-90deg) scale(0.7); opacity: 0; } }
+.fin-rosca > div { width: 62%; aspect-ratio: 1; border-radius: 50%; background: #000; display: grid; place-content: center; text-align: center; }
+.fin-rosca strong { font-size: 1.05rem; } .fin-rosca small { font-size: 0.68rem; color: #8e8e93; letter-spacing: 0.1em; text-transform: uppercase; }
+.fin-leg { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.fin-leg li { display: grid; grid-template-columns: 10px 1fr auto 42px; gap: 10px; align-items: center; font-size: 0.88rem; }
+.fin-leg i { width: 10px; height: 10px; border-radius: 3px; } .fin-leg span { color: #d1d1d6; } .fin-leg small { color: #8e8e93; text-align: right; }
+.fin-entradas { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.fin-entradas li { display: grid; grid-template-columns: 30px 1fr auto; gap: 12px; align-items: center; padding: 10px 6px; border-bottom: 0.5px solid rgba(255,255,255,0.08); }
+.fin-entradas li > span:nth-child(2) { display: grid; } .fin-entradas small { color: #8e8e93; font-size: 0.76rem; } .fin-entradas strong { color: #30d158; }
+.fin-tag { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; background: rgba(48,209,88,0.15); color: #30d158; }
+.fin-tag.aporte { background: rgba(212,165,60,0.15); color: #d4a53c; }
+.fin-metas { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
+.fin-metas li { display: flex; gap: 10px; align-items: flex-start; padding: 14px 16px; border-radius: 18px; background: rgba(212,165,60,0.06); box-shadow: inset 0 0 0 0.5px rgba(255,214,120,0.2); }
+.fin-metas li > div { flex: 1; display: grid; gap: 2px; } .fin-metas small { color: #a1a1a6; font-size: 0.74rem; } .fin-metas b { font-size: 1rem; } .fin-metas p { margin: 4px 0 0; color: #aeaeb2; font-size: 0.84rem; }
+.fin-meta-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 10px; }
+.fin-meta-form input, .fin-meta-form select { padding: 10px 12px; border-radius: 12px; border: 0; background: rgba(255,255,255,0.08); color: #fff; font: inherit; font-size: 0.88rem; }
+.fin-meta-form #fm-titulo { grid-column: 1 / -1; }
+.fin-conversa { width: 100%; background: linear-gradient(90deg, #7d530c, #d4a53c) !important; color: #fff !important; }
+.fin-calc { margin: 10px 0; }
+.fin-cens { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 14px 0 10px; }
+.fin-cen { display: grid; gap: 4px; padding: 18px; border-radius: 22px; background: rgba(255,255,255,0.045); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.12); }
+.fin-cen.realista { background: rgba(212,165,60,0.10); box-shadow: inset 0 0 0 1px rgba(255,214,120,0.45), 0 0 30px rgba(212,165,60,0.12); }
+.fin-cen small { font-size: 0.7rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #d4a53c; }
+.fin-cen strong { font-size: 2rem; font-weight: 800; letter-spacing: -0.02em; }
+.fin-cen span { font-size: 0.84rem; color: #c7c7cc; } .fin-cen b { color: #fff; } .fin-cen em { font-style: normal; font-size: 0.76rem; color: #8e8e93; }
+.fin-cen .fin-cen-meta { color: #ffe08a; font-size: 0.78rem; }
+.fin-det summary { cursor: pointer; color: #d4a53c; font-weight: 600; padding: 6px 0 12px; }
+@media (max-width: 800px) { .fin-rosca-box { grid-template-columns: 1fr; justify-items: center; } .fin-rosca { width: min(64vw, 240px); } .fin-leg { width: 100%; } .fin-moeda { width: 58vw; height: 58vw; } }
+.ag-rolo.fin .jvp-calc label { color: #a1a1a6; }
+.ag-rolo.fin .jvp-calc input { background: rgba(255,255,255,0.08); color: #fff; border: 0; box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.14); }
+.ag-rolo.fin .jvp-seg { background: rgba(255,255,255,0.06); }
+.ag-rolo.fin .jvp-seg button { color: #c7c7cc; background: transparent; }
+.ag-rolo.fin .jvp-seg button.on { background: #d4a53c; color: #1a1205; }

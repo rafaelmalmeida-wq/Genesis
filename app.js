@@ -49,6 +49,7 @@ let primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || [];
 let agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; // Central de Comando: agentes criados pelo Rafael — { id, setor, nome, missao, skills: [], criado }
 let filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; // Produção: o que o Rafael quer imprimir (voz/chat/app) — { id, titulo, qtd, material, cor, origem, status: fila|imprimindo|feito, criado, obs }
 let recadosAgentes = JSON.parse(localStorage.getItem('lifeos_recadosagentes')) || []; // fase 7: o filtro do J.A.R.V.I.S. — o que o Rafael contou e que importa a um agente — { id, quando, agentes: [ids], tipo, texto, origem: voz|chat }
+let metasPrimos = JSON.parse(localStorage.getItem('lifeos_metasprimos')) || []; // fase 7: metas da Primos (empresa, Rafael, sócio) — { id, criada, tipo: faturamento|lucro|vendas|retorno|outro, quem, titulo, valor, prazo, obs }
 let estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; setTimeout(renderCentral, 0); // Estoque da Primos (o que o app registra além da Central) — { id, data, tipo: compra|consumo|ajuste, material, cor, kg, valor, status: caminho|chegou, obs } // Primos: ações do plano do J.A.R.V.I.S. marcadas como feitas (✓) — { id, chave, texto, prazo, feito }
 let jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; // J.A.R.V.I.S.: a conversa do chat (curta: as mais recentes, sincroniza)
 let media = JSON.parse(localStorage.getItem('lifeos_media')) || [];         // filmes, séries, docs
@@ -6154,6 +6155,8 @@ function dadosPrimosIA() {
   if (!pc) return 'Ainda não chegaram os dados da Primos 3D Central neste aparelho (falta conectar o app ao computador em Ajustes do J.A.R.V.I.S.).';
   const cx = pc.caixa || {}, par = pc.parametros || {}, ct = contabilidadePrimos(pc);
   L.push(`Fonte: planilha "Primos 3D - Gestão Financeira" e pastas da Primos 3D Central, lidas em ${isoParaBR(pc.geradoEm.slice(0, 10))} ${pc.geradoEm.slice(11, 16)}. Empresa MEI aberta ~ago/2026.`);
+  if (metasPrimos.length) L.push(`METAS (fase 7, definidas pelo Rafael — guie o caminho até elas): ${metasPrimos.map(m => `${QUEM_META[m.quem] || 'Primos 3D'}: ${m.titulo}${m.prazo ? ` (até ${isoParaBR(m.prazo)})` : ''}${m.obs ? ` — ${m.obs}` : ''}`).join(' · ')}`);
+  const recs = recadosAgentes.slice(0, 8); if (recs.length) L.push(`RECADOS RECENTES QUE VOCÊ PASSOU AOS AGENTES: ${recs.map(r => `${r.quando.slice(0, 10)} → ${r.agentes.join(',')}: ${r.texto}`).join(' · ')}`);
   L.push(`CAIXA: aportes do sócio ${R$(cx.aportes)} (3 PIX); total gasto ${R$(cx.totalGasto)} (filamento ${R$(cx.gastoFilamento)}, outras despesas ${R$(cx.outrasDespesas)}); caixa estimado ${R$(cx.saldo)} (negativo = parte foi paga pelo CPF do Rafael e pela conta do MEI, ainda não registrada como aporte); contas a pagar já contratadas ${R$(cx.contasPagar)}; faturamento registrado em 2026 ${R$(ct.receitaBruta)}.`);
   L.push(`ONDE ESTÁ O DINHEIRO: imobilizado (máquinas, ferramentas, estrutura, elétrica) ${R$(ct.imobilizado)}; estoques (filamento, insumos, embalagens) ${R$(ct.estoques)}; despesas já realizadas (marketing/site, serviços, fretes, a conferir) ${R$(ct.despesasRealizadas)}. Depreciação estimada (linear 5 anos) até hoje ${R$(ct.depreciacao)}. Resultado acumulado estimado ${R$(ct.resultado)}.`);
   L.push('GASTOS POR CATEGORIA: ' + (pc.categorias || []).filter(c => c.valor).sort((a, b) => b.valor - a.valor).map(c => `${c.nome} ${R$(c.valor)}`).join('; ') + '.');
@@ -6901,6 +6904,7 @@ function registrarRecado(agentes, texto, tipo, origem) {
   if (!ids.length || !String(texto || '').trim()) return null;
   const r = { id: novoId(), quando: new Date().toISOString().slice(0, 16), agentes: ids, tipo: tipo || 'fato', texto: String(texto).trim().slice(0, 500), origem: origem || 'chat' };
   recadosAgentes.unshift(r); recadosAgentes = recadosAgentes.slice(0, 120); salvar('recadosagentes', recadosAgentes); publicarRecadosCofre();
+  if (r.tipo === 'meta' && ids.includes('contabil') && origem !== 'app') adicionarMeta({ titulo: r.texto, tipo: 'outro', quem: 'empresa' }, 'recado'); // meta dita por voz/chat aparece em Metas do Financeiro
   const nomes = ids.map(id => (todosAgentes().find(a => a.id === id) || {}).nome).filter(Boolean);
   toast(`✦ Avisei: ${nomes.join(', ')}`, 3500); return r;
 }
@@ -6909,7 +6913,7 @@ function publicarRecadosCofre() {
   clearTimeout(cc.tRecados); if (!claudeConfigurado()) return;
   cc.tRecados = setTimeout(async () => {
     const limite = isoDe(new Date(Date.now() - 21 * 864e5)), mapa = mapaAnonimo();
-    const dados = { tipo: 'jarvis-recados', quando: new Date().toISOString(), recados: recadosAgentes.filter(r => r.quando.slice(0, 10) >= limite).map(r => ({ ...r, texto: anonimizar(r.texto, mapa) })) };
+    const dados = { tipo: 'jarvis-recados', quando: new Date().toISOString(), metas: metasPrimos.map(m => ({ ...m, titulo: anonimizar(m.titulo, mapa), obs: anonimizar(m.obs || '', mapa) })), recados: recadosAgentes.filter(r => r.quando.slice(0, 10) >= limite).map(r => ({ ...r, texto: anonimizar(r.texto, mapa) })) };
     try { let sha = null; try { sha = (await gh('/contents/dados/recados.json?ref=main')).sha; } catch (e) { }
       await gh('/contents/dados/recados.json', { method: 'PUT', body: JSON.stringify({ message: 'App: recados aos agentes', content: btoa(unescape(encodeURIComponent(JSON.stringify(dados, null, 1)))), ...(sha ? { sha } : {}) }) }); } catch (e) { }
   }, 4000);
@@ -7076,7 +7080,7 @@ const SETORES_CENTRAL = [
   { id: 'outros', nome: 'Outros', cor: '#8e8e93', ico: '●' }
 ];
 const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafael 02/10/2026): só os agentes dela + o Desenvolvedor
-  { id: 'contabil', setor: 'primos', nome: 'Financeiro', funcao: 'Custos, preços, caixa, retorno e MEI', skills: ['Custeio de impressão 3D', 'Precificação e margem', 'Compras e estoque', 'Fluxo de caixa e resultados', 'Rentabilidade e planejamento'] },
+  { id: 'contabil', setor: 'primos', nome: 'Financeiro', funcao: 'Custos, preços, caixa, retorno e MEI', skills: ['Custeio de impressão 3D', 'Precificação e margem', 'Compras e estoque', 'Fluxo de caixa e resultados', 'Rentabilidade e planejamento', 'Metas e plano de ação'] },
   { id: 'marketing', setor: 'primos', nome: 'Marketing', funcao: 'TikTok, Instagram e público', skills: ['TikTok', 'Instagram', 'Público-alvo', 'Tendências', 'Datas comerciais'] },
   { id: 'estoque', setor: 'primos', nome: 'Estoque', funcao: 'Itens, filamentos, entradas/saídas e reposição', skills: ['Cadastro e padronização de itens', 'Controle de entrada e saída', 'Gestão de filamentos e insumos', 'Planejamento de reposição', 'Inventário e disponibilidade'] },
   { id: 'producao', setor: 'primos', nome: 'Impressão e Produção', funcao: 'Viabilidade, fatiamento, fila e qualidade', skills: ['Análise de viabilidade de impressão', 'Preparação e fatiamento', 'Programação da produção', 'Controle de qualidade e falhas', 'Apontamento de produção e manutenção'], aba: 'producao' },
@@ -7087,6 +7091,7 @@ const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafa
 ];
 /** O que cada skill faz (pedido do Rafael 02/10/2026) — aparece no painel do agente e vai no "manual" dele na nuvem (rodar.mjs). */
 const SKILLS_DESC = {
+  'Metas e plano de ação': 'Lê as metas que você e o sócio definiram (empresa, Rafael, sócio), mostra onde vocês estão, quanto falta, o ritmo por semana e a ação da semana para chegar lá.',
   'Cadastro e padronização de itens': 'Organizar filamentos, componentes, embalagens e produtos acabados por código, categoria, característica e localização.',
   'Controle de entrada e saída': 'Registrar compras, consumos, devoluções, perdas e movimentações, mantendo histórico e saldo atualizados.',
   'Gestão de filamentos e insumos': 'Controlar peso disponível por bobina, material, cor e lote, além das condições de armazenamento.',
@@ -7552,6 +7557,123 @@ function gargantuaPagina() {
   };
   cc.jvPagRaf = requestAnimationFrame(quadro);
 }
+// =====================================================================================================================
+// PÁGINA DO FINANCEIRO (fase 7, pedido do Rafael 03/10/2026): mais limpa, cara de DINHEIRO (moeda de ouro com a logo da
+// Primos, sem mármore), gráficos de pizza, o essencial na frente e links para o detalhe; METAS (empresa, Rafael, sócio —
+// o agente lê e guia o caminho) e a CALCULADORA DE PREÇO com 3 cenários (conservador · realista · volume).
+// =====================================================================================================================
+const CORES_FIN = ['#d4a53c', '#30d158', '#0a84ff', '#bf5af2', '#ff9f0a', '#64d2ff', '#ff375f', '#8e8e93'];
+/** Pizza (rosca) em CSS puro + legenda com %. */
+function roscaFin(itens, centro, rot) {
+  const tot = itens.reduce((s, i) => s + i.valor, 0) || 1; let ac = 0;
+  const fatias = itens.map((it, k) => { const a = ac / tot * 360, b = (ac += it.valor) / tot * 360; return `${it.cor || CORES_FIN[k % CORES_FIN.length]} ${a.toFixed(2)}deg ${b.toFixed(2)}deg`; }).join(', ');
+  return `<div class="fin-rosca-box"><div class="fin-rosca" style="--fatias: conic-gradient(${fatias})"><div><strong>${esc(centro)}</strong><small>${esc(rot)}</small></div></div>
+    <ul class="fin-leg">${itens.map((it, k) => `<li><i style="background:${it.cor || CORES_FIN[k % CORES_FIN.length]}"></i><span>${esc(it.nome)}</span><b>${reais(it.valor)}</b><small>${(it.valor / tot * 100).toFixed(0)}%</small></li>`).join('')}</ul></div>`;
+}
+function finBloco(titulo, corpo, link) { return `<section class="ag-sec ag-corpo fin-sec"><div class="fin-cab"><h2 class="jvpg-tit">${titulo}</h2>${link || ''}</div>${corpo}</section>`; }
+function linkFin(txt, acao) { return `<button type="button" class="fin-link" onclick="${acao}">${esc(txt)} ›</button>`; }
+const IR_CONTABIL = "fecharPaginaAgente(); fecharCentral(); abrirPrimos('contabil')", IR_ANALISE = "fecharPaginaAgente(); fecharCentral(); abrirPrimos('analise')";
+function renderPaginaFinanceiro() {
+  const el = $j('ag-pag'); if (!el) return; const pc = primosCentral, a = todosAgentes().find(x => x.id === 'contabil');
+  if (!pc || !pc.caixa) { el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>Financeiro</strong></div></header><div class="ag-rolo" id="ag-rolo"><section class="ag-sec"><p class="cc-txt">Sem dados da Central ainda. Conecte o computador (Ajustes do J.A.R.V.I.S. → 2).</p></section></div>`; return; }
+  const cx = pc.caixa, vl = vendasLiquidasPrimos(pc), N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, r = relatorioAgente('contabil') || {};
+  const inv = cx.totalGasto || 0, pct = inv ? vl.total / inv : 0;
+  // de onde veio: aportes do sócio/Rafael + vendas por canal
+  const porCanal = {}; (pc.vendas || []).forEach(v => { porCanal[v.canal || 'Outros'] = (porCanal[v.canal || 'Outros'] || 0) + (v.liquido ?? v.bruto ?? 0); });
+  const veio = [{ nome: 'Aportes (sócios)', valor: cx.aportes || 0, cor: '#8e8e93' }].concat(Object.entries(porCanal).map(([k, v], i) => ({ nome: 'Vendas · ' + k, valor: v, cor: ['#30d158', '#d4a53c', '#0a84ff', '#bf5af2'][i % 4] }))).filter(x => x.valor > 0);
+  const foi = (pc.categorias || []).filter(c => c.valor > 0).sort((x, y) => y.valor - x.valor), foiTop = foi.slice(0, 6).concat(foi.length > 6 ? [{ nome: 'Outros', valor: foi.slice(6).reduce((s, c) => s + c.valor, 0) }] : []);
+  const entradas = [...(pc.vendas || []).map(v => ({ data: v.data, txt: `${v.produto}${v.qtd > 1 ? ` · ${v.qtd} un.` : ''}`, sub: v.canal, valor: v.liquido ?? v.bruto, tipo: 'venda' })), ...(pc.aportes || []).map(p => ({ data: p.data, txt: p.desc, sub: 'aporte', valor: p.valor, tipo: 'aporte' }))].filter(e => e.data).sort((x, y) => y.data.localeCompare(x.data)).slice(0, 6);
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
+      <button type="button" class="ag-falar" onclick="${VOZ_AGENTES.contabil ? "falarComAgente('contabil')" : "conversarComAgente('contabil')"}">🎙 Falar</button></header>
+    <i class="ag-progresso" id="ag-progresso" style="--cor:#d4a53c"></i>
+    <div class="ag-rolo fin" id="ag-rolo" style="--cor:#d4a53c">
+      <section class="ag-heroi"><div class="ag-heroi-txt"><small>Primos 3D · agente</small><h1>Financeiro</h1><p>${r.manchete ? textoAgente(r.manchete) : esc(a.funcao || '')}</p></div>
+        <div class="ag-palco"><div class="ag-moeda-palco"><div class="fin-moeda"><i class="f"><img src="img/primos-logo.jpg" alt=""></i><i class="v"><b>${pctFr(pct)}</b><small>já voltou</small></i>${Array.from({ length: 14 }, (_, k) => `<i class="b" style="transform:translateZ(${(k - 6.5).toFixed(1)}px)"></i>`).join('')}</div>
+          ${[[reais(vl.total), 'recebido'], [N.paybackMesesNoRitmoAtual ? Math.round(N.paybackMesesNoRitmoAtual) + ' meses' : '—', 'payback'], [reais(cx.saldo), 'caixa'], [reais(N.valuationPatrimonial), 'valor']].map(([v, rr], k) => `<span class="ag-orbita fin-orb" style="--k:${k}"><b>${v}</b><small>${rr}</small></span>`).join('')}</div></div>
+        <div class="ag-desca">role para ver tudo<i></i></div></section>
+      <section class="ag-sec ag-nums">${numerosPagina('contabil').map(([v, rr], k) => `<div class="ag-num fin-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(rr)}</small></div>`).join('')}</section>
+      ${finBloco('Quanto já voltou', `<div class="fin-volta"><div class="fin-barra"><i style="--w:${Math.min(100, pct * 100).toFixed(1)}%"></i></div><p><b>${reais(vl.total)}</b> de <b>${reais(inv)}</b> investidos · faltam <b>${reais(Math.max(0, inv - vl.total))}</b></p></div>`, linkFin('Payback em detalhe', IR_ANALISE))}
+      ${finBloco('Para onde foi o dinheiro', roscaFin(foiTop, reais(inv), 'investido'), linkFin('Contabilidade completa', IR_CONTABIL))}
+      ${veio.length ? finBloco('De onde veio', roscaFin(veio, reais(veio.reduce((s, x) => s + x.valor, 0)), 'entrou')) : ''}
+      <section class="ag-sec ag-corpo">${graficosFinanceiro(pc, { semCategorias: true })}</section>
+      ${entradas.length ? finBloco('Últimas entradas', `<ul class="fin-entradas">${entradas.map(e => `<li><span class="fin-tag ${e.tipo}">${e.tipo === 'venda' ? '↑' : '◆'}</span><span><b>${esc(String(e.txt).slice(0, 60))}</b><small>${esc(isoParaBR(e.data))} · ${esc(e.sub || '')}</small></span><strong>${reais(e.valor)}</strong></li>`).join('')}</ul>`, linkFin('Todos os lançamentos', IR_CONTABIL)) : ''}
+      ${finBloco('Metas', `<div id="fin-metas">${htmlMetasFin()}</div>`)}
+      ${finBloco('Calculadora de preço', `<div id="fin-calc">${htmlCalcFin()}</div>`, linkFin('Preço mínimo por canal', IR_ANALISE))}
+      ${finBloco('Relatório e comando do agente', `<details class="fin-det"><summary>Abrir o relatório de hoje, o comando e as skills</summary>${htmlPainelAgente('contabil').replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<button type="button" class="cc-btn ag-abrir"[^>]*>[^<]*<\/button>/, '')}</details>`)}
+      <footer class="ag-fim">J.A.R.V.I.S. · Financeiro da Primos 3D</footer>
+    </div>`;
+  animarPaginaAgente();
+}
+
+// --- METAS (módulo `metasprimos`, sincroniza): da empresa, do Rafael e do sócio. O Financeiro lê (cofre) e guia o caminho. ---
+const QUEM_META = { empresa: 'Primos 3D', rafael: 'Rafael', socio: 'Sócio' };
+const TIPO_META = { faturamento: 'Faturar por mês (R$)', lucro: 'Lucro por mês (R$)', vendas: 'Peças vendidas por mês', retorno: 'Recuperar o investimento até', outro: 'Outra meta' };
+function progressoMeta(m) {
+  const pc = primosCentral || {}, mes = hojeISO().slice(0, 7), vMes = (pc.vendas || []).filter(v => (v.data || '').startsWith(mes));
+  if (m.tipo === 'faturamento' && m.valor) { const at = vMes.reduce((s, v) => s + (v.bruto || 0), 0); return { at, txt: `${reais(at)} de ${reais(m.valor)} neste mês`, f: at / m.valor }; }
+  if (m.tipo === 'vendas' && m.valor) { const at = vMes.reduce((s, v) => s + (v.qtd || 1), 0); return { at, txt: `${at} de ${m.valor} peças neste mês`, f: at / m.valor }; }
+  if (m.tipo === 'retorno' && pc.caixa) { const vl = vendasLiquidasPrimos(pc), inv = pc.caixa.totalGasto || 1; return { txt: `${pctFr(vl.total / inv)} recuperado`, f: vl.total / inv }; }
+  return null;
+}
+function htmlMetasFin() {
+  const L = metasPrimos.slice().sort((a, b) => (a.prazo || '9').localeCompare(b.prazo || '9'));
+  const lista = L.length ? `<ul class="fin-metas">${L.map(m => { const p = progressoMeta(m); return `<li><div><small>${esc(QUEM_META[m.quem] || 'Primos 3D')} · ${esc(TIPO_META[m.tipo] || 'Meta')}${m.prazo ? ` · até ${esc(isoParaBR(m.prazo))}` : ''}</small><b>${esc(m.titulo)}</b>${p ? `<div class="fin-barra fina"><i style="--w:${Math.min(100, Math.max(0, p.f * 100)).toFixed(1)}%"></i></div><small>${esc(p.txt)}</small>` : ''}${m.obs ? `<p>${esc(m.obs)}</p>` : ''}</div><button type="button" class="cc-mini sec" onclick="removerMeta('${m.id}')" aria-label="Apagar meta">✕</button></li>`; }).join('')}</ul>`
+    : '<p class="cc-txt">Ainda sem metas. Conte para o J.A.R.V.I.S. a sua realidade, a do seu sócio e onde vocês querem chegar — ou anote aqui. O Financeiro lê as metas todo dia e monta o caminho.</p>';
+  return `${lista}
+    <form class="fin-meta-form" onsubmit="salvarMeta(event)">
+      <input id="fm-titulo" placeholder="Ex.: faturar R$ 3.000 por mês" maxlength="120" required>
+      <select id="fm-tipo">${Object.entries(TIPO_META).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+      <input id="fm-valor" type="number" inputmode="decimal" min="0" step="any" placeholder="Número (opcional)">
+      <input id="fm-prazo" type="date" title="Prazo">
+      <select id="fm-quem">${Object.entries(QUEM_META).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select>
+      <input id="fm-obs" placeholder="Realidade / contexto (opcional)" maxlength="300">
+      <button type="submit" class="cc-btn">＋ Anotar meta</button>
+    </form>
+    <button type="button" class="cc-btn fin-conversa" onclick="iniciarConversaVoz('Financeiro › metas: ouvir a realidade do Rafael e do sócio, definir metas e o caminho', 'primos')">🎙 Conversar com o J.A.R.V.I.S. sobre as metas</button>`;
+}
+function salvarMeta(ev) {
+  ev.preventDefault(); const titulo = $j('fm-titulo').value.trim(); if (!titulo) return;
+  adicionarMeta({ titulo, tipo: $j('fm-tipo').value, valor: parseFloat($j('fm-valor').value) || null, prazo: $j('fm-prazo').value || null, quem: $j('fm-quem').value, obs: $j('fm-obs').value.trim() }, 'app');
+  const el = $j('fin-metas'); if (el) el.innerHTML = htmlMetasFin();
+}
+function adicionarMeta(m, origem) {
+  const meta = { id: novoId(), criada: hojeISO(), tipo: TIPO_META[m.tipo] ? m.tipo : 'outro', quem: QUEM_META[m.quem] ? m.quem : 'empresa', titulo: String(m.titulo || '').slice(0, 160), valor: Number(m.valor) || null, prazo: m.prazo || null, obs: String(m.obs || '').slice(0, 300) };
+  metasPrimos.push(meta); salvar('metasprimos', metasPrimos); publicarRecadosCofre();
+  if (origem !== 'recado') registrarRecado(['contabil'], `Meta nova (${QUEM_META[meta.quem]}): ${meta.titulo}${meta.prazo ? ' até ' + isoParaBR(meta.prazo) : ''}${meta.obs ? ' — ' + meta.obs : ''}`, 'meta', origem);
+  return meta;
+}
+function removerMeta(id) { metasPrimos = metasPrimos.filter(m => m.id !== id); salvar('metasprimos', metasPrimos); publicarRecadosCofre(); const el = $j('fin-metas'); if (el) el.innerHTML = htmlMetasFin(); }
+
+// --- CALCULADORA com 3 cenários: o custo real da peça (parâmetros da planilha) + o rateio dos custos fixos ---
+const CENARIOS_FIN = [['conservador', 'Conservador', 'margem folgada: cobre falhas, retrabalho e desconto'], ['realista', 'Realista', 'a margem-alvo da sua planilha'], ['volume', 'Volume', 'preço para vender muito (margem menor)']];
+function precoComMargem(par, canal, custo, m) {
+  if (canal === 'Consignado') return custo / Math.max(0.05, 1 - (par.comissaoExpositor || 0.3) - m);
+  if (canal === 'Shopee') return ((par.shopeeFixa || 4) + custo) / Math.max(0.05, 1 - (par.shopeeComissao || 0.2) - m);
+  return custo / Math.max(0.05, 1 - m);
+}
+function htmlCalcFin() {
+  const c = jv.calcF || (jv.calcF = { g: 20, h: 1.5, n: 1, imp: 'A1', acab: 5, aces: 0, emb: true, canal: 'Direto', qtd: 1 });
+  const campo = (rot, k, passo, modo) => `<label>${rot}<input type="number" inputmode="${modo || 'decimal'}" min="0" step="${passo}" value="${esc(String(c[k]))}" oninput="jv.calcF.${k}=this.value; atualizarCalcFin()"></label>`;
+  return `<p class="cc-txt">Pegue o tempo e as gramas no Bambu Studio depois de fatiar. Os custos (filamento, energia, máquina, falhas, embalagem, taxas) vêm da sua planilha.</p>
+    <div class="jvp-calc fin-calc">${campo('Filamento (g)', 'g', 0.1)}${campo('Tempo (h)', 'h', 0.05)}${campo('Peças no lote', 'n', 1, 'numeric')}${campo('Acabamento (min/peça)', 'acab', 1, 'numeric')}${campo('Acessórios (R$/peça)', 'aces', 0.01)}${campo('Quantidade do pedido', 'qtd', 1, 'numeric')}</div>
+    <div class="jvp-seg">${['A1', 'Kobra'].map(k => `<button type="button" class="${c.imp === k ? 'on' : ''}" onclick="jv.calcF.imp='${k}'; refazerCalcFin()">${k === 'A1' ? 'Bambu A1' : 'Kobra X'}</button>`).join('')}<button type="button" class="${c.emb ? 'on' : ''}" onclick="jv.calcF.emb=!jv.calcF.emb; refazerCalcFin()">Com caixinha</button></div>
+    <div class="jvp-seg">${['Direto', 'Shopee', 'Consignado'].map(k => `<button type="button" class="${c.canal === k ? 'on' : ''}" onclick="jv.calcF.canal='${k}'; refazerCalcFin()">${k === 'Direto' ? 'Cliente direto' : k}</button>`).join('')}</div>
+    <div id="fin-calc-res">${htmlCalcFinRes()}</div>`;
+}
+function htmlCalcFinRes() {
+  const pc = primosCentral, c = jv.calcF; if (!pc) return ''; const par = pc.parametros || {}, base = calcularPeca(pc, { ...c, preco: '' });
+  const fixos = (par.das || 82.05) + 89.9, mes = hojeISO().slice(0, 7), pecasMes = Math.max(20, (pc.vendas || []).filter(v => (v.data || '').startsWith(mes)).reduce((s, v) => s + (v.qtd || 1), 0));
+  const rateio = fixos / pecasMes, custo = base.custo + rateio, mA = par.margemAlvo || 0.4, qtd = Math.max(1, Number(c.qtd) || 1);
+  const margens = { conservador: Math.min(0.6, mA + 0.15), realista: mA, volume: Math.max(0.15, mA - 0.15) };
+  const meta = metasPrimos.find(m => m.tipo === 'lucro' && m.valor) || null;
+  const cards = CENARIOS_FIN.map(([k, nome, desc]) => { const p = precoBonito(precoComMargem(par, c.canal, custo, margens[k])), taxa = taxaCanal(par, c.canal, p), lucro = p - taxa - custo;
+    return `<div class="fin-cen ${k}"><small>${nome}</small><strong>${reais(p)}</strong><span>por peça · lucro <b>${reais(lucro)}</b> (${pctFr(lucro / p)})</span>${qtd > 1 ? `<span>pedido de ${qtd}: <b>${reais(p * qtd)}</b> · lucro ${reais(lucro * qtd)}</span>` : ''}<em>${desc}</em><span class="fin-cen-meta">${lucro > 0 ? `${Math.ceil(fixos / lucro)} peças/mês pagam os custos fixos${meta ? ` · ${Math.ceil(meta.valor / lucro)} para a meta de lucro` : ''}` : 'prejuízo neste preço'}</span></div>`; }).join('');
+  return `<div class="fin-cens">${cards}</div>
+    <p class="cc-nota">Custo da peça ${reais(base.custo)} (filamento ${reais(base.fil)} · máquina ${reais(base.maq)} · mão de obra ${reais(base.mao)} · falhas ${reais(base.fal)}${base.emb ? ` · caixinha ${reais(base.emb)}` : ''}${base.aces ? ` · acessórios ${reais(base.aces)}` : ''}) + ${reais(rateio)} de custo fixo rateado (DAS + site ÷ ${pecasMes} peças/mês).${c.canal === 'Shopee' ? ' Shopee: 20% + R$ 4 por item.' : c.canal === 'Consignado' ? ' Expositor: 30% de comissão.' : ''}</p>
+    <button type="button" class="cc-btn" onclick="abrirChatJarvis({ contexto: 'Calculadora do Financeiro: ${esc(`${c.g} g, ${c.h} h (${c.imp}), lote ${c.n}, ${c.canal}, custo ${reais(custo)}`)} — me ajude a escolher o preço', area: 'primos' })">Perguntar ao J.A.R.V.I.S. qual cenário usar</button>`;
+}
+function atualizarCalcFin() { const el = $j('fin-calc-res'); if (el) el.innerHTML = htmlCalcFinRes(); }
+function refazerCalcFin() { const el = $j('fin-calc'); if (el) el.innerHTML = htmlCalcFin(); }
 function numerosPagina(id) {
   const pc = primosCentral || {}, N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, R = v => reais(v);
   if (id === 'contabil') { const vl = pc.caixa ? vendasLiquidasPrimos(pc) : { total: 0 }; return [[R(vl.total), 'recebido'], [R((pc.caixa || {}).totalGasto), 'investido'], [R((pc.caixa || {}).saldo), 'caixa'], [R(N.valuationPatrimonial), 'valor da empresa']]; }
@@ -7580,6 +7702,7 @@ function palcoPagina(id) {
 function renderPaginaAgente() {
   const el = $j('ag-pag'), id = cc.pagina; if (!el || el.hidden || !id) return;
   if (id === 'jarvis') return renderPaginaJarvis();
+  if (id === 'contabil') return renderPaginaFinanceiro();
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -7772,7 +7895,7 @@ function htmlMastermind() {
 }
 
 /** Gráficos do Financeiro (HTML/CSS puros, animam ao entrar na tela): fluxo mensal, para onde foi o dinheiro, sobra por produto. */
-function graficosFinanceiro(pc) {
+function graficosFinanceiro(pc, op = {}) {
   const MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
   const fluxo = fluxoMensalPrimos(pc).slice(-6), maxF = Math.max(1, ...fluxo.flatMap(f => [f.ent, f.sai]));
   const g1 = fluxo.length ? ccBloco('Fluxo de caixa por mês', `<div class="cc-colunas">${fluxo.map(f => `<div class="cc-col" title="${esc(f.mes)}: entrou ${reais(f.ent)} · saiu ${reais(f.sai)}">
@@ -7785,7 +7908,7 @@ function graficosFinanceiro(pc) {
   const g3 = prods.length ? ccBloco('Quanto sobra em cada produto', `<ul class="cc-pilhas">${prods.map(p => { const cu = Math.min(100, p.custo / p.preco * 100), tx = Math.min(100 - cu, (p.taxa || 0) / p.preco * 100), lu = Math.max(0, 100 - cu - tx);
       return `<li><div class="cc-pilha-topo"><b>${esc(String(p.produto).slice(0, 38))}</b><strong>${reais(p.preco)}</strong></div><div class="cc-pilha"><i class="cu" style="--w:${cu.toFixed(1)}%"></i>${tx ? `<i class="tx" style="--w:${tx.toFixed(1)}%"></i>` : ''}<i class="lu" style="--w:${lu.toFixed(1)}%"></i></div><small>custo ${reais(p.custo)}${p.taxa ? ` · taxas ${reais(p.taxa)}` : ''} · sobra <b>${reais(p.sobra)}</b> (${(lu).toFixed(0)}%) · ${esc(p.canal || '')}</small></li>`; }).join('')}</ul>
     <p class="cc-legenda"><span><i class="cu"></i>custo de impressão</span><span><i class="tx"></i>taxas</span><span><i class="lu"></i>sobra</span></p>`) : '';
-  return g1 + g2 + g3;
+  return g1 + (op.semCategorias ? '' : g2) + g3;
 }
 
 // --- CONTEÚDO do agente de Marketing: vídeos montados de madrugada no PC (prévia leve no cofre; o completo fica na pasta) ---
@@ -8168,8 +8291,8 @@ function migrarEntregasDePedidos() {
 }
 
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, recadosagentes: recadosAgentes, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, recadosagentes: recadosAgentes, metasprimos: metasPrimos, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.metasprimos) salvar('metasprimos', data.metasprimos); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -10382,7 +10505,7 @@ if (_vndProd) _vndProd.addEventListener('change', previaVenda);
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'agentes', 'estoqueprimos', 'filaimpressao', 'recadosagentes', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'agentes', 'estoqueprimos', 'filaimpressao', 'recadosagentes', 'metasprimos', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -10514,7 +10637,7 @@ function redesenharTudo() {
   entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || [];
   orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
   claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || [];
-  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; recadosAgentes = JSON.parse(localStorage.getItem('lifeos_recadosagentes')) || []; setTimeout(renderCentral, 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
+  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; recadosAgentes = JSON.parse(localStorage.getItem('lifeos_recadosagentes')) || []; metasPrimos = JSON.parse(localStorage.getItem('lifeos_metasprimos')) || []; setTimeout(renderCentral, 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
   media = JSON.parse(localStorage.getItem('lifeos_media')) || []; playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || [];
   trips = JSON.parse(localStorage.getItem('lifeos_trips')) || []; contacts = JSON.parse(localStorage.getItem('lifeos_contacts')) || [];
   devnotes = JSON.parse(localStorage.getItem('lifeos_devnotes')) || {};
