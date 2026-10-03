@@ -48,6 +48,7 @@ let memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || [];   // J
 let primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || [];
 let agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; // Central de Comando: agentes criados pelo Rafael — { id, setor, nome, missao, skills: [], criado }
 let filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; // Produção: o que o Rafael quer imprimir (voz/chat/app) — { id, titulo, qtd, material, cor, origem, status: fila|imprimindo|feito, criado, obs }
+let recadosAgentes = JSON.parse(localStorage.getItem('lifeos_recadosagentes')) || []; // fase 7: o filtro do J.A.R.V.I.S. — o que o Rafael contou e que importa a um agente — { id, quando, agentes: [ids], tipo, texto, origem: voz|chat }
 let estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; setTimeout(renderCentral, 0); // Estoque da Primos (o que o app registra além da Central) — { id, data, tipo: compra|consumo|ajuste, material, cor, kg, valor, status: caminho|chegou, obs } // Primos: ações do plano do J.A.R.V.I.S. marcadas como feitas (✓) — { id, chave, texto, prazo, feito }
 let jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; // J.A.R.V.I.S.: a conversa do chat (curta: as mais recentes, sincroniza)
 let media = JSON.parse(localStorage.getItem('lifeos_media')) || [];         // filmes, séries, docs
@@ -6241,6 +6242,7 @@ ESTILO: curto e escaneável (até ~150 palavras, a menos que ele peça detalhe),
 LIMITES: você conversa pelo app. Você não envia e-mails, não posta em redes, não faz pagamentos nem compras. Quem mexe no computador — planilha "Primos 3D - Gestão Financeira.xlsx", pasta "Primos 3D Central", código do app — é o Claude, no PC do ${nome}.
 QUANDO PRECISAR DO COMPUTADOR (lançar ou corrigir algo na planilha, guardar print/nota fiscal na Central, ler um arquivo da Central, mudar o app): responda normalmente e termine com a linha exata ⟦PC: <o que o Claude deve fazer, em 1 frase objetiva>⟧. Só use quando for mesmo necessário.
 PRINTS/FOTOS de compra ou venda: leia loja, data, itens, quantidades, valores, frete e total; mostre um resumo em lista e termine com ⟦PC: lançar ... na aba Filamentos/Despesas/Vendas⟧ (filamento → Filamentos; outras compras → Despesas; venda → Vendas). Se algo estiver ilegível, pergunte antes.
+FILTRO DOS AGENTES (o mais importante): você é o comando dos agentes da Primos 3D (ids: ${agentesCentral().map(a => a.id).join(', ')}; ${MAPA_FILTRO}). Se o que ele contou importa a um agente, termine com a linha ⟦AGENTES: id1, id2 | o recado em 1 frase com os números⟧ e diga em poucas palavras quem avisou. Compra de filamento: ⟦FILAMENTO: kg | material | cor | valor total ou vazio | chegou ou caminho⟧ (entra no estoque e avisa Estoque e Financeiro; se faltar kg ou cor, pergunte). Coisa solta da vida não precisa.
 NAVEGAR: se ajudar, termine com ⟦ABRIR: destino⟧, destino entre: primos, primos/analise, primos/contabilidade, primos/vendas, primos/chaveiros, primos/producao, primos/marketing, primos/central, engenharia, seguranca, mercado, academia, familia, diaadia, financas, agenda, tarefas, notas, saude, negocios, ajustes.
 BUSCA: para fatos atuais, preços, concorrentes, tendências, datas comemorativas e normas, use a busca do Google e diga de onde veio.
 DESABAFO: acolha primeiro, sem julgar; no máximo uma pergunta; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
@@ -6388,6 +6390,7 @@ async function enviarChatJarvis(ev) {
 function comandoLocalJarvis(texto) {
   const s = semAcentoCer(texto);
   if (/\?/.test(texto) || /^(quanto|qual|quais|como|quando|onde|por que|porque|o que|me (diz|fala|explica|mostra)|analis|resum|compar)/.test(s)) return null;
+  if (/^comprei/.test(s) && /filament|\b(pla|petg|tpu|abs|asa)\b/.test(s)) return null; // fase 7: compra de filamento vai ao J.A.R.V.I.S. (estoque + Financeiro + planilha), não à despesa solta
   if (!/^(gastei|paguei|comprei|recebi|vendi|ganhei|novo pedido|nova encomenda|orcamento|novo cliente|nova cliente|cadastra|tarefa|nova tarefa|lembrar de|me lembra|marcar|agendar|reuniao|compromisso|anota|nova nota|nota:)/.test(s)) return null;
   try { const r = interpretarDitado(texto, 'jarvis'); return r && r.tipo && r.tipo !== 'nota' || /^(anota|nova nota|nota:)/.test(s) ? r : null; } catch (e) { return null; }
 }
@@ -6442,7 +6445,9 @@ async function conversarJarvis(texto, anexos = []) {
   jv.iaPensando = false; jv.controle = null; resp.pensando = false;
   if (pronto) {
     let t = pronto.texto; const ordens = [];
-    t = t.replace(/⟦\s*(PC|ABRIR)\s*:\s*([^⟧]*)⟧/gi, (x, tipo, arg) => { ordens.push([tipo.toUpperCase(), arg.trim()]); return ''; }).trim();
+    t = t.replace(/⟦\s*(PC|ABRIR|AGENTES|FILAMENTO)\s*:\s*([^⟧]*)⟧/gi, (x, tipo, arg) => { ordens.push([tipo.toUpperCase(), arg.trim()]); return ''; }).trim();
+    ordens.filter(o => o[0] === 'AGENTES').forEach(o => { const [ids, rec] = o[1].split('|'); registrarRecado(String(ids || '').split(/[,\s]+/).filter(Boolean), desanonimizar(String(rec || '').trim(), mapa), 'fato', 'chat'); });
+    ordens.filter(o => o[0] === 'FILAMENTO').forEach(o => { const [kg, material, cor, valor, st] = o[1].split('|').map(x => (x || '').trim()); registrarCompraFilamento({ kg: parseFloat(kg.replace(',', '.')), material, cor, valor: (v => parseFloat(v.includes(',') ? v.replace(/\./g, '').replace(',', '.') : v) || null)(String(valor).replace(/[^\d,.]/g, '')), chegou: !/caminho/i.test(st) }, 'chat'); });
     resp.t = t; resp.fontes = pronto.fontes; resp.acoes = [];
     const abrir = ordens.find(o => o[0] === 'ABRIR'); if (abrir && DESTINOS_JARVIS[abrir[1]]) resp.acoes.push([DESTINOS_JARVIS[abrir[1]][0], `irDestinoJarvis('${abrir[1]}')`]);
     const pc = ordens.find(o => o[0] === 'PC');
@@ -6691,6 +6696,7 @@ async function conectarVoz() {
     if (!vz.ativo) return;
     const motivo = String(ev.reason || ''), antesDeComecar = !vz.jaConectou;
     if (antesDeComecar && /key|auth|credential|permission|denied|unauthenticated/i.test(motivo) && /^AQ\./.test(jvConfig.iaChave) && vz.auth === 'key' && vz.tentativas < 3) { vz.tentativas++; jvConfig.vozAuth = 'access_token'; conectarVoz(); return; }
+    if (antesDeComecar && jvConfig.vozSemAjuste !== vz.modelo && !/quota|exhaust|rate|limit|key|auth|credential|permission|denied/i.test(motivo)) { jvConfig.vozSemAjuste = vz.modelo; salvarJvConfig(); vz.tentativas++; conectarVoz(); return; } // o modelo recusou os ajustes de velocidade: tenta sem eles (e lembra)
     if (antesDeComecar && !/quota|exhaust|rate|limit|key|auth|credential|permission|denied/i.test(motivo) && vz.nivelSetup < 3) { vz.nivelSetup++; vz.tentativas++; conectarVoz(); return; }
     if (!antesDeComecar && vz.reconexoes < 3 && !/quota|exhaust|rate|limit/i.test(motivo)) { vz.reconexoes++; pararFalaVoz(); estadoVoz('Reconectando…', 'conectando'); setTimeout(() => { if (vz.ativo) conectarVoz(); }, 700); return; }
     falhaVoz({ amigavel: traduzirFechamentoVoz(ev.code, motivo) });
@@ -6708,6 +6714,11 @@ function setupVoz(modelo) {
   if (vz.nivelSetup < 3) { s.inputAudioTranscription = {}; s.outputAudioTranscription = {}; }
   if (vz.nivelSetup < 2) s.tools = [{ functionDeclarations: ferramentasVoz() }];
   if (vz.nivelSetup < 1) s.tools.push({ googleSearch: {} });
+  if (jvConfig.vozSemAjuste !== modelo) { // fase 7: resposta mais rápida — entende mais cedo que ele parou de falar, não "pensa" antes de falar, sessão longa sem estourar
+    s.realtimeInputConfig = { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH', silenceDurationMs: 600, prefixPaddingMs: 200 } };
+    s.contextWindowCompression = { slidingWindow: {} };
+    s.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  }
   return s;
 }
 function ferramentasVoz() {
@@ -6716,6 +6727,9 @@ function ferramentasVoz() {
     { name: 'lembrar_sobre_rafael', description: 'Guarda um fato duradouro sobre o Rafael (um gosto, o jeito dele, uma preferência, um objetivo) para você se adaptar a ele nas próximas conversas. Use com moderação.', parameters: { type: 'OBJECT', properties: { fato: { type: 'STRING' } }, required: ['fato'] } }
   ];
   if (claudeConfigurado()) f.push({ name: 'pedir_ao_computador', description: 'Manda uma tarefa para o Claude, no computador do Rafael: lançar ou corrigir algo na planilha da Primos 3D, guardar ou ler algo na Primos 3D Central, ou mudar o app. Confirme com ele em uma frase antes de mandar.', parameters: { type: 'OBJECT', properties: { tarefa: { type: 'STRING', description: 'O que o Claude deve fazer, em 1 frase objetiva' } }, required: ['tarefa'] } });
+  const ids = agentesCentral().map(a => a.id);
+  f.push({ name: 'avisar_agentes', description: 'O SEU FILTRO: quando o Rafael contar algo que importa a um agente da Primos 3D (gasto, compra, venda, cliente, meta, ideia de produto ou de vídeo, problema numa máquina, estoque...), registre um recado curto para o(s) agente(s) certo(s). Não precisa confirmar; diga de passagem quem você avisou. Mapa: ' + MAPA_FILTRO, parameters: { type: 'OBJECT', properties: { agentes: { type: 'ARRAY', items: { type: 'STRING', enum: ids } }, tipo: { type: 'STRING', enum: ['fato', 'gasto', 'compra', 'venda', 'meta', 'ideia', 'problema', 'pedido'] }, resumo: { type: 'STRING', description: 'o recado em 1 frase objetiva, com os números que ele disse' } }, required: ['agentes', 'resumo'] } });
+  f.push({ name: 'registrar_compra_filamento', description: 'Quando ele disser que comprou filamento (ex.: comprei 2 kg de PLA preto por 180 reais): põe no estoque, avisa Estoque e Financeiro e, com o valor, manda lançar na planilha (ele confirma no cartão). Se faltar kg ou cor, pergunte antes.', parameters: { type: 'OBJECT', properties: { kg: { type: 'NUMBER' }, material: { type: 'STRING', description: 'PLA, PETG, TPU, ABS...' }, cor: { type: 'STRING' }, valor: { type: 'NUMBER', description: 'total pago em reais, se ele disse' }, loja: { type: 'STRING' }, chegou: { type: 'BOOLEAN', description: 'false se ainda está a caminho' } }, required: ['kg', 'cor'] } });
   f.push({ name: 'adicionar_fila_impressao', description: 'Anota um item na FILA DE IMPRESSÃO da Primos 3D (o agente de Produção organiza a fila do dia). Use quando o Rafael disser que quer/precisa imprimir algo ou pedir para pôr na fila. Não precisa confirmar.', parameters: { type: 'OBJECT', properties: { titulo: { type: 'STRING', description: 'o que imprimir (ex.: chaveiro Nossa Senhora)' }, qtd: { type: 'NUMBER' }, material: { type: 'STRING' }, cor: { type: 'STRING' }, obs: { type: 'STRING' } }, required: ['titulo'] } });
   return f;
 }
@@ -6738,6 +6752,7 @@ COMO FALAR: frases curtas e naturais, feitas para ouvir (de 1 a 4 frases; mais s
 PAPEL: sócio-analista dele em tudo — a Primos 3D (vendas, caixa, custos, estratégia, marketing), a engenharia, as finanças pessoais, a agenda, as tarefas, a saúde e a rotina. Seja proativo: o que importa agora, riscos, oportunidades e o próximo passo. Nunca invente números: use o bloco DADOS.
 ${vz.nivelSetup >= 2 ? `COMPUTADOR: nesta conversa você não tem ferramentas. ${claudeConfigurado() ? 'Quando precisar do PC (planilha, Central, mudar o app) e ele confirmar, diga numa frase afirmativa "vou mandar ao Claude: <o quê>" — o app encaminha sozinho.' : 'O app não está conectado ao computador: se precisar do PC, peça para ele conectar em Ajustes do J.A.R.V.I.S.'}`
     : `FERRAMENTAS: abrir_tela para mostrar algo no app; ${claudeConfigurado() ? 'pedir_ao_computador para o que precisa do PC (planilha, Central, mudar o app) — confirme numa frase e CHAME a ferramenta (não basta dizer que vai pedir); ' : ''}lembrar_sobre_rafael quando ele revelar um gosto, um jeito ou um objetivo duradouro.${vz.nivelSetup < 1 ? ' Para fatos atuais, preços e notícias, use a busca do Google.' : ''}`}
+FILTRO (o mais importante): você é o comando dos agentes da Primos 3D. Tudo o que ele contar passa pelo seu filtro: se importa a um agente, registre o recado ${vz.nivelSetup >= 2 ? '(nesta conversa sem ferramentas: diga "anotado para o agente X" — o chat guarda)' : '(avisar_agentes; compra de filamento = registrar_compra_filamento)'} e diga em poucas palavras quem avisou ("anotei e passei pro Financeiro"). Coisa solta da vida não precisa de recado.
 LIMITES: você não envia e-mails, não posta, não compra e não paga nada. Nunca peça senhas nem dados bancários. Em desabafo, acolha primeiro; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); diga "um cliente" ou o código, sem inventar nomes.
 ${perfilIA(nome)}AGORA: ${dia}, ${hora}. Tela aberta no app: ${vz.contexto || 'página inicial'}.${vz.saudar ? '\nCOMECE você: cumprimente em uma frase curta, com a sua voz, e pergunte por onde ele quer começar.' : ''}
@@ -6805,6 +6820,8 @@ function executarFerramentasVoz(chamadas) {
     try {
       if (c.name === 'abrir_tela' && DESTINOS_JARVIS[a.destino]) { const d = a.destino; setTimeout(() => irDestinoJarvis(d), 0); r = { ok: true, aberto: DESTINOS_JARVIS[d][0] }; }
       else if (c.name === 'adicionar_fila_impressao' && a.titulo) { const it = adicionarFila({ titulo: String(a.titulo), qtd: a.qtd, material: a.material, cor: a.cor, obs: a.obs }, 'voz'); toast(`🖨️ Na fila: ${it.titulo} · ${it.qtd} un.`, 4000); r = { ok: true, aviso: 'Anotado na fila de impressão; o agente de Produção vai encaixar na fila do dia.' }; }
+      else if (c.name === 'avisar_agentes' && a.resumo) { const rec = registrarRecado(a.agentes, a.resumo, a.tipo, 'voz'); r = rec ? { ok: true, avisados: rec.agentes } : { ok: false, erro: 'agente desconhecido' }; }
+      else if (c.name === 'registrar_compra_filamento') r = registrarCompraFilamento(a, 'voz');
       else if (c.name === 'lembrar_sobre_rafael' && a.fato) { guardarMemoria({ tipo: 'perfil', texto: String(a.fato).slice(0, 240) }); r = { ok: true }; }
       else if (c.name === 'pedir_ao_computador' && a.tarefa && claudeConfigurado()) { vz.pediuEm = Date.now(); const tipo = classificarPedidoPC(String(a.tarefa)); enviarAoComputadorAuto(desanonimizar(vz.legEu || a.tarefa, vz.mapa), [], vz.contexto, vz.area, desanonimizar(String(a.tarefa), vz.mapa)); r = tipo === 'proibido' ? { ok: false, erro: 'Bloqueado pela segurança: compras, pagamentos, enviar mensagens/e-mails e postar ficam só com o Rafael. Diga isso a ele.' } : tipo === 'grava' ? { ok: true, aviso: 'Isso grava dados: apareceu no chat um cartão para o Rafael confirmar. Diga a ele para tocar em Confirmar no chat.' } : { ok: true, aviso: 'Pedido de leitura enviado ao Claude no computador; a resposta aparece no chat do app.' }; }
       else r = { ok: false, erro: 'não consegui fazer isso' };
@@ -6862,11 +6879,51 @@ function falhaVoz(e) {
   if (e && e.classico) { encerrarConversaVoz(); toast(e.amigavel || 'Abri a conversa escrita.', 6000); abrirChatJarvis({ contexto: vz.contexto, area: vz.area, ouvir: true }); return; }
   estadoVoz((e && e.amigavel) || 'A conversa por voz não abriu. Toque na esfera para tentar de novo.', 'erro'); vz.legEu = ''; vz.legEle = ''; vz.dica = ''; renderLegendaVoz();
 }
+// fase 7: o app foi para o fundo (fechou, trocou de app, bloqueou a tela) → encerra a conversa. Antes a conexão ficava meio
+// viva e, ao voltar, tocava a resposta antiga que estava na fila.
+document.addEventListener('visibilitychange', () => { if (document.hidden && vz.ativo) encerrarConversaVoz(); });
 function encerrarConversaVoz(daVolta) {
   pararSessaoVoz();
   const el = $j('jv-conversa'); if (!el || el.hidden) return;
   el.hidden = true; document.body.classList.remove('jv-em-voz');
   if (daVolta !== true) desempilharCamada('voz');
+}
+
+// ============================================================================
+// FILTRO DO J.A.R.V.I.S. → RECADOS AOS AGENTES (fase 7, pedido do Rafael 03/10/2026): tudo o que ele conta (por voz
+// ou no chat) passa pelo filtro; o que importa a um agente vira um recado (`recadosagentes`, sincroniza) e vai para o
+// cofre (`dados/recados.json`, anonimizado) — os agentes da nuvem leem na próxima rodada. Compra de filamento também
+// entra no estoque na hora (e o lançamento na planilha vai ao PC com cartão de confirmação).
+// ============================================================================
+const MAPA_FILTRO = 'contabil = dinheiro, gasto, preço, caixa, metas, sócio, aporte, MEI · estoque = filamento, insumos, compras de material · producao = imprimir, máquinas, falhas, tempo de impressão · marketing = vídeos, fotos, TikTok, Instagram, ideias de post · vendas = clientes, orçamentos, pedidos, vendas · consignacao = expositores e chaveiros · shopee = loja da Shopee, anúncios · dev = mudanças no app';
+function registrarRecado(agentes, texto, tipo, origem) {
+  const ids = [].concat(agentes || []).map(String).filter(id => agentesCentral().some(a => a.id === id));
+  if (!ids.length || !String(texto || '').trim()) return null;
+  const r = { id: novoId(), quando: new Date().toISOString().slice(0, 16), agentes: ids, tipo: tipo || 'fato', texto: String(texto).trim().slice(0, 500), origem: origem || 'chat' };
+  recadosAgentes.unshift(r); recadosAgentes = recadosAgentes.slice(0, 120); salvar('recadosagentes', recadosAgentes); publicarRecadosCofre();
+  const nomes = ids.map(id => (todosAgentes().find(a => a.id === id) || {}).nome).filter(Boolean);
+  toast(`✦ Avisei: ${nomes.join(', ')}`, 3500); return r;
+}
+/** Manda os recados dos últimos 21 dias ao cofre (nomes de clientes trocados por códigos). */
+function publicarRecadosCofre() {
+  clearTimeout(cc.tRecados); if (!claudeConfigurado()) return;
+  cc.tRecados = setTimeout(async () => {
+    const limite = isoDe(new Date(Date.now() - 21 * 864e5)), mapa = mapaAnonimo();
+    const dados = { tipo: 'jarvis-recados', quando: new Date().toISOString(), recados: recadosAgentes.filter(r => r.quando.slice(0, 10) >= limite).map(r => ({ ...r, texto: anonimizar(r.texto, mapa) })) };
+    try { let sha = null; try { sha = (await gh('/contents/dados/recados.json?ref=main')).sha; } catch (e) { }
+      await gh('/contents/dados/recados.json', { method: 'PUT', body: JSON.stringify({ message: 'App: recados aos agentes', content: btoa(unescape(encodeURIComponent(JSON.stringify(dados, null, 1)))), ...(sha ? { sha } : {}) }) }); } catch (e) { }
+  }, 4000);
+}
+/** "Comprei 2 kg de PLA preto": entra no estoque (a caminho ou chegou), avisa Estoque + Financeiro e, com valor, pede ao PC o lançamento na aba Filamentos. */
+function registrarCompraFilamento(a, origem) {
+  const kg = Number(a.kg) || 0, cor = String(a.cor || '').trim(); if (!(kg > 0) || !cor) return { ok: false, erro: 'Falta a quantidade (kg) ou a cor.' };
+  const material = String(a.material || 'PLA').trim().toUpperCase(), valor = Number(a.valor) || null, chegou = a.chegou !== false;
+  estoquePrimos.push({ id: novoId(), data: hojeISO(), tipo: 'compra', material, cor, kg, valor, status: chegou ? 'chegou' : 'caminho', obs: a.loja ? `loja: ${a.loja}` : '' });
+  salvar('estoqueprimos', estoquePrimos); if (typeof renderCentral === 'function') renderCentral();
+  const desc = `Compra de ${fmtKg(kg)} de ${material} ${cor}${valor ? ` por ${reais(valor)}` : ''}${a.loja ? ` (${a.loja})` : ''}${chegou ? '' : ' — a caminho'}`;
+  registrarRecado(['estoque', 'contabil'], desc, 'compra', origem);
+  if (valor && claudeConfigurado()) enviarAoComputadorAuto(desc, [], 'J.A.R.V.I.S. · compra de filamento', 'primos', `Lançar na aba Filamentos da planilha: ${desc}, data ${isoParaBR(hojeISO())}.`);
+  return { ok: true, aviso: `Entrou no estoque${chegou ? '' : ' como a caminho'}; avisei Estoque e Financeiro.${valor && claudeConfigurado() ? ' O lançamento na planilha precisa do OK dele no cartão do chat.' : valor ? '' : ' Pergunte o valor pago se ele souber, para o Financeiro.'}` };
 }
 
 // ============================================================================
@@ -7672,7 +7729,9 @@ function htmlPainelAgente(id) {
   const skills = sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '';
   const i = html.indexOf('</header>') + 9, abrir = cc.pagina ? '' : `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('${id}')">Abrir a página completa de ${esc(ag ? ag.nome : '')} ›</button>`;
   const limpo = html.slice(i).replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
-  return html.slice(0, i) + abrir + est + cmd + resp + limpo + skills;
+  const recs = recadosAgentes.filter(x => (x.agentes || []).includes(id)).slice(0, 6); // fase 7: o que o Rafael contou ao J.A.R.V.I.S. e ele passou a este agente
+  const recados = recs.length ? ccBloco('Recados que o J.A.R.V.I.S. me passou', `<ul class="cc-lista">${recs.map(x => `<li><span><b>${esc(x.texto)}</b><small>${esc(isoParaBR(x.quando.slice(0, 10)))} · ${x.origem === 'voz' ? '🎙 voz' : '💬 chat'}${x.tipo ? ' · ' + esc(x.tipo) : ''}</small></span></li>`).join('')}</ul><p class="cc-nota">Eu leio estes recados na próxima rodada (todo dia às 7h ou ao tocar em Rodar agora).</p>`) : '';
+  return html.slice(0, i) + abrir + est + cmd + resp + recados + limpo + skills;
 }
 function htmlPainelAgenteBase(id) {
   if (id === 'jarvis') {
@@ -8109,8 +8168,8 @@ function migrarEntregasDePedidos() {
 }
 
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, recadosagentes: recadosAgentes, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -10323,7 +10382,7 @@ if (_vndProd) _vndProd.addEventListener('change', previaVenda);
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'agentes', 'estoqueprimos', 'filaimpressao', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'agentes', 'estoqueprimos', 'filaimpressao', 'recadosagentes', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -10455,7 +10514,7 @@ function redesenharTudo() {
   entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || [];
   orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
   claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || [];
-  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; setTimeout(renderCentral, 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
+  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; recadosAgentes = JSON.parse(localStorage.getItem('lifeos_recadosagentes')) || []; setTimeout(renderCentral, 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
   media = JSON.parse(localStorage.getItem('lifeos_media')) || []; playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || [];
   trips = JSON.parse(localStorage.getItem('lifeos_trips')) || []; contacts = JSON.parse(localStorage.getItem('lifeos_contacts')) || [];
   devnotes = JSON.parse(localStorage.getItem('lifeos_devnotes')) || {};
