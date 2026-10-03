@@ -176,6 +176,8 @@ class Secadora {
     const u = hit.object === this.fios ? this.porFio[hit.instanceId] : hit.object === this.fiosBrilho ? this.porBrilho[hit.instanceId] : this.usados[Math.floor(hit.instanceId / 2)];
     if (u) { this.destaque = { u, t: performance.now() }; this.aoTocar(u.b, e.clientX - r.left, e.clientY - r.top); this.tocar(); }
   }
+  /** A rolagem da página gira a secadora (estilo Apple): v em radianos. */
+  rolar(v) { this.ang = Math.max(-1.1, Math.min(1.1, v)); this.vel = 0; this.mexeu = performance.now(); this.tocar(); }
   porta(aberta) { this.alvoPorta = aberta ? 1 : 0; this.mexeu = performance.now(); this.tocar(); }
   anexar(host) {
     if (!host) return; this.host = host; host.appendChild(this.renderer.domElement);
@@ -196,7 +198,7 @@ class Secadora {
     this.raf = 0; const el = this.renderer.domElement; if (this.solto || !el.isConnected || document.hidden) return;
     const agora = performance.now(), parado = agora - (this.mexeu || 0) > 3000, desde = agora - this.entrada;
     if (Math.abs(this.vel) > 0.0004) { this.ang = Math.max(-1.1, Math.min(1.1, this.ang + this.vel)); this.vel *= 0.92; }
-    else if (parado) this.ang = -0.42 + Math.sin(agora / 5200) * 0.22; // "respira" devagar para mostrar o volume
+    else if (parado) this.ang += ((-0.42 + Math.sin(agora / 5200) * 0.22) - this.ang) * 0.02; // volta devagar (sem pulo depois da rolagem) // "respira" devagar para mostrar o volume
     // porta: espera a câmera chegar e abre com mola suave (e a luz de dentro acende junto)
     const alvo = desde < 700 ? 0 : this.alvoPorta; this.abertura += (alvo - this.abertura) * 0.06;
     this.porta3d.rotation.y = -this.abertura * 1.95;

@@ -6991,7 +6991,7 @@ function abrirCentral(setor) {
   const el = $j('jv-central'); if (!el) return;
   if (setor) cc.setor = setor;
   if (el.hidden) empilharCamada('central', fecharCentral);
-  el.hidden = false; document.body.classList.add('cc-aberta'); renderCentral(); sincronizarCofre();
+  el.hidden = false; document.body.classList.add('cc-aberta'); renderCentral(); sincronizarCofre(); acompanharExecucao(true);
 }
 function fecharCentral(daVolta) {
   const el = $j('jv-central'); if (!el || el.hidden) return;
@@ -7041,20 +7041,7 @@ function renderCentral() {
   const el = $j('jv-central'); if (!el || el.hidden) return;
   const pc = primosCentral, ag = todosAgentes();
   $j('cc-sub').textContent = pc && pc.geradoEm ? `Dados da Central lidos em ${isoParaBR(String(pc.geradoEm).slice(0, 10))} · agentes só leem` : 'Agentes só leem · gravar sempre pede o seu OK';
-  const noAgente = a => {
-    const s = setorCentral(a.setor), st = estadoAgente(a);
-    return `<button type="button" class="cc-no cc-agente${cc.agente === a.id ? ' sel' : ''}" data-no="a:${esc(a.id)}" data-pai="s:${esc(a.setor)}" style="--cor:${s.cor}" onclick="abrirAgenteCentral('${esc(a.id)}')">
-      <span class="cc-no-topo"><i class="cc-luz ${st.nivel}"></i><b>${esc(a.nome)}</b></span>
-      <small>${esc(a.funcao || a.missao || '')}</small>
-      <strong class="cc-metrica">${esc(st.metrica)}</strong>
-      <span class="cc-tags">${(a.skills || []).slice(0, 3).map(k => `<em>${esc(k)}</em>`).join('')}</span></button>`;
-  };
-  const doSetor = ag.filter(a => a.setor === cc.setor);
-  $j('cc-nos').innerHTML = `
-    <div class="cc-nivel"><button type="button" class="cc-no cc-jarvis${cc.agente === 'jarvis' ? ' sel' : ''}" data-no="jarvis" onclick="abrirAgenteCentral('jarvis')"><img src="icon-180.png" alt=""><span><b>J.A.R.V.I.S.</b><small>${relatoriosAgentes && relatoriosAgentes.jarvis ? `${plural((relatoriosAgentes.jarvis.prioridades || []).filter(p => p.urgencia === 'hoje').length, 'prioridade', 'prioridades')} hoje · toque para ver` : `${plural(ag.length, 'agente', 'agentes')} · ${plural(SETORES_CENTRAL.length, 'setor', 'setores')}`}</small></span></button></div>
-    <div class="cc-nivel cc-setores">${SETORES_CENTRAL.map(s => { const n = ag.filter(a => a.setor === s.id); const at = n.some(a => estadoAgente(a).nivel === 'atencao');
-      return `<button type="button" class="cc-no cc-setor${cc.setor === s.id ? ' sel' : ''}" data-no="s:${s.id}" data-pai="jarvis" style="--cor:${s.cor}" onclick="escolherSetorCentral('${s.id}')"><span class="cc-ico">${s.ico}</span><b>${esc(s.nome)}</b><small>${n.length ? plural(n.length, 'agente', 'agentes') : 'sem agentes'}${at ? ' · <i class="cc-luz atencao"></i>' : ''}</small></button>`; }).join('')}</div>
-    <div class="cc-nivel cc-agentes">${doSetor.map(noAgente).join('')}<button type="button" class="cc-no cc-add" data-no="add" data-pai="s:${cc.setor}" onclick="cc.novo=true; cc.agente=null; renderCentral()">＋<small>Novo agente em ${esc(setorCentral(cc.setor).nome)}</small></button></div>`;
+  renderCanvasCentral();
   const p = $j('cc-painel');
   if (cc.novo) { p.hidden = false; p.innerHTML = htmlNovoAgente(); }
   else if (cc.agente) { p.hidden = false; p.innerHTML = htmlPainelAgente(cc.agente); p.scrollTop = 0; }
@@ -7062,7 +7049,7 @@ function renderCentral() {
   el.classList.toggle('com-painel', !p.hidden);
   if (cc.agente === 'estoque') montarSecadora3D(); else if (cc.seca3d) cc.seca3d.renderer.domElement.remove(); // o 3D só anda com o Estoque aberto
   animarPainelCentral(); animarQuadroCentral();
-  requestAnimationFrame(desenharFiosCentral); setTimeout(desenharFiosCentral, 260); // de novo depois que as fontes/painel assentam
+  requestAnimationFrame(desenharFiosCanvas); setTimeout(desenharFiosCanvas, 260); // de novo depois que as fontes assentam
 }
 /** Fios tracejados do pai (embaixo, no meio) ao filho (em cima, no meio), recalculados a cada desenho. */
 function desenharFiosCentral() {
@@ -7078,7 +7065,218 @@ function desenharFiosCentral() {
   });
   svg.innerHTML = fios.join('');
 }
-window.addEventListener('resize', () => { if ($j('jv-central') && !$j('jv-central').hidden) desenharFiosCentral(); });
+window.addEventListener('resize', () => { if ($j('jv-central') && !$j('jv-central').hidden) aplicarCamCanvas(); });
+
+// --- CANVAS INFINITO (fase 6, inspirado no React Flow / Flowise / Slashspace + a foto do mármore do Rafael) ---
+// Fundo branco com pontinhos; o J.A.R.V.I.S. no centro e os agentes em blocos de MÁRMORE PRETO, ligados por fios que
+// mostram a troca de informação (com o número real que passa). Arrastar o fundo = mover; roda/pinça = zoom; arrastar o
+// bloco = reposicionar (fica salvo neste aparelho: prefs.ccPos); tocar no bloco = abre o agente (conversa, comandos, resultados).
+const CV = { cam: null, arrasto: null, ptrs: new Map(), pinca: null };
+const CV_PRIMOS = ['contabil', 'marketing', 'estoque', 'producao', 'vendas', 'consignacao'];
+const celCanvas = () => window.innerWidth < 700;
+const chavePosCanvas = () => celCanvas() ? 'ccPosCel' : 'ccPos'; // celular e PC guardam arranjos diferentes
+function posPadraoCanvas() {
+  const p = { jarvis: { x: 0, y: 0 } }, ag = todosAgentes(), R1 = 300;
+  if (celCanvas()) { // celular em pé: 2 colunas, o J.A.R.V.I.S. no meio
+    [['contabil', -138, -310], ['marketing', 138, -310], ['estoque', -138, 300], ['producao', 138, 300], ['vendas', -138, 560], ['consignacao', 138, 560]].forEach(([id, x, y]) => { p[id] = { x, y }; });
+    ag.filter(a => !CV_PRIMOS.includes(a.id)).forEach((a, i) => { p[a.id] = { x: (i % 2 ? 138 : -138), y: 820 + Math.floor(i / 2) * 260 }; });
+    return p;
+  }
+  CV_PRIMOS.forEach((id, i) => { const a = -Math.PI / 2 + i / CV_PRIMOS.length * Math.PI * 2; p[id] = { x: Math.round(Math.cos(a) * R1 * 1.25), y: Math.round(Math.sin(a) * R1) }; });
+  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id)); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
+  return p;
+}
+function posCanvas(id) { const s = (prefs[chavePosCanvas()] || {})[id]; return s || posPadraoCanvas()[id] || { x: 0, y: 0 }; }
+/** Os fios: quem passa o quê para quem (com o número real, quando há). */
+function fiosCanvas() {
+  const N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, e = calcularEstoque(), pc = primosCentral || {}, p7 = (((pc.marketing || {}).tiktok || {}).periodo7d || {});
+  const F = todosAgentes().map(a => ({ de: a.id, para: 'jarvis', rot: relatorioAgente(a.id) ? 'relatório ' + isoParaBR(relatorioAgente(a.id).dia || '').slice(0, 5) : estadoAgente(a).metrica, forte: !!relatorioAgente(a.id) }));
+  F.push({ de: 'estoque', para: 'contabil', rot: N.dinheiroEmFilamento ? reais(N.dinheiroEmFilamento) + ' em filamento' : 'valor do estoque', lateral: true });
+  F.push({ de: 'producao', para: 'contabil', rot: N.lucroMedioPorPeca ? 'sobra ' + reais(N.lucroMedioPorPeca) + '/peça' : 'custo por peça', lateral: true });
+  F.push({ de: 'estoque', para: 'producao', rot: e.total ? fmtKg(e.total) + ' disponível' : 'filamento', lateral: true });
+  F.push({ de: 'marketing', para: 'vendas', rot: p7.views ? (p7.views / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil views/7d' : 'público', lateral: true });
+  F.push({ de: 'consignacao', para: 'vendas', rot: 'acertos dos expositores', lateral: true });
+  F.push({ de: 'consignacao', para: 'contabil', rot: 'comissões', lateral: true });
+  return F;
+}
+const ESTADOS_CV = { rodando: ['Rodando', '#0a84ff'], pausado: ['Pausado', '#8e8e93'], atencao: ['Atenção', '#ff9f0a'], ok: ['Ativo', '#30d158'], sem: ['Sem dados', '#8e8e93'], fila: ['Na fila', '#bf5af2'] };
+function estadoCanvas(a) {
+  const ex = cc.execucao || {}, t = (ex.tarefas || {})[a.id];
+  if ((ex.pausados || []).includes(a.id)) return 'pausado';
+  if (t && t.status === 'rodando') return 'rodando'; if (t && t.status === 'fila') return 'fila';
+  return estadoAgente(a).nivel;
+}
+function tarefaCanvas(a) {
+  const ex = cc.execucao || {}, t = (ex.tarefas || {})[a.id];
+  if (t && (t.status === 'rodando' || t.status === 'fila')) return t.instrucao ? `Executando: ${t.instrucao}` : 'Gerando o relatório agora…';
+  const r = relatorioAgente(a.id); if (r && (r.acoes || []).length) return r.acoes[0];
+  return a.aba || CV_PRIMOS.includes(a.id) ? 'Aguardando a rodada das 7h' : a.missao || a.funcao || '';
+}
+function renderCanvasCentral() {
+  const q = $j('cc-quadro'); if (!q) return;
+  if (!$j('cv-mundo')) {
+    q.className = 'cc-quadro cv-canvas';
+    q.innerHTML = `<div id="cv-mundo" class="cv-mundo"><svg id="cv-fios" class="cv-fios" aria-hidden="true"></svg><div id="cv-nos"></div></div>
+      <div class="cv-ctrl"><button type="button" onclick="zoomCanvas(1.25)" aria-label="Aproximar">＋</button><button type="button" onclick="zoomCanvas(0.8)" aria-label="Afastar">－</button><button type="button" onclick="enquadrarCanvas(true)" aria-label="Ver tudo">⤢</button><button type="button" onclick="organizarCanvas()" aria-label="Organizar" title="Organizar os blocos">↺</button></div>
+      <svg id="cv-mini" class="cv-mini" aria-hidden="true"></svg><p class="cv-dica">arraste o fundo para mover · roda ou pinça para zoom · arraste um bloco para reposicionar</p>`;
+    gestosCanvas(q);
+  }
+  const ag = todosAgentes(), rj = relatoriosAgentes && relatoriosAgentes.jarvis, hoje = rj ? (rj.prioridades || []).filter(p => p.urgencia === 'hoje') : [];
+  const jp = posCanvas('jarvis'), ex = cc.execucao || {};
+  let h = `<div class="cv-no cv-jarvis${cc.agente === 'jarvis' ? ' sel' : ''}" data-id="jarvis" style="left:${jp.x}px; top:${jp.y}px">
+    <div class="cv-alca"><img src="icon-180.png" alt=""><div><b>J.A.R.V.I.S.</b><small>mastermind · ${plural(ag.length, 'agente', 'agentes')}</small></div><span class="cv-estado" style="--e:${ex.rodando ? '#0a84ff' : '#30d158'}">${ex.rodando ? 'Coordenando' : 'Online'}</span></div>
+    <p class="cv-tarefa"><em>Agora</em>${hoje[0] ? textoAgente(hoje[0].texto) : rj ? textoAgente(rj.manchete) : 'Esperando o 1º relatório dos agentes (todo dia às 7h).'}</p>
+    <div class="cv-acoes"><button type="button" data-acao="rodar" data-ag="todos">▶ Rodar todos</button><button type="button" data-acao="abrir" data-ag="jarvis">Abrir</button></div></div>`;
+  ag.forEach(a => {
+    const p = posCanvas(a.id), s = setorCentral(a.setor), est = estadoCanvas(a), E = ESTADOS_CV[est] || ESTADOS_CV.sem, pausado = est === 'pausado', rodando = est === 'rodando' || est === 'fila';
+    h += `<div class="cv-no cv-agente${cc.agente === a.id ? ' sel' : ''}${rodando ? ' rodando' : ''}" data-id="${esc(a.id)}" style="left:${p.x}px; top:${p.y}px; --cor:${s.cor}">
+      <div class="cv-alca"><i class="cv-sel-setor"></i><div><b>${esc(a.nome)}</b><small>${esc(s.nome)}</small></div><span class="cv-estado" style="--e:${E[1]}">${E[0]}</span></div>
+      <p class="cv-tarefa"><em>${rodando ? 'Executando' : 'Tarefa atual'}</em>${textoAgente(tarefaCanvas(a))}</p>
+      <div class="cv-rodape"><strong>${esc(estadoAgente(a).metrica)}</strong>
+        <span class="cv-ctrls"><button type="button" data-acao="rodar" data-ag="${esc(a.id)}" title="Rodar agora" ${rodando || pausado ? 'disabled' : ''}>▶</button><button type="button" data-acao="${pausado ? 'retomar' : 'pausar'}" data-ag="${esc(a.id)}" title="${pausado ? 'Retomar' : 'Pausar'}">${pausado ? '⏵' : '⏸'}</button><button type="button" data-acao="cancelar" data-ag="${esc(a.id)}" title="Cancelar a tarefa" ${rodando ? '' : 'disabled'}>✕</button></span></div></div>`;
+  });
+  $j('cv-nos').innerHTML = h;
+  if (!CV.cam) { const c = celCanvas() ? null : prefs.ccCam; if (c && c.k) CV.cam = { ...c }; else enquadrarCanvas(false); }
+  aplicarCamCanvas(); desenharFiosCanvas();
+}
+function aplicarCamCanvas() {
+  const m = $j('cv-mundo'), q = $j('cc-quadro'); if (!m || !CV.cam) return;
+  m.style.transform = `translate(${CV.cam.x}px, ${CV.cam.y}px) scale(${CV.cam.k})`;
+  q.style.backgroundSize = `${22 * CV.cam.k}px ${22 * CV.cam.k}px`; q.style.backgroundPosition = `${CV.cam.x}px ${CV.cam.y}px`;
+  q.classList.toggle('longe', CV.cam.k < 0.42); desenharMiniCanvas();
+}
+function salvarCamCanvas() { clearTimeout(CV.tSalvar); CV.tSalvar = setTimeout(() => { prefs.ccCam = { x: Math.round(CV.cam.x), y: Math.round(CV.cam.y), k: Math.round(CV.cam.k * 1000) / 1000 }; salvarPrefsJarvis(); }, 400); }
+function limitesCanvas(soPrimos) { const ids = soPrimos ? ['jarvis', ...CV_PRIMOS] : ['jarvis', ...todosAgentes().map(a => a.id)], ps = ids.map(posCanvas); return { x0: Math.min(...ps.map(p => p.x)) - 200, x1: Math.max(...ps.map(p => p.x)) + 200, y0: Math.min(...ps.map(p => p.y)) - 140, y1: Math.max(...ps.map(p => p.y)) + 160 }; }
+function enquadrarCanvas(anima) {
+  const q = $j('cc-quadro'); if (!q) return; const w = q.clientWidth || innerWidth, h = q.clientHeight || innerHeight, b = limitesCanvas(celCanvas()); // celular: enquadra a Primos (Mercado e Treino ficam ao lado, é só arrastar)
+  const k = Math.max(0.18, Math.min(1.1, Math.min(w / (b.x1 - b.x0), h / (b.y1 - b.y0)) * 0.92));
+  const alvo = { k, x: w / 2 - (b.x0 + b.x1) / 2 * k, y: h / 2 - (b.y0 + b.y1) / 2 * k };
+  if (!anima || !CV.cam) { CV.cam = alvo; aplicarCamCanvas(); salvarCamCanvas(); return; }
+  const de = { ...CV.cam }, t0 = performance.now(); const passo = t => { const u = Math.min(1, (t - t0) / 450), e = 1 - Math.pow(1 - u, 3); CV.cam = { x: de.x + (alvo.x - de.x) * e, y: de.y + (alvo.y - de.y) * e, k: de.k + (alvo.k - de.k) * e }; aplicarCamCanvas(); if (u < 1) requestAnimationFrame(passo); else salvarCamCanvas(); }; requestAnimationFrame(passo);
+}
+function zoomCanvas(f, cx, cy) {
+  const q = $j('cc-quadro'); if (!q || !CV.cam) return; const r = q.getBoundingClientRect();
+  if (cx === undefined) { cx = r.width / 2; cy = r.height / 2; }
+  const k = Math.max(0.2, Math.min(2.2, CV.cam.k * f)), s = k / CV.cam.k;
+  CV.cam = { k, x: cx - (cx - CV.cam.x) * s, y: cy - (cy - CV.cam.y) * s }; aplicarCamCanvas(); salvarCamCanvas();
+}
+function organizarCanvas() { prefs[chavePosCanvas()] = {}; salvarPrefsJarvis(); renderCanvasCentral(); enquadrarCanvas(true); }
+function gestosCanvas(q) {
+  q.addEventListener('wheel', e => { e.preventDefault(); const r = q.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+    const touchpad = e.deltaMode === 0 && (Math.abs(e.deltaX) > 0 || Math.abs(e.deltaY) % 1 !== 0 || Math.abs(e.deltaY) < 40); // rodinha do mouse = passos grandes e inteiros
+    if (e.ctrlKey) zoomCanvas(Math.exp(-e.deltaY * 0.012), x, y); else if (touchpad) { CV.cam.x -= e.deltaX; CV.cam.y -= e.deltaY; aplicarCamCanvas(); salvarCamCanvas(); } else zoomCanvas(Math.exp(-e.deltaY * 0.0015), x, y); }, { passive: false });
+  q.addEventListener('pointerdown', e => {
+    if (e.target.closest('.cv-ctrl, .cv-mini')) return;
+    CV.ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (CV.ptrs.size === 2) { const [a, b] = [...CV.ptrs.values()]; CV.pinca = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), k: CV.cam.k }; CV.arrasto = null; return; }
+    const no = e.target.closest('.cv-no'), botao = e.target.closest('button[data-acao]');
+    CV.arrasto = { x0: e.clientX, y0: e.clientY, moveu: 0, no: no && !botao ? no.dataset.id : null, botao, cam0: { ...CV.cam }, pos0: no ? posCanvas(no.dataset.id) : null };
+    try { q.setPointerCapture(e.pointerId); } catch (err) { }
+  });
+  q.addEventListener('pointermove', e => {
+    if (!CV.ptrs.has(e.pointerId)) return; CV.ptrs.set(e.pointerId, [e.clientX, e.clientY]);
+    if (CV.pinca && CV.ptrs.size === 2) { const [a, b] = [...CV.ptrs.values()], r = q.getBoundingClientRect(); const d = Math.hypot(a[0] - b[0], a[1] - b[1]); zoomCanvas(CV.pinca.k * d / CV.pinca.d / CV.cam.k, (a[0] + b[0]) / 2 - r.left, (a[1] + b[1]) / 2 - r.top); return; }
+    const A = CV.arrasto; if (!A) return; const dx = e.clientX - A.x0, dy = e.clientY - A.y0; A.moveu = Math.max(A.moveu, Math.hypot(dx, dy)); if (A.moveu < 4) return;
+    if (A.no) { const K = chavePosCanvas(); prefs[K] = prefs[K] || {}; prefs[K][A.no] = { x: Math.round(A.pos0.x + dx / CV.cam.k), y: Math.round(A.pos0.y + dy / CV.cam.k) }; const el = q.querySelector(`.cv-no[data-id="${A.no}"]`); if (el) { el.style.left = prefs[K][A.no].x + 'px'; el.style.top = prefs[K][A.no].y + 'px'; el.classList.add('arrastando'); } desenharFiosCanvas(); desenharMiniCanvas(); }
+    else if (!A.botao) { CV.cam.x = A.cam0.x + dx; CV.cam.y = A.cam0.y + dy; aplicarCamCanvas(); }
+  });
+  const fim = e => {
+    if (!CV.ptrs.has(e.pointerId)) return; CV.ptrs.delete(e.pointerId); if (CV.ptrs.size < 2) CV.pinca = null;
+    const A = CV.arrasto; CV.arrasto = null; if (!A) return;
+    q.querySelectorAll('.cv-no.arrastando').forEach(n => n.classList.remove('arrastando'));
+    if (A.moveu >= 4) { if (A.no) salvarPrefsJarvis(); else salvarCamCanvas(); return; }
+    if (A.botao) { acaoCanvas(A.botao.dataset.acao, A.botao.dataset.ag); return; }
+    if (A.no) abrirAgenteCentral(A.no);
+  };
+  q.addEventListener('pointerup', fim); q.addEventListener('pointercancel', fim);
+}
+// --- CONTROLE DOS AGENTES pelo painel: grava agentes/controle.json no COFRE (token do Rafael) → o GitHub roda o agente;
+//     o andamento volta por dados/execucao.json (lido a cada 6 s enquanto houver algo rodando). Só texto: nenhum agente age fora.
+async function lerControleCofre() {
+  try { const j = await gh('/contents/agentes/controle.json?ref=main'); return { dados: JSON.parse(decodeURIComponent(escape(atob(j.content.replace(/\n/g, ''))))), sha: j.sha }; }
+  catch (e) { if (/^404/.test(e.message)) return { dados: { pausados: [], pedidos: [], cancelar: [] }, sha: null }; throw e; }
+}
+async function gravarControleCofre(mudar, msg) {
+  for (let k = 0; k < 3; k++) {
+    const { dados, sha } = await lerControleCofre(); mudar(dados);
+    try { await gh('/contents/agentes/controle.json', { method: 'PUT', body: JSON.stringify({ message: msg, content: btoa(unescape(encodeURIComponent(JSON.stringify(dados, null, 1)))), ...(sha ? { sha } : {}) }) }); cc.controle = dados; return true; }
+    catch (e) { if (!/^409|^422/.test(e.message)) throw e; } // alguém gravou junto: lê de novo e tenta outra vez
+  }
+  return false;
+}
+async function controlarAgente(acao, id, instrucao) {
+  if (!claudeConfigurado()) { toast('Para comandar os agentes, conecte o computador em Ajustes do J.A.R.V.I.S. → 2.', 5000); return; }
+  const nome = id === 'todos' ? 'todos os agentes' : ((todosAgentes().find(a => a.id === id) || {}).nome || id);
+  try {
+    if (acao === 'rodar') {
+      const p = { id: 'p' + novoId(), agente: id, instrucao: String(instrucao || '').slice(0, 400), quando: new Date().toISOString() };
+      await gravarControleCofre(d => { d.pedidos = (d.pedidos || []).concat(p); d.cancelar = (d.cancelar || []).filter(x => x !== id && x !== 'todos'); }, `Painel: rodar ${id}`);
+      cc.execucao = cc.execucao || { tarefas: {} }; cc.execucao.tarefas = cc.execucao.tarefas || {};
+      (id === 'todos' ? CV_PRIMOS : [id]).forEach(x => { cc.execucao.tarefas[x] = { status: 'fila', instrucao: p.instrucao }; });
+      toast(`▶ ${nome}: na fila. O GitHub começa em instantes.`, 4000);
+    } else if (acao === 'pausar' || acao === 'retomar') {
+      await gravarControleCofre(d => { const s = new Set(d.pausados || []); acao === 'pausar' ? s.add(id) : s.delete(id); d.pausados = [...s]; }, `Painel: ${acao} ${id}`);
+      cc.execucao = cc.execucao || { tarefas: {} }; cc.execucao.pausados = cc.controle.pausados;
+      toast(acao === 'pausar' ? `⏸ ${nome} pausado: fica fora da rodada das 7h.` : `⏵ ${nome} voltou para a rodada das 7h.`, 4000);
+    } else if (acao === 'cancelar') {
+      await gravarControleCofre(d => { d.cancelar = [...new Set((d.cancelar || []).concat(id))]; d.pedidos = (d.pedidos || []).filter(p => p.agente !== id); }, `Painel: cancelar ${id}`);
+      toast(`✕ Cancelando ${nome}… (se a IA já estiver respondendo, termina esta parte e para)`, 5000);
+    }
+  } catch (e) { toast(`Não consegui falar com o cofre (${e.message}).`, 6000); return; }
+  renderCentral(); acompanharExecucao(true);
+}
+async function acompanharExecucao(agora) {
+  clearTimeout(cc.tExec);
+  if (!claudeConfigurado() || $j('jv-central').hidden) return;
+  try {
+    const ex = await (await cofreBruto('dados/execucao.json')).json();
+    if (ex && ex.tipo === 'jarvis-execucao') {
+      const antes = cc.execucao, terminou = antes && antes.rodando && !ex.rodando;
+      cc.execucao = { ...ex, pausados: (cc.controle && cc.controle.pausados) || ex.pausados || [] };
+      if (terminou) { jv.ultimaSincCofre = 0; await sincronizarCofre(true); toast('✓ Os agentes terminaram. Relatórios atualizados.', 4000); }
+      renderCanvasCentral(); if (cc.agente) { const p = $j('cc-painel'); const y = p.scrollTop; p.innerHTML = htmlPainelAgente(cc.agente); p.scrollTop = y; animarPainelCentral(); }
+    }
+  } catch (e) { }
+  if (!cc.controle) try { cc.controle = (await lerControleCofre()).dados; cc.execucao = { ...(cc.execucao || { tarefas: {} }), pausados: cc.controle.pausados || [] }; renderCanvasCentral(); } catch (e) { }
+  const ativo = cc.execucao && (cc.execucao.rodando || Object.values(cc.execucao.tarefas || {}).some(t => t.status === 'fila' || t.status === 'rodando'));
+  cc.tExec = setTimeout(() => acompanharExecucao(), ativo ? 6000 : 60000);
+}
+/** Comando direto para um agente (painel dele): vira um pedido com instrução; a resposta volta no relatório dele. */
+function enviarComandoAgente(ev, id) {
+  ev.preventDefault(); const inp = $j('cc-cmd'); const t = (inp.value || '').trim(); if (!t) return;
+  if (PC_PROIBIDO.test(t)) { toast('🛡️ Isso nenhum agente faz: compras, pagamentos, mensagens e posts ficam com você.', 5000); return; }
+  inp.value = ''; controlarAgente('rodar', id, t);
+}
+function acaoCanvas(acao, id) {
+  if (acao === 'abrir') return abrirAgenteCentral(id);
+  if (typeof controlarAgente === 'function') return controlarAgente(acao, id);
+}
+/** Fios em coordenadas do mundo: curva suave entre as bordas dos blocos + bolinha de luz correndo (a informação indo). */
+function desenharFiosCanvas() {
+  const svg = $j('cv-fios'), nos = $j('cv-nos'); if (!svg || !nos) return;
+  const caixa = id => { const el = nos.querySelector(`.cv-no[data-id="${id}"]`); if (!el) return null; const p = posCanvas(id); return { x: p.x, y: p.y, w: el.offsetWidth, h: el.offsetHeight }; };
+  const borda = (A, B) => { const dx = B.x - A.x, dy = B.y - A.y; const sx = A.w / 2 / Math.abs(dx || 1e-6), sy = A.h / 2 / Math.abs(dy || 1e-6), s = Math.min(sx, sy); return { x: A.x + dx * s, y: A.y + dy * s }; };
+  let h = '', rot = '';
+  fiosCanvas().forEach((f, i) => {
+    const A = caixa(f.de), B = caixa(f.para); if (!A || !B) return;
+    const a = borda(A, B), b = borda(B, A), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, curva = f.lateral ? 0.18 : 0.08, nx = -(b.y - a.y) * curva, ny = (b.x - a.x) * curva;
+    const d = `M${a.x.toFixed(1)},${a.y.toFixed(1)} Q${(mx + nx).toFixed(1)},${(my + ny).toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
+    const ativo = cc.agente && (cc.agente === f.de || cc.agente === f.para), rodando = estadoCanvas({ id: f.de, ...(todosAgentes().find(x => x.id === f.de) || {}) }) === 'rodando';
+    h += `<path id="cvf${i}" class="cv-fio${f.lateral ? ' lateral' : ''}${ativo ? ' ativo' : ''}${rodando ? ' rodando' : ''}" d="${d}"/>`;
+    h += `<circle class="cv-pulso${f.lateral ? ' lateral' : ''}" r="${rodando ? 5 : 3.2}"><animateMotion dur="${rodando ? 1.4 : f.lateral ? 4.6 : 3.4}s" begin="${(i * 0.37) % 3}s" repeatCount="indefinite" rotate="auto"><mpath href="#cvf${i}"/></animateMotion></circle>`;
+    rot += `<span class="cv-rot${f.lateral ? ' lateral' : ''}${ativo ? ' ativo' : ''}" style="left:${(mx + nx / 2).toFixed(0)}px; top:${(my + ny / 2).toFixed(0)}px">${esc(f.rot)}</span>`;
+  });
+  svg.innerHTML = h;
+  let r = $j('cv-rots'); if (!r) { r = document.createElement('div'); r.id = 'cv-rots'; r.className = 'cv-rots'; $j('cv-mundo').insertBefore(r, $j('cv-nos')); } // etiquetas por baixo dos blocos r.innerHTML = rot;
+}
+function desenharMiniCanvas() {
+  const mini = $j('cv-mini'), q = $j('cc-quadro'); if (!mini || !q || !CV.cam) return;
+  const b = limitesCanvas(), W = 150, H = 96, k = Math.min(W / (b.x1 - b.x0), H / (b.y1 - b.y0)), ox = (W - (b.x1 - b.x0) * k) / 2, oy = (H - (b.y1 - b.y0) * k) / 2;
+  const P = (x, y) => [ox + (x - b.x0) * k, oy + (y - b.y0) * k];
+  const blocos = ['jarvis', ...todosAgentes().map(a => a.id)].map(id => { const p = posCanvas(id), [x, y] = P(p.x, p.y); return `<rect x="${(x - (id === 'jarvis' ? 9 : 7)).toFixed(1)}" y="${(y - 4).toFixed(1)}" width="${id === 'jarvis' ? 18 : 14}" height="8" rx="2" class="${id === 'jarvis' ? 'j' : ''}"/>`; }).join('');
+  const [vx, vy] = P(-CV.cam.x / CV.cam.k, -CV.cam.y / CV.cam.k), vw = q.clientWidth / CV.cam.k * k, vh = q.clientHeight / CV.cam.k * k;
+  mini.setAttribute('viewBox', `0 0 ${W} ${H}`); mini.innerHTML = blocos + `<rect class="vista" x="${vx.toFixed(1)}" y="${vy.toFixed(1)}" width="${vw.toFixed(1)}" height="${vh.toFixed(1)}" rx="3"/>`;
+}
 
 // --- ANIMAÇÕES DE ROLAGEM (painel dos agentes): blocos surgem ao entrar na tela, números contam até o valor,
 //     barras e gráficos crescem, o cabeçalho encolhe e uma linha fina na cor do setor mostra o quanto já rolou. ---
@@ -7103,12 +7301,23 @@ function animarPainelCentral() {
     el.querySelectorAll('.cc-nums strong, .cc-num').forEach(contarNumero); if (el.matches('.cc-nums > div')) el.querySelectorAll('strong').forEach(contarNumero);
   }), { root: p, threshold: 0.12, rootMargin: largo ? '0px 0px -6% 0px' : '0px 0px -4% 0px' });
   let k = 0; itens.forEach(i => { i.classList.add('cc-rev'); i.style.transitionDelay = (Math.min(k++, 6) * 55) + 'ms'; cc.obsPainel.observe(i); });
-  if (!p.dataset.rolagem) { p.dataset.rolagem = '1'; p.addEventListener('scroll', () => {
+  if (!p.dataset.rolagem) { p.dataset.rolagem = '1'; p.addEventListener('scroll', () => { if (!cc.rafRol) cc.rafRol = requestAnimationFrame(() => { cc.rafRol = 0; rolagemPainel(p); }); }, { passive: true }); p.addEventListener('scroll', () => {
     const topo = p.querySelector('.cc-p-topo'), max = p.scrollHeight - p.clientHeight, pr = $j('cc-progresso');
     if (topo) topo.classList.toggle('compacto', p.scrollTop > 40);
     if (pr) pr.style.transform = `scaleX(${max > 0 ? Math.min(1, p.scrollTop / max) : 0})`;
   }, { passive: true }); }
+  rolagemPainel(p);
   const pr = $j('cc-progresso'); if (pr) { pr.style.transform = 'scaleX(0)'; const ag = todosAgentes().find(x => x.id === cc.agente); pr.style.background = ag ? setorCentral(ag.setor).cor : '#f2f2f7'; }
+}
+/** Rolagem que COMANDA a animação (estilo Apple Vision Pro / Lusion): cada bloco ganha --p (0 = entrando por baixo,
+ *  0,5 = no meio da tela, 1 = saindo por cima) e o painel ganha --s (0→1 nos primeiros 520 px). O CSS usa isso para
+ *  subir, crescer, dar profundidade (paralaxe) e girar objetos 3D; a secadora 3D gira junto com a rolagem. */
+function rolagemPainel(p) {
+  if (!p || p.hidden || reduzMovimento()) return;
+  const H = p.clientHeight, r0 = p.getBoundingClientRect().top, s = Math.min(1, p.scrollTop / 520);
+  p.style.setProperty('--s', s.toFixed(3));
+  p.querySelectorAll('.cc-bloco, .cc-nums, .cc-heroi3d').forEach(el => { const r = el.getBoundingClientRect(), y = r.top - r0; const v = Math.max(0, Math.min(1, (H - y) / (H * 0.9))); el.style.setProperty('--p', v.toFixed(3)); });
+  if (cc.agente === 'estoque' && cc.seca3d && cc.seca3d.rolar) cc.seca3d.rolar(-0.9 + s * 1.8);
 }
 /** Ao abrir a Central ou trocar de setor, os cartões entram em cascata. */
 function animarQuadroCentral() {
@@ -7131,7 +7340,19 @@ function conversarComAgente(id) {
   abrirChatJarvis({ contexto: `Central de Comando › ${setorCentral(a.setor).nome} › agente ${a.nome} (especialista em: ${(a.skills || []).join(', ')}${a.missao ? '; missão: ' + a.missao : ''}). Responda como esse especialista.`, area: a.setor === 'outros' ? null : a.setor });
 }
 
+/** Painel do agente + a caixa de COMANDO, o andamento da tarefa e a resposta ao último comando (agentes da nuvem). */
 function htmlPainelAgente(id) {
+  const html = htmlPainelAgenteBase(id); if (!CV_PRIMOS.includes(id)) return html;
+  const t = ((cc.execucao || {}).tarefas || {})[id], r = relatorioAgente(id), pausado = ((cc.execucao || {}).pausados || []).includes(id);
+  const est = t && (t.status === 'rodando' || t.status === 'fila') ? `<p class="cc-exec rodando"><span class="spin"></span>${t.status === 'fila' ? 'Na fila do GitHub…' : 'Trabalhando agora…'}${t.instrucao ? ` <b>“${esc(t.instrucao)}”</b>` : ''}<button type="button" class="cc-mini sec" onclick="controlarAgente('cancelar', '${id}')">Cancelar</button></p>`
+    : pausado ? `<p class="cc-exec">⏸ Pausado: fora da rodada das 7h. <button type="button" class="cc-mini" onclick="controlarAgente('retomar', '${id}')">Retomar</button></p>` : '';
+  const resp = r && r.resposta ? ccBloco('Resposta ao seu comando', `<div class="cc-relatorio cc-resp"><p class="cc-nota">Você pediu: “${esc(r.comando || '')}”</p><p class="cc-txt">${textoAgente(r.resposta)}</p></div>`) : '';
+  const cmd = `<form class="cc-cmd" onsubmit="enviarComandoAgente(event, '${id}')"><input id="cc-cmd" placeholder="Comando para o agente (ex.: refaça o payback com 30 vendas/mês)" maxlength="400" autocomplete="off" enterkeyhint="send"><button type="submit" aria-label="Enviar comando">↑</button></form>
+    <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Rodar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="conversarComAgente('${id}')">💬 Conversar</button></div>`;
+  const i = html.indexOf('</header>') + 9;
+  return html.slice(0, i) + est + cmd + resp + html.slice(i);
+}
+function htmlPainelAgenteBase(id) {
   if (id === 'jarvis') {
     const ag = todosAgentes();
     return `<header class="cc-p-topo"><button type="button" class="cc-x" onclick="fecharPainelCentral()" aria-label="Fechar">✕</button><small>comando · mastermind da Primos 3D</small><h3><i class="cc-luz ok"></i>J.A.R.V.I.S.</h3><p>Lê o relatório de todos os agentes e te entrega só o que importa. Nenhum agente compra, paga, envia mensagem ou posta.</p></header>`
@@ -7198,6 +7419,8 @@ function htmlAgenteContabil(a) {
     + (N.mei ? ccBloco('MEI 2026', `<div class="cc-barra"><i style="width:${Math.min(100, N.mei.faturado2026 / N.mei.limiteProporcional2026 * 100).toFixed(1)}%"></i></div><p class="cc-txt">Faturou <b>${reais(N.mei.faturado2026)}</b> de <b>${reais(N.mei.limiteProporcional2026)}</b> (limite proporcional desde ${esc(isoParaBR(N.mei.inicio))}). DAS ${reais(N.mei.das)}/mês. A declaração anual (DASN-SIMEI) vence em 31/05 do ano seguinte — eu deixo os números prontos; quem envia é você.</p><p class="cc-nota">Confirme com o contador.</p>`) : '');
   const pctRec = invest ? Math.min(100, vl.total / invest * 100) : 0;
   return cabecalhoAgente(a)
+    + `<section class="cc-heroi3d"><div class="cc-moeda"><i class="f"><b>P3D</b><small>${reais(vl.total)}</small></i><i class="v"><b>${pctFr(invest ? vl.total / invest : 0)}</b><small>do investimento voltou</small></i>${Array.from({ length: 12 }, (_, k) => `<i class="b" style="transform:translateZ(${(k - 5.5).toFixed(1)}px)"></i>`).join('')}</div>
+      <div class="cc-heroi-txt"><small>Quanto vale a empresa (patrimônio)</small><strong class="cc-num">${reais(patrimonial)}</strong><span>falta <b>${reais(falta)}</b> para se pagar</span></div></section>`
     + htmlRelatorioAgente(a.id)
     + ccNums([[reais(vl.total), 'recebido (líquido)'], [reais(invest), 'investido'], [reais(cx.saldo), 'caixa', (cx.saldo || 0) < 0 ? '#ff453a' : '#30d158'], [reais(cx.contasPagar), 'contas a pagar']])
     + ccBloco('Payback', `<div class="cc-barra"><i style="width:${pctRec.toFixed(1)}%"></i></div><p class="cc-txt"><b>${pctRec.toFixed(1).replace('.', ',')}%</b> do investimento já voltou. Falta <b>${reais(falta)}</b>.${payback !== null ? ` No ritmo atual (~${reais(ritmo)}/mês), leva <b>${payback > 120 ? 'mais de 10 anos' : Math.ceil(payback) + ' meses'}</b>.` : ' Ainda sem vendas para medir o ritmo.'}</p>`)
