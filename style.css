@@ -2859,3 +2859,42 @@ body.ag-aberta { overflow: hidden; }
   .jv-ag-lista { flex-direction: row; overflow-x: auto; max-height: none; margin: 0 -16px; padding: 0 16px 6px; gap: 8px; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; }
   .jv-ag-aviso { flex: 0 0 calc(100vw - 96px); scroll-snap-align: start; background: rgba(255,255,255,0.045); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.1); }
 }
+
+/* ============================================================================
+   FASE 7 — PÁGINA DO J.A.R.V.I.S. (comando central): Gargantua grande na abertura, prioridades, agentes em órbita
+   ============================================================================ */
+.jvpg-heroi { display: flex; flex-direction: column; justify-content: flex-end; align-items: center; text-align: center; padding-bottom: 19vh; }
+.jvpg-garg { position: absolute; inset: 0; width: 100%; height: 100%; transform: scale(calc(1 + var(--h, 0) * 0.5)); opacity: calc(1 - var(--h, 0) * 0.8); animation: jvpgEntra 1.6s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes jvpgEntra { from { opacity: 0; transform: scale(0.6); } }
+.jvpg-heroi .ag-heroi-txt { position: relative; z-index: 1; max-width: 760px; }
+.jvpg-heroi .ag-heroi-txt small { color: #8e8e93; }
+.jvpg-heroi .ag-heroi-txt h1 { font-size: clamp(2.4rem, 7vw, 5.2rem); }
+.jvpg-heroi .ag-heroi-txt p { max-width: 46ch; margin: 0 auto; color: #c7c7cc; }
+.jvpg-heroi .ag-heroi-txt p b { color: #fff; }
+.jvpg-tit { margin: 0 0 6px; font-size: clamp(1.5rem, 3.4vw, 2.4rem); font-weight: 700; letter-spacing: -0.03em; }
+.jvpg-sub { margin: 22px 0 8px; font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; color: #8e8e93; }
+.jvpg-txt { color: #c7c7cc; line-height: 1.55; } .jvpg-txt b { color: #fff; }
+.jvpg-prios { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin-top: 16px; }
+.jvpg-prio { position: relative; padding: 18px 18px 18px 22px; border-radius: 22px; background: rgba(255,255,255,0.045); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.12); cursor: pointer; transition: transform .25s, background .25s; }
+.jvpg-prio::before { content: ""; position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; border-radius: 3px; background: var(--u); box-shadow: 0 0 10px var(--u); }
+.jvpg-prio:hover { background: rgba(255,255,255,0.075); transform: translateY(-2px); }
+.jvpg-prio small { font-size: 0.66rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--u); }
+.jvpg-prio p { margin: 6px 0 0; font-size: 0.98rem; line-height: 1.45; color: #e5e5ea; }
+.jvpg-orbita { display: block; width: 100%; max-width: 560px; margin: 10px auto 0; overflow: visible; }
+.jvpg-fio { stroke: rgba(255,255,255,0.22); stroke-width: 1; stroke-dasharray: 3 5; fill: none; animation: jvpgFio 6s linear infinite; }
+@keyframes jvpgFio { to { stroke-dashoffset: -80; } }
+.jvpg-pulso { fill: #fff; filter: drop-shadow(0 0 4px #fff); }
+.jvpg-no { fill: #0d0d0f; stroke: rgba(255,255,255,0.75); stroke-width: 1.2; transition: stroke .2s; }
+.jvpg-ag { cursor: pointer; } .jvpg-ag:hover .jvpg-no { stroke: #fff; stroke-width: 2; }
+.jvpg-ini { fill: #fff; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; }
+.jvpg-nome { fill: #aeaeb2; font-size: 11px; letter-spacing: 0.06em; }
+.jvpg-sol { animation: jvpgSol 3.9s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes jvpgSol { 50% { transform: scale(1.18); opacity: 0.8; } }
+.jvpg-recados { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 4px; }
+.jvpg-recados li { display: grid; grid-template-columns: 10px auto 1fr; gap: 10px; align-items: baseline; padding: 10px 12px; border-radius: 14px; cursor: pointer; }
+.jvpg-recados li:hover { background: rgba(255,255,255,0.05); }
+.jvpg-recados i { width: 7px; height: 7px; border-radius: 50%; background: var(--urg); box-shadow: 0 0 8px var(--urg); }
+.jvpg-recados b { font-size: 0.82rem; white-space: nowrap; } .jvpg-recados span { font-size: 0.86rem; color: #aeaeb2; line-height: 1.4; }
+.jvpg-espera { color: #8e8e93; line-height: 1.6; padding-left: 18px; }
+.jvpg-acoes { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+@media (max-width: 800px) { .jvpg-heroi { padding-bottom: 17vh; } .jvpg-recados li { grid-template-columns: 10px 1fr; } .jvpg-recados span { grid-column: 2; } }

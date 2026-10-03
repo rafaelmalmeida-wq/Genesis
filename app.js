@@ -5097,7 +5097,7 @@ function renderHeroiJarvis() {
 /** A página de menu da área (a Primos 3D abre a página própria dela). */
 function abrirMenuArea(area, aba) {
   if (!area) return;
-  if (area === 'primos') { abrirPrimos(aba); return; }
+  if (area === 'primos') { if (aba) abrirPrimos(aba); else abrirPaginaJarvis(); return; } // fase 7: o menu da Primos é a página do J.A.R.V.I.S.
   if (!AREAS_CEREBRO.some(x => x.id === area)) return;
   jv.menu = area; jv.abaMenu = aba || 'resumo'; jv.area = area;
   const el = $j('jv-menu-area'); if (el.hidden) { empilharCamada('menu', fecharMenuArea); jv.menuEntrando = true; }
@@ -7410,6 +7410,7 @@ function tocarFabrica3D(info, x, y) {
 // =====================================================================================================================
 const PAG_AGENTE = { contabil: 'contabil', marketing: 'marketing', estoque: 'producao', producao: 'producao', vendas: 'vendas', consignacao: 'chaveiros', shopee: 'vendas', dev: null };
 function abrirPaginaAgente(id) {
+  if (id === 'jarvis') return abrirPaginaJarvis();
   const a = todosAgentes().find(x => x.id === id); if (!a) return;
   let el = $j('ag-pag'); if (!el) { el = document.createElement('div'); el.id = 'ag-pag'; el.className = 'ag'; el.hidden = true; document.body.appendChild(el); }
   fecharPainelCentral(); cc.pagina = id; // o painel lateral fecha (os ids dos formulários não podem existir duas vezes)
@@ -7422,6 +7423,77 @@ function fecharPaginaAgente(daVolta) {
   if (cc.seca3d) cc.seca3d.renderer.domElement.remove(); if (cc.fab3d) cc.fab3d.renderer.domElement.remove(); if (jv.expo3d) jv.expo3d.renderer.domElement.remove();
   if (!daVolta) desempilharCamada('pagina');
   if (id && !$j('jv-central').hidden) abrirAgenteCentral(id); // volta para o painel do agente na Central
+}
+// =====================================================================================================================
+// PÁGINA DO J.A.R.V.I.S. (fase 7, pedido do Rafael 03/10/2026): a página CENTRAL dele — a mais trabalhada e a mais limpa.
+// Abre por "Abrir o menu de Primos 3D" (herói) e pelo nó J.A.R.V.I.S. da Central de Comando. Mesmo esqueleto das páginas dos
+// agentes (#ag-pag, rolagem que comanda), mas com: abertura = o Gargantua grande (canvas), o que importa hoje (filtro do
+// mastermind), os agentes em órbita em volta dele (fios com a informação correndo), os avisos da vida e o que pode esperar.
+// =====================================================================================================================
+function abrirPaginaJarvis() {
+  let el = $j('ag-pag'); if (!el) { el = document.createElement('div'); el.id = 'ag-pag'; el.className = 'ag'; el.hidden = true; document.body.appendChild(el); }
+  if (typeof fecharPainelCentral === 'function' && $j('jv-central') && !$j('jv-central').hidden) fecharPainelCentral();
+  cc.pagina = 'jarvis'; if (el.hidden) empilharCamada('pagina', fecharPaginaAgente);
+  el.hidden = false; document.body.classList.add('ag-aberta'); renderPaginaJarvis();
+}
+function renderPaginaJarvis() {
+  const el = $j('ag-pag'); if (!el) return;
+  const j = (relatoriosAgentes && relatoriosAgentes.jarvis) || {}, prio = j.prioridades || [], ags = agentesCentral(), av = avisosJarvis(), aa = avisosAgentes();
+  const nome = String(profile.name || '').trim().split(/\s+/)[0], h = new Date().getHours();
+  const saud = (h < 5 ? 'Boa madrugada' : h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite') + (nome ? `, ${esc(nome)}` : '') + '.';
+  const nomeAg = id => { const a = todosAgentes().find(x => x.id === id); return a ? a.nome : ''; };
+  const hoje = prio.filter(p => p.urgencia === 'hoje'), resto = prio.filter(p => p.urgencia !== 'hoje');
+  const trabalhando = ags.filter(a => relatorioAgente(a.id)).length, atencao = ags.filter(a => estadoAgente(a).nivel === 'atencao').length;
+  const nums = [[trabalhando, 'agentes trabalhando'], [hoje.length, 'prioridades de hoje'], [resto.length, 'para a semana / mês'], [atencao, 'agentes pedindo atenção']];
+  // os agentes em órbita: J.A.R.V.I.S. no meio, cada agente num ponto do círculo, fio tracejado e um pontinho de luz indo até ele
+  const N = ags.length || 1, R0 = 150, cor = { ok: '#30d158', atencao: '#ff9f0a', sem: '#636366' };
+  const orbita = `<svg class="jvpg-orbita" viewBox="-230 -210 460 420" aria-hidden="false">
+    <defs><radialGradient id="jvpg-luz"><stop offset="0" stop-color="#fff"/><stop offset=".25" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
+    ${ags.map((a, k) => { const ang = k / N * Math.PI * 2 - Math.PI / 2, x = Math.cos(ang) * R0, y = Math.sin(ang) * R0 * 0.82, st = estadoAgente(a), u = (aa.find(v => v.id === a.id) || {}).u;
+      return `<g class="jvpg-ag" style="--k:${k}" onclick="abrirPaginaAgente('${esc(a.id)}')" role="button" tabindex="0" aria-label="${esc(a.nome)}">
+        <path id="jvpg-f${k}" d="M0,0 L${x.toFixed(1)},${y.toFixed(1)}" class="jvpg-fio"/>
+        <circle r="2.6" class="jvpg-pulso"><animateMotion dur="${(2.4 + k * 0.37).toFixed(2)}s" repeatCount="indefinite"><mpath href="#jvpg-f${k}"/></animateMotion></circle>
+        <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="21" class="jvpg-no"/><circle cx="${(x + 15).toFixed(1)}" cy="${(y - 15).toFixed(1)}" r="4.5" fill="${u ? u.cor : cor[st.nivel] || '#636366'}"/>
+        <text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" class="jvpg-ini">${esc(a.nome.slice(0, 2))}</text>
+        <text x="${x.toFixed(1)}" y="${(y + 38).toFixed(1)}" text-anchor="middle" class="jvpg-nome">${esc(a.nome.split(' ')[0])}</text></g>`; }).join('')}
+    <circle r="46" fill="url(#jvpg-luz)" class="jvpg-sol"/><circle r="9" fill="#fff"/></svg>`;
+  const cartao = (p, k) => { const u = URGENCIA_JV[p.urgencia] || URGENCIA_JV.semana; return `<article class="jvpg-prio" style="--k:${k}; --u:${u[1]}"${p.agente ? ` onclick="abrirPaginaAgente('${esc(p.agente)}')"` : ''}><small>${u[0]}${p.agente ? ` · ${esc(nomeAg(p.agente))}` : ''}</small><p>${textoAgente(p.texto)}</p></article>`; };
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Comando central</small><strong>J.A.R.V.I.S.</strong></div>
+      <button type="button" class="ag-falar" onclick="iniciarConversaVoz('Página do J.A.R.V.I.S.')">🎙 Falar</button></header>
+    <i class="ag-progresso" id="ag-progresso" style="--cor:#ffffff"></i>
+    <div class="ag-rolo jvpg" id="ag-rolo" style="--cor:#ffffff">
+      <section class="ag-heroi jvpg-heroi"><canvas id="jvpg-garg" class="jvpg-garg" aria-hidden="true"></canvas>
+        <div class="ag-heroi-txt"><small>Comando central · ${esc(isoParaBR(j.dia || hojeISO()))}</small><h1>${saud}</h1><p>${j.manchete ? textoAgente(j.manchete) : 'Estou lendo os relatórios dos agentes. O primeiro filtro do dia sai às 7h.'}</p></div>
+        <div class="ag-desca">role para ver tudo<i></i></div></section>
+      <section class="ag-sec ag-nums">${nums.map(([v, r], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</section>
+      ${hoje.length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">O que importa hoje</h2><div class="jvpg-prios">${hoje.map(cartao).join('')}</div></section>` : ''}
+      <section class="ag-sec ag-corpo jvpg-sec-orb"><h2 class="jvpg-tit">Como estou organizando os agentes</h2><p class="ag-sub">Cada fio é um agente me mandando o relatório. A bolinha mostra a urgência do recado dele. Toque para abrir a página do agente.</p>${orbita}
+        ${aa.length ? `<ul class="jvpg-recados">${aa.map(a => `<li style="--urg:${a.u.cor}" onclick="abrirPaginaAgente('${esc(a.id)}')"><i></i><b>${esc(a.nome)}</b><span>${esc(a.txt)}</span></li>`).join('')}</ul>` : ''}</section>
+      ${resto.length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">Para esta semana e este mês</h2><div class="jvpg-prios">${resto.map(cartao).join('')}</div></section>` : ''}
+      ${av.length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">Pensando na sua vida</h2><div class="jvpg-prios">${av.map((a, k) => `<article class="jvpg-prio" style="--k:${k}; --u:#ffffff" onclick="fecharPaginaAgente(); ${a.acao}"><small>${esc(a.rot)}</small><p>${esc(a.txt)}</p></article>`).join('')}</div></section>` : ''}
+      ${j.valuation || j.retorno || (j.podeEsperar || []).length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">Visão do negócio</h2>${j.valuation ? `<p class="jvpg-txt"><b>Quanto vale.</b> ${textoAgente(j.valuation)}</p>` : ''}${j.retorno ? `<p class="jvpg-txt"><b>Retorno.</b> ${textoAgente(j.retorno)}</p>` : ''}${(j.podeEsperar || []).length ? `<h3 class="jvpg-sub">Pode esperar</h3><ul class="jvpg-espera">${j.podeEsperar.map(p => `<li>${textoAgente(p)}</li>`).join('')}</ul>` : ''}</section>` : ''}
+      <section class="ag-sec ag-corpo jvpg-acoes"><button type="button" class="cc-btn" onclick="iniciarConversaVoz('Página do J.A.R.V.I.S.')">🎙 Conversar comigo</button><button type="button" class="cc-btn" onclick="fecharPaginaAgente(); abrirCentral('primos')">Abrir a Central de Comando ›</button></section>
+      <footer class="ag-fim">J.A.R.V.I.S. · comando central</footer>
+    </div>`;
+  animarPaginaAgente(); gargantuaPagina();
+}
+/** O Gargantua grande da abertura (canvas 2D, o mesmo desenho da opção B escolhida pelo Rafael). Para sozinho quando a página fecha. */
+function gargantuaPagina() {
+  const c = $j('jvpg-garg'); if (!c) return; const x = c.getContext('2d'); if (cc.jvPagRaf) cancelAnimationFrame(cc.jvPagRaf);
+  const glow = (cx, cy, r, a) => { const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(0.25, `rgba(255,255,255,${a * 0.45})`); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, 7); x.fill(); };
+  const quadro = T => {
+    if (cc.pagina !== 'jarvis' || !c.isConnected) { cc.jvPagRaf = 0; return; }
+    const t = T / 1000, dpr = Math.min(2, devicePixelRatio || 1), W = c.width = c.clientWidth * dpr, H = c.height = c.clientHeight * dpr; if (!W || !H) { cc.jvPagRaf = requestAnimationFrame(quadro); return; }
+    const on = 0.5 + 0.5 * Math.sin(t * 1.6), U = Math.min(W, H * 1.4), cx = W / 2, cy = H * 0.42, e = (vz && vz.ativo ? 0.3 : 0);
+    x.clearRect(0, 0, W, H);
+    x.save(); x.translate(cx, cy); x.rotate(-0.08); x.scale(1, 0.17); glow(0, 0, U * 0.62, 0.5 + on * 0.15 + e); x.restore();
+    x.save(); x.globalCompositeOperation = 'lighter'; x.strokeStyle = `rgba(255,255,255,${0.1 + on * 0.07})`; x.lineWidth = U * 0.035; x.filter = `blur(${U * 0.014}px)`; x.beginPath(); x.ellipse(cx, cy, U * 0.17, U * 0.17, 0, Math.PI, 0); x.stroke(); x.restore();
+    const sb = x.createRadialGradient(cx, cy, U * 0.05, cx, cy, U * 0.13); sb.addColorStop(0, 'rgba(0,0,0,.45)'); sb.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = sb; x.beginPath(); x.arc(cx, cy, U * 0.13, 0, 7); x.fill();
+    glow(cx, cy, U * (0.2 + on * 0.04), 0.42 + on * 0.16); glow(cx, cy, U * (0.085 + on * 0.018), 1); x.fillStyle = '#fff'; x.beginPath(); x.arc(cx, cy, U * (0.03 + on * 0.007), 0, 7); x.fill();
+    x.save(); x.translate(cx, cy); x.rotate(-0.08); x.scale(1, 0.06); glow(0, 0, U * 0.4, 0.55 + on * 0.2); x.restore();
+    cc.jvPagRaf = requestAnimationFrame(quadro);
+  };
+  cc.jvPagRaf = requestAnimationFrame(quadro);
 }
 function numerosPagina(id) {
   const pc = primosCentral || {}, N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, R = v => reais(v);
@@ -7450,6 +7522,7 @@ function palcoPagina(id) {
 }
 function renderPaginaAgente() {
   const el = $j('ag-pag'), id = cc.pagina; if (!el || el.hidden || !id) return;
+  if (id === 'jarvis') return renderPaginaJarvis();
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -7605,6 +7678,7 @@ function htmlPainelAgenteBase(id) {
   if (id === 'jarvis') {
     const ag = todosAgentes();
     return `<header class="cc-p-topo"><button type="button" class="cc-x" onclick="fecharPainelCentral()" aria-label="Fechar">✕</button><small>comando · mastermind da Primos 3D</small><h3><i class="cc-luz ok"></i>J.A.R.V.I.S.</h3><p>Lê o relatório de todos os agentes e te entrega só o que importa. Nenhum agente compra, paga, envia mensagem ou posta.</p></header>`
+      + '<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaJarvis()">Abrir a página do J.A.R.V.I.S. ›</button>'
       + htmlMastermind()
       + ccBloco('Situação dos agentes', `<ul class="cc-lista">${ag.map(a => { const st = estadoAgente(a); return `<li onclick="cc.setor='${a.setor}'; abrirAgenteCentral('${esc(a.id)}')"><i class="cc-luz ${st.nivel}"></i><span><b>${esc(a.nome)}</b><small>${esc(setorCentral(a.setor).nome)} · ${esc(st.metrica)}</small></span><em>›</em></li>`; }).join('')}</ul>`)
       + ccBloco('🛡️ Regras de segurança', `<ul class="cc-regras"><li>Ler e analisar: automático</li><li>Gravar ou alterar: só com o seu OK</li><li>Compras, pagamentos, Pix, e-mails, mensagens e posts: nunca</li></ul>`);
