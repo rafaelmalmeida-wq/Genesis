@@ -5690,7 +5690,7 @@ function montarExpositor3D() {
   const pronto = () => { const c = host.querySelector('.jvk-carregando'); if (c) c.remove(); };
   if (jv.expo3d) { jv.expo3d.anexar(host); jv.expo3d.atualizar(dados); pronto(); return; }
   if (!window.Expositor3D) {
-    if (!jv.expo3dCarregando) { jv.expo3dCarregando = true; import('./expositor3d.js').then(() => { jv.expo3dCarregando = false; if (jv.aba === 'chaveiros') montarExpositor3D(); }).catch(() => { jv.expo3dCarregando = false; const c = host.querySelector('.jvk-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }); }
+    if (!jv.expo3dCarregando) { jv.expo3dCarregando = true; import('./expositor3d.js').then(() => { jv.expo3dCarregando = false; if (jv.aba === 'chaveiros' || cc.pagina === 'consignacao') montarExpositor3D(); }).catch(() => { jv.expo3dCarregando = false; const c = host.querySelector('.jvk-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }); }
     return;
   }
   try { jv.expo3d = window.Expositor3D.montar(host, dados, tocarChaveiro3D); pronto(); } catch (err) { const c = host.querySelector('.jvk-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }
@@ -5811,7 +5811,8 @@ function cofreBruto(caminho) {
   return fetch(`https://api.github.com/repos/${JARVIS_REPO}/contents/${caminho.split('/').map(encodeURIComponent).join('/')}`, { cache: 'no-store', headers: { Accept: 'application/vnd.github.raw', Authorization: `Bearer ${claudeConfig.token}`, 'X-GitHub-Api-Version': '2022-11-28' } })
     .then(r => { if (!r.ok) throw new Error(String(r.status)); return r; });
 }
-let relatoriosAgentes = (() => { try { return JSON.parse(localStorage.getItem('lifeos_relatorios')); } catch (e) { return null; } })(); // Central: relatórios dos agentes (GitHub Actions do cofre, 1×/dia) — CACHE local, como a Primos
+let relatoriosAgentes = (() => { try { return JSON.parse(localStorage.getItem('lifeos_relatorios')); } catch (e) { return null; } })();
+let impressoesBambu = (() => { try { return JSON.parse(localStorage.getItem('lifeos_impressoes')); } catch (e) { return null; } })(); // histórico da Bambu (cofre: dados/impressoes.json) — CACHE local // Central: relatórios dos agentes (GitHub Actions do cofre, 1×/dia) — CACHE local, como a Primos
 function guardarPrimosLocal() { try { localStorage.setItem('lifeos_primoscentral', JSON.stringify(primosCentral)); } catch (e) { } } // cache do que veio do cofre (não passa pela planilha)
 async function sincronizarCofre(forcar) {
   if (!claudeConfigurado() || jv.sincronizando) return;
@@ -5826,6 +5827,7 @@ async function sincronizarCofre(forcar) {
       renderPrimosPagina();
       toast(primeira ? '🟢 J.A.R.V.I.S. conectado à Primos 3D Central.' : `🟢 J.A.R.V.I.S. atualizou a Primos 3D (Central de ${isoParaBR(d.geradoEm.slice(0, 10)).slice(0, 5)} às ${d.geradoEm.slice(11, 16)}).`, 5000);
     } else if (forcar) toast('A Primos 3D já está com os dados mais novos.', 3500);
+    try { const b = await (await cofreBruto('dados/impressoes.json')).json(); if (b && b.tipo === 'jarvis-impressoes' && (!impressoesBambu || b.lidoEm !== impressoesBambu.lidoEm)) { impressoesBambu = b; try { localStorage.setItem('lifeos_impressoes', JSON.stringify(b)); } catch (e) { } if (cc.agente === 'producao') montarFabrica3D(); } } catch (e) { }
     try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } renderCentral(); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
   } catch (e) { if (forcar) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
   jv.sincronizando = false; renderAreasJarvis(); renderPrimosPagina(); renderAjustesJarvis(); setTimeout(renderAreasJarvis, 91000);
@@ -7329,17 +7331,27 @@ function htmlAgenteProducao(a) {
   const linha = f => `<li class="${f.status}"><i style="background:${COR_FILA[semAcentoCer(f.cor)] || '#8e8e93'}"></i><span><b>${esc(f.titulo)} · ${f.qtd} un.</b><small>${esc([f.material, f.cor, ORIGEM_FILA[f.origem] || ''].filter(Boolean).join(' · '))}</small></span>
     ${f.status === 'feito' ? '<em>✓</em>' : `<button type="button" class="cc-mini${f.status === 'imprimindo' ? '' : ' sec'}" onclick="mudarFila(${f.id}, '${f.status === 'imprimindo' ? 'feito' : 'imprimindo'}')">${f.status === 'imprimindo' ? '✓ Pronto' : '▶ Imprimir'}</button>`}<button type="button" class="cc-mini sec" onclick="removerFila(${f.id})" aria-label="Tirar da fila">✕</button></li>`;
   return cabecalhoAgente(a)
-    + `<section class="cc-bloco cc-fab-bloco"><h4>Fábrica · ao vivo</h4><div id="cc-fab" class="cc-fab"><div class="cc-seca-carregando"><span class="spin"></span> Ligando as impressoras…</div></div><p class="cc-nota">As impressoras mostram o que está em "imprimindo" (ou o 1º da fila do dia). O andamento é ilustrativo até ligarmos o histórico da Bambu.</p></section>`
+    + `<section class="cc-bloco cc-fab-bloco"><h4>Fábrica · ao vivo</h4><div id="cc-fab" class="cc-fab"><div class="cc-seca-carregando"><span class="spin"></span> Ligando as impressoras…</div></div><p class="cc-nota">${impressoesBambu ? `As A1 mostram o que está imprimindo DE VERDADE (conta Bambu, lida às ${esc(String(impressoesBambu.lidoEm || '').slice(11, 16))}); a Kobra X mostra o que você marcou como "imprimindo" ou o 1º da fila do dia.` : 'As impressoras mostram o que está em "imprimindo" (ou o 1º da fila do dia).'}</p></section>`
     + htmlRelatorioAgente('producao') + dia
     + ccBloco(`Sua fila · ${plural(abertos.length, 'item', 'itens')}`, `<ul class="cc-fila">${abertos.map(linha).join('') || '<li><span><small>Vazia. Fale “quero imprimir …” para o J.A.R.V.I.S. ou anote aqui embaixo.</small></span></li>'}${feitos.map(linha).join('')}</ul>
       <form class="cc-form cc-fila-form" onsubmit="event.preventDefault(); const t = document.getElementById('cc-fila-txt'); const d = detectarFila('imprimir ' + t.value) || { titulo: t.value, qtd: 1 }; if (d.titulo) { adicionarFila(d, 'app'); t.value = ''; }"><input id="cc-fila-txt" placeholder="Ex.: 20 chaveiros Nossa Senhora em PLA dourado" maxlength="120" required><button type="submit" class="cc-btn">＋ Pôr na fila</button></form>`)
     + datas + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('producao')">Abrir Produção na Primos</button>` + botaoConversarAgente(a);
 }
 const MAQUINAS_FAB = ['A1 Combo #1', 'A1 Combo #2', 'Kobra X'];
+/** O que cada A1 está imprimindo DE VERDADE (Bambu: status 4 = em andamento), com o progresso pelo tempo. A Kobra X não tem histórico (Anycubic). */
+function jobsBambu() {
+  const L = (impressoesBambu && impressoesBambu.impressoes) || [], agora = Date.now(), por = {};
+  L.forEach(t => { const m = /impressora\s*2|#\s*2/i.test(t.maquina || '') ? 1 : /impressora\s*1|#\s*1/i.test(t.maquina || '') ? 0 : -1; if (m < 0 || por[m]) return; if (String(t.status) !== '4') return;
+    const ini = Date.parse(t.inicio), dur = (Number(t.minutos) || 0) * 60000; const prog = dur ? Math.min(0.99, Math.max(0.01, (agora - ini) / dur)) : null; if (prog !== null && agora - ini > dur * 1.3) return;
+    por[m] = { titulo: t.titulo, cor: ((t.cores || [])[0] || {}).cor || '#8e8e93', prog, faltam: dur ? Math.max(0, Math.round((ini + dur - agora) / 60000)) : null, real: true }; });
+  return por;
+}
 function dadosFabrica() {
   const r = relatorioAgente('producao') || {}, corDe = c => COR_FILA[semAcentoCer(c || '')] || (/^#/.test(c || '') ? c : '#8e8e93');
   const imprimindo = filaImpressao.filter(f => f.status === 'imprimindo'), dia = (r.filaDia || []).slice();
+  const reais = jobsBambu();
   const maquinas = MAQUINAS_FAB.map((nome, i) => {
+    if (reais[i]) return { nome, job: reais[i] };
     let job = imprimindo[i] ? { titulo: imprimindo[i].titulo, cor: corDe(imprimindo[i].cor) } : null;
     if (!job) { const k = dia.findIndex(f => semAcentoCer(f.maquina || '').includes(i === 2 ? 'kobra' : '#' + (i + 1)) || (!f.maquina && i === 0)); if (k >= 0) { const f = dia.splice(k, 1)[0]; job = { titulo: f.titulo, cor: corDe(f.cor) }; } }
     return { nome, job };
@@ -7350,7 +7362,7 @@ function dadosFabrica() {
 function montarFabrica3D() {
   const host = $j('cc-fab'); if (!host) return; const dados = dadosFabrica();
   const pronto = () => { const c = host.querySelector('.cc-seca-carregando'); if (c) c.remove(); };
-  if (!window.Fabrica3D) { if (!cc.fabCarregando) { cc.fabCarregando = true; import('./fabrica3d.js').then(() => { cc.fabCarregando = false; if (cc.agente === 'producao') montarFabrica3D(); }).catch(() => { cc.fabCarregando = false; const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }); } return; }
+  if (!window.Fabrica3D) { if (!cc.fabCarregando) { cc.fabCarregando = true; import('./fabrica3d.js').then(() => { cc.fabCarregando = false; if (cc.agente === 'producao' || cc.pagina === 'producao') montarFabrica3D(); }).catch(() => { cc.fabCarregando = false; const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }); } return; }
   try { if (cc.fab3d) { cc.fab3d.anexar(host); cc.fab3d.atualizar(dados); } else cc.fab3d = window.Fabrica3D.montar(host, dados, tocarFabrica3D); pronto(); }
   catch (err) { const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }
 }
@@ -7360,6 +7372,92 @@ function tocarFabrica3D(info, x, y) {
   t.innerHTML = `<span><b>${esc(info.titulo)}</b><small>${esc(info.sub || '')}</small></span>`; t.hidden = false;
   t.style.left = Math.max(8, Math.min(x - 90, (t.parentElement.clientWidth || 300) - 200)) + 'px'; t.style.top = Math.max(8, y - 64) + 'px';
   clearTimeout(cc.dicaFab); cc.dicaFab = setTimeout(() => { t.hidden = true; }, 3200);
+}
+// =====================================================================================================================
+// PÁGINA DO AGENTE (fase 6, pedido do Rafael 03/10/2026): no lugar da janela da Primos, cada agente tem uma PÁGINA INTEIRA,
+// animada pela rolagem (estilo Apple Vision Pro / Lusion): abertura em tela cheia com o visual dele (3D ou ilustração), números
+// grandes que contam, o painel do agente (comando, relatório, ferramentas, skills) e a análise completa da Primos.
+// =====================================================================================================================
+const PAG_AGENTE = { contabil: 'contabil', marketing: 'marketing', estoque: 'producao', producao: 'producao', vendas: 'vendas', consignacao: 'chaveiros', shopee: 'vendas', dev: null };
+function abrirPaginaAgente(id) {
+  const a = todosAgentes().find(x => x.id === id); if (!a) return;
+  let el = $j('ag-pag'); if (!el) { el = document.createElement('div'); el.id = 'ag-pag'; el.className = 'ag'; el.hidden = true; document.body.appendChild(el); }
+  fecharPainelCentral(); cc.pagina = id; // o painel lateral fecha (os ids dos formulários não podem existir duas vezes)
+  if (el.hidden) empilharCamada('pagina', fecharPaginaAgente);
+  el.hidden = false; document.body.classList.add('ag-aberta'); renderPaginaAgente();
+}
+function fecharPaginaAgente(daVolta) {
+  const el = $j('ag-pag'); if (!el || el.hidden) return; const id = cc.pagina;
+  el.hidden = true; document.body.classList.remove('ag-aberta'); cc.pagina = null; if (cc.obsPag) cc.obsPag.disconnect();
+  if (cc.seca3d) cc.seca3d.renderer.domElement.remove(); if (cc.fab3d) cc.fab3d.renderer.domElement.remove(); if (jv.expo3d) jv.expo3d.renderer.domElement.remove();
+  if (!daVolta) desempilharCamada('pagina');
+  if (id && !$j('jv-central').hidden) abrirAgenteCentral(id); // volta para o painel do agente na Central
+}
+function numerosPagina(id) {
+  const pc = primosCentral || {}, N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, R = v => reais(v);
+  if (id === 'contabil') { const vl = pc.caixa ? vendasLiquidasPrimos(pc) : { total: 0 }; return [[R(vl.total), 'recebido'], [R((pc.caixa || {}).totalGasto), 'investido'], [R((pc.caixa || {}).saldo), 'caixa'], [R(N.valuationPatrimonial), 'valor da empresa']]; }
+  if (id === 'marketing') { const tk = pc.tiktokPerfil || {}, p7 = (((pc.marketing || {}).tiktok || {}).periodo7d || {}); return [[tk.seguidores ?? '—', 'seguidores'], [p7.views ? (p7.views / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil' : '—', 'views em 7 dias'], [tk.curtidas ?? '—', 'curtidas'], [tk.videos ?? '—', 'vídeos']]; }
+  if (id === 'estoque') { const e = calcularEstoque(); return [[fmtKg(e.total), 'de filamento'], [e.cores.filter(c => c.kg > 0.01).length, 'cores'], [e.caminho.length, 'compras a caminho'], [e.cores.filter(c => c.kg < 0.3).length, 'cores para repor']]; }
+  if (id === 'producao') { const L = (impressoesBambu && impressoesBambu.impressoes) || [], g = L.reduce((s, t) => s + (Number(t.gramas) || 0), 0); return [[filaImpressao.filter(f => f.status !== 'feito').length, 'itens na fila'], [L.length, 'impressões (Bambu)'], [g ? (g / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' kg' : '—', 'impressos'], [3, 'máquinas']]; }
+  if (id === 'vendas' || id === 'shopee') { const v = pc.vendas || [], fat = v.reduce((s, x) => s + (x.bruto || 0), 0); return [[v.length, 'vendas'], [R(fat), 'faturado'], [v.length ? R(fat / v.length) : '—', 'ticket médio'], [orders.filter(o => pedidoAberto(o)).length, 'pedidos abertos']]; }
+  if (id === 'consignacao') { const t = pc.expositores ? totaisExpositores(pc) : { colocados: 0, vendidos: 0, potencial: 0 }; return [[t.colocados, 'colocados'], [t.vendidos, 'vendidos'], [R(t.potencial), 'potencial'], [(((pc.expositores || {}).resumo) || []).length, 'pontos de venda']]; }
+  return [];
+}
+/** O visual da abertura de cada agente. */
+function palcoPagina(id) {
+  const pc = primosCentral || {}, N = (relatoriosAgentes && relatoriosAgentes.numeros) || {};
+  if (id === 'contabil') { const vl = pc.caixa ? vendasLiquidasPrimos(pc) : { total: 0 }, inv = (pc.caixa || {}).totalGasto || 0;
+    return `<div class="ag-moeda-palco"><div class="cc-moeda ag-moeda"><i class="f"><b>P3D</b><small>${reais(vl.total)}</small></i><i class="v"><b>${pctFr(inv ? vl.total / inv : 0)}</b><small>já voltou</small></i>${Array.from({ length: 16 }, (_, k) => `<i class="b" style="transform:translateZ(${(k - 7.5).toFixed(1)}px)"></i>`).join('')}</div>
+      ${[[reais(N.valuationPatrimonial), 'valor'], [N.paybackMesesNoRitmoAtual ? Math.round(N.paybackMesesNoRitmoAtual) + ' meses' : '—', 'payback'], [reais((pc.caixa || {}).saldo), 'caixa'], [N.pontoEquilibrioPecasMes ? N.pontoEquilibrioPecasMes + ' peças/mês' : '—', 'equilíbrio']].map(([v, r], k) => `<span class="ag-orbita" style="--k:${k}"><b>${v}</b><small>${r}</small></span>`).join('')}</div>`; }
+  if (id === 'marketing') { const fotos = (pc.shopee || []).filter(s => s.foto).slice(0, 9);
+    return `<div class="ag-mural">${(fotos.length ? fotos : Array.from({ length: 9 }, () => null)).map((s, k) => `<figure style="--k:${k}">${s ? `<img data-cofre="${esc(s.foto)}" alt=""><figcaption>${esc(s.produto)}</figcaption>` : '<span></span>'}</figure>`).join('')}</div>`; }
+  if (id === 'estoque' || id === 'producao') return `<div id="ag-3d" class="ag-3d"><div class="cc-seca-carregando"><span class="spin"></span> Montando…</div></div>`;
+  if (id === 'vendas' || id === 'shopee') { const v = (pc.vendas || []).length, ab = orders.filter(o => pedidoAberto(o)).length, orc = orders.filter(o => o.status === 'orcamento').length;
+    return `<svg class="ag-funil" viewBox="0 0 400 300" aria-hidden="true">${[['Contatos e prospecção', '#0a84ff', 0], ['Orçamentos', '#5e5ce6', orc], ['Pedidos abertos', '#bf5af2', ab], ['Vendas fechadas', '#30d158', v]].map(([t, c, n], k) => `<g style="--k:${k}"><path d="M${40 + k * 32},${30 + k * 64} L${360 - k * 32},${30 + k * 64} L${360 - (k + 1) * 32},${86 + k * 64} L${40 + (k + 1) * 32},${86 + k * 64} Z" fill="${c}" opacity=".85"/><text x="200" y="${62 + k * 64}" text-anchor="middle">${t}${k ? ' · ' + n : ''}</text></g>`).join('')}</svg>`; }
+  if (id === 'consignacao') { const t = pc.expositores ? totaisExpositores(pc) : { colocados: 0, vendidos: 0 }, f = t.colocados ? t.vendidos / t.colocados : 0, C = 2 * Math.PI * 120;
+    return `<div class="ag-anel"><svg viewBox="0 0 300 300" aria-hidden="true"><circle cx="150" cy="150" r="120" class="fundo"/><circle cx="150" cy="150" r="120" class="valor" style="--c:${C.toFixed(1)}; --f:${f.toFixed(3)}"/></svg><div><b>${t.vendidos}</b><small>de ${t.colocados} chaveiros vendidos</small></div></div>`; }
+  return `<div class="ag-vazio">✦</div>`;
+}
+function renderPaginaAgente() {
+  const el = $j('ag-pag'), id = cc.pagina; if (!el || el.hidden || !id) return;
+  const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
+  let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
+  const nums = numerosPagina(id);
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
+      ${VOZ_AGENTES[id] ? `<button type="button" class="ag-falar" onclick="falarComAgente('${id}')">🎙 Falar</button>` : `<button type="button" class="ag-falar" onclick="conversarComAgente('${id}')">💬 Conversar</button>`}</header>
+    <i class="ag-progresso" id="ag-progresso" style="--cor:${s.cor}"></i>
+    <div class="ag-rolo" id="ag-rolo" style="--cor:${s.cor}">
+      <section class="ag-heroi"><div class="ag-heroi-txt"><small>${esc(s.nome)} · agente</small><h1>${esc(a.nome)}</h1><p>${esc(a.funcao || '')}</p></div><div class="ag-palco">${palcoPagina(id)}</div><div class="ag-desca">role para ver tudo<i></i></div></section>
+      ${nums.length ? `<section class="ag-sec ag-nums">${nums.map(([v, r], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</section>` : ''}
+      <section class="ag-sec ag-corpo">${painel}</section>
+      ${id === 'contabil' && pc ? `<section class="ag-sec ag-corpo">${graficosFinanceiro(pc)}</section>` : ''}
+      ${aba && pc ? `<section class="ag-sec ag-completa"><h2>Análise completa</h2><p class="ag-sub">Tudo o que o J.A.R.V.I.S. sabe sobre ${esc(a.nome)}, vindo da Primos 3D Central.</p><div class="jvp-corpo ag-embed">${htmlAbaPrimos(aba, pc)}</div></section>` : ''}
+      <footer class="ag-fim">J.A.R.V.I.S. · Primos 3D</footer>
+    </div>`;
+  // 3D e mídias de cada página
+  if (id === 'estoque') { const h = $j('ag-3d'); if (h) { h.id = 'cc-seca'; montarSecadora3D(); } }
+  if (id === 'producao') { const h = $j('ag-3d'); if (h) { h.id = 'cc-fab'; montarFabrica3D(); } }
+  if (aba === 'chaveiros') montarExpositor3D();
+  el.querySelectorAll('img[data-cofre]').forEach(async img => { const u = await fotoCofre(img.dataset.cofre).catch(() => null); if (u) { img.src = u; img.classList.add('ok'); } });
+  el.querySelectorAll('video[data-cofre]').forEach(async v => { const u = await videoCofre(v.dataset.cofre).catch(() => null); if (u) { v.muted = true; v.playsInline = true; v.src = u; v.play().catch(() => { }); } });
+  animarPaginaAgente();
+}
+/** A rolagem comanda: --h (0→1 na 1ª tela) no rolo; --p em cada seção/bloco; números contam ao aparecer; 3D gira junto. */
+function animarPaginaAgente() {
+  const r = $j('ag-rolo'); if (!r) return;
+  const alvos = [...r.querySelectorAll('.ag-num, .ag-corpo > *, .ag-completa > h2, .ag-completa > .ag-sub, .ag-embed > *')];
+  if (cc.obsPag) cc.obsPag.disconnect();
+  if (reduzMovimento()) alvos.forEach(x => x.classList.add('vis')); else alvos.forEach(x => x.classList.add('ag-rev'));
+  const passo = () => {
+    const H = r.clientHeight, h = Math.min(1, r.scrollTop / H), max = r.scrollHeight - H;
+    r.style.setProperty('--h', h.toFixed(3)); const topoR = r.getBoundingClientRect().top;
+    r.querySelectorAll('.ag-rev:not(.vis)').forEach(x => { if (x.getBoundingClientRect().top - topoR < H * 0.94) { x.classList.add('vis'); x.querySelectorAll('.ag-conta, .cc-nums strong').forEach(contarNumero); if (x.matches('.ag-num')) x.querySelectorAll('.ag-conta').forEach(contarNumero); } }); const pr = $j('ag-progresso'); if (pr) pr.style.transform = `scaleX(${max > 0 ? r.scrollTop / max : 0})`;
+    r.querySelectorAll('.ag-sec').forEach(sec => { const b = sec.getBoundingClientRect(), y = b.top - r.getBoundingClientRect().top; sec.style.setProperty('--p', Math.max(0, Math.min(1, (H - y) / (H * 0.9))).toFixed(3)); });
+    if (cc.pagina === 'estoque' && cc.seca3d && cc.seca3d.rolar) cc.seca3d.rolar(-0.9 + h * 1.8);
+    if (cc.pagina === 'producao' && cc.fab3d && cc.fab3d.rolar) cc.fab3d.rolar(-0.5 + h);
+  };
+  r.onscroll = () => { if (!cc.rafPag) cc.rafPag = requestAnimationFrame(() => { cc.rafPag = 0; passo(); }); };
+  passo();
 }
 function acaoCanvas(acao, id) {
   if (acao === 'abrir') return abrirAgenteCentral(id);
@@ -7470,8 +7568,9 @@ function htmlPainelAgente(id) {
     <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Rodar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="${VOZ_AGENTES[id] ? `falarComAgente('${id}')` : `conversarComAgente('${id}')`}">${VOZ_AGENTES[id] ? '🎙 Falar' : '💬 Conversar'}</button></div>`;
   const ag = todosAgentes().find(x => x.id === id), sk = ((ag && ag.skills) || []).filter(k => SKILLS_DESC[k]);
   const skills = sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '';
-  const i = html.indexOf('</header>') + 9;
-  return html.slice(0, i) + est + cmd + resp + html.slice(i) + skills;
+  const i = html.indexOf('</header>') + 9, abrir = cc.pagina ? '' : `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('${id}')">Abrir a página completa de ${esc(ag ? ag.nome : '')} ›</button>`;
+  const limpo = html.slice(i).replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
+  return html.slice(0, i) + abrir + est + cmd + resp + limpo + skills;
 }
 function htmlPainelAgenteBase(id) {
   if (id === 'jarvis') {
@@ -7604,7 +7703,7 @@ function montarSecadora3D() {
   const e = calcularEstoque(), dados = { bobinas: bobinasEstoque(e), temp: '45°C', umid: '18%' };
   const pronto = () => { const c = host.querySelector('.cc-seca-carregando'); if (c) c.remove(); };
   if (!window.Secadora3D) {
-    if (!cc.secaCarregando) { cc.secaCarregando = true; import('./secadora3d.js').then(() => { cc.secaCarregando = false; if (cc.agente === 'estoque') montarSecadora3D(); }).catch(() => { cc.secaCarregando = false; const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }); }
+    if (!cc.secaCarregando) { cc.secaCarregando = true; import('./secadora3d.js').then(() => { cc.secaCarregando = false; if (cc.agente === 'estoque' || cc.pagina === 'estoque') montarSecadora3D(); }).catch(() => { cc.secaCarregando = false; const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }); }
     return;
   }
   try { if (cc.seca3d) { cc.seca3d.anexar(host); cc.seca3d.atualizar(dados); } else cc.seca3d = window.Secadora3D.montar(host, dados, tocarBobina3D); pronto(); }

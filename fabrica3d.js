@@ -99,7 +99,7 @@ class Fabrica {
       if (mq.placa) { mq.g.remove(mq.placa); mq.placa.material.map.dispose(); mq.placa.material.dispose(); }
       if (job) { const cor = job.cor || '#8e8e93'; const mat = new THREE.MeshStandardMaterial({ color: cor, roughness: 0.55, metalness: /d4a53c|c3c6cc/.test(cor) ? 0.6 : 0.02 });
         const geo = new THREE.CylinderGeometry(4.2, 5, 10, 32, 20); geo.translate(0, 5, 0); mq.peca = new THREE.Mesh(geo, mat); mq.peca.position.y = 0.5; mq.mesa.add(mq.peca); }
-      mq.placa = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaTexto(d.nome || 'Impressora', job ? job.titulo : 'livre'), transparent: true, depthWrite: false }));
+      mq.placa = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaTexto((d.nome || 'Impressora') + (job && job.real ? ' · ao vivo' : ''), job ? (job.real && job.prog != null ? `% · ` : job.titulo) : 'livre'), transparent: true, depthWrite: false }));
       mq.placa.scale.set(30, 7.5, 1); mq.placa.position.set(0, 46, 0); mq.g.add(mq.placa); mq.job = job;
     });
     this.caixas.forEach(c => { this.esteira.remove(c); c.geometry.dispose(); c.material.dispose(); }); this.caixas = [];
@@ -119,8 +119,10 @@ class Fabrica {
     const cx = this.caixas.find(c => c === h.object); if (cx) return this.aoTocar({ titulo: cx.userData.f.titulo, sub: `${cx.userData.f.qtd || 1} un. · na fila` }, e.clientX - r.left, e.clientY - r.top);
     const mq = this.maquinas.find(m => { let o = h.object; while (o) { if (o === m.g) return true; o = o.parent; } return false; });
     const i = this.maquinas.indexOf(mq), d = (this.dados.maquinas || [])[i] || {};
-    this.aoTocar({ titulo: d.nome || 'Impressora', sub: mq && mq.job ? `imprimindo: ${mq.job.titulo}` : 'livre' }, e.clientX - r.left, e.clientY - r.top);
+    this.aoTocar({ titulo: d.nome || 'Impressora', sub: mq && mq.job ? (mq.job.real ? `ao vivo: ${mq.job.titulo} · ${Math.round((mq.job.prog || 0) * 100)}%${mq.job.faltam != null ? ' · faltam ' + Math.floor(mq.job.faltam / 60) + 'h' + String(mq.job.faltam % 60).padStart(2, '0') : ''}` : `imprimindo: ${mq.job.titulo}`) : 'livre' }, e.clientX - r.left, e.clientY - r.top);
   }
+  /** A rolagem da página gira a fábrica. */
+  rolar(v) { this.ang = Math.max(-0.6, Math.min(0.6, v)); this.mexeu = performance.now(); this.tocar(); }
   anexar(host) { if (!host) return; this.host = host; host.appendChild(this.renderer.domElement); if (this.obs) this.obs.disconnect(); if (window.ResizeObserver) { this.obs = new ResizeObserver(() => { this.medir(); this.tocar(); }); this.obs.observe(host); } this.medir(); this.tocar(); }
   medir() { const h = this.host; if (!h) return; const w = h.clientWidth, a = h.clientHeight; if (!w || !a) return; this.renderer.setSize(w, a, false); this.cam.aspect = w / a; this.cam.updateProjectionMatrix(); const tg = Math.tan(this.cam.fov * Math.PI / 360); this.dist = Math.max(46 / tg, 80 / (tg * this.cam.aspect)); }
   tocar() { if (!this.raf && !this.solto) this.raf = requestAnimationFrame(() => this.quadro()); }
@@ -131,7 +133,7 @@ class Fabrica {
       const fase = t * 1.6 + i * 1.3, ativo = !!mq.job;
       if (ativo) { // o cabeçote risca a camada, a mesa (A1) vai e volta, a peça cresce e recomeça
         mq.cab.position.x = Math.sin(fase * 2.2) * 5; if (mq.tipo === 'a1') mq.mesa.position.z = Math.cos(fase * 1.7) * 4; else mq.port.position.z = Math.cos(fase * 1.7) * 4;
-        const prog = (t * 0.045 + i * 0.27) % 1; if (mq.peca) { mq.peca.scale.y = 0.04 + prog * 0.96; } mq.port.position.y = (mq.tipo === 'a1' ? 15.2 : 21) + (0.5 + 10 * (0.04 + prog * 0.96)) + 6.2;
+        const prog = mq.job.real && mq.job.prog != null ? mq.job.prog : (t * 0.045 + i * 0.27) % 1; // real (Bambu) ou ilustrativo if (mq.peca) { mq.peca.scale.y = 0.04 + prog * 0.96; } mq.port.position.y = (mq.tipo === 'a1' ? 15.2 : 21) + (0.5 + 10 * (0.04 + prog * 0.96)) + 6.2;
       }
     });
     this.caixas.forEach((c, i) => { const vx = ((c.userData.base + t * 3) + 75) % 150 - 75; c.position.x = vx; c.rotation.y = Math.sin(t + i) * 0.05; });
