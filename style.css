@@ -3059,3 +3059,27 @@ body.ag-aberta { overflow: hidden; }
 .jvpg-segue::before { content: ""; position: absolute; left: -90%; right: -90%; top: 45%; height: 10%; border-radius: 50%; background: radial-gradient(closest-side, rgba(255,255,255,0.9), rgba(255,255,255,0)); filter: blur(2px); transform: rotate(-5deg); animation: jvfRespira 3.9s ease-in-out infinite; }
 .jvpg-segue i { width: 32%; height: 32%; border-radius: 50%; background: #fff; box-shadow: 0 0 10px 3px #fff, 0 0 28px 12px rgba(255,255,255,0.5), 0 0 70px 26px rgba(255,255,255,0.16); animation: jvfRespira 3.9s ease-in-out infinite; }
 .jvpg-segue.pousada::before { opacity: 0.5; } .jvpg-segue.pousada i { box-shadow: 0 0 6px 2px #fff, 0 0 14px 5px rgba(255,255,255,0.45); }
+
+/* FASE 7 (v2): a luz é a do PRÓPRIO 3D (modo canto) — sem segunda bolinha; a área e os agentes ficam ao lado dela */
+#cerebro.jv-foco-ag #jv-3d { opacity: 1; }
+.jv-ag-foco { display: block; padding: 0 5vw 0 30vw; overflow-y: auto; scrollbar-width: none; }
+.jv-ag-foco::-webkit-scrollbar { display: none; }
+.jv-ag-foco .jvf-topo { margin: max(0px, calc(50vh - 200px)) 0 18px; }
+.jv-ag-foco .jvf-sub, .jv-ag-foco .ag-barras { grid-column: auto; grid-row: auto; margin-top: 0; max-height: none; }
+.jv-ag-foco .jvf-corpo, .jv-ag-foco .jvf-topo { max-width: 640px; }
+.jvf-area { color: var(--area, #fff); }
+.jvf-heroi { margin-bottom: 18px; animation: jvfEntra .5s .45s both; } .jvf-heroi h2 { margin: 0 0 6px; font-size: 1.5rem; color: #fff; } .jvf-heroi p { margin: 0; color: #c7c7cc; line-height: 1.45; }
+.jvf-ind { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; } .jvf-ind div { padding: 10px 14px; border-radius: 16px; background: rgba(255,255,255,0.06); } .jvf-ind strong { display: block; color: #fff; } .jvf-ind small { color: #8e8e93; font-size: 0.72rem; }
+@media (max-width: 800px) {
+  .jv-ag-foco { padding: 0 16px; }
+  .jv-ag-foco .jvf-topo { margin: calc(27vh - 92px - 23px) 0 22px 30vw; }
+  .jvf-heroi h2 { font-size: 1.25rem; }
+}
+
+/* FASE 7 (v2): o próprio Gargantua desce com a rolagem, POR TRÁS do conteúdo */
+.jvpg-garg.fixo { position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; transform-origin: 50% 42%; pointer-events: none; animation: jvpgEntra 1.6s cubic-bezier(.2,.8,.2,1) both; will-change: transform, opacity; }
+#ag-pag .ag-rolo.jvpg { z-index: 1; background: transparent; }
+#ag-pag .jvpg-segue { display: none; }
+#jvpg-marca { position: relative; }
+#jvpg-marca::after { content: ""; position: absolute; left: calc(100% + 10px); top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: #fff; box-shadow: 0 0 8px 2px #fff, 0 0 18px 6px rgba(255,255,255,0.4); opacity: 0; transform: scale(0.3); transition: opacity .35s, transform .35s; animation: jvfRespira 3.9s ease-in-out infinite; }
+#jvpg-marca.pousada::after { opacity: 1; transform: scale(1); }

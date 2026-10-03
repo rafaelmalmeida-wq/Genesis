@@ -5089,8 +5089,9 @@ function renderHeroiJarvis() {
   const a = AREAS_CEREBRO.find(x => x.id === jv.heroi);
   const mostrar = !!(a && jv.modo === '3d' && $j('cerebro').classList.contains('jv-focado'));
   el.hidden = !mostrar; bt.hidden = !mostrar || !$j('cer-cartao').hidden; // com o cartão de um setor/item aberto, a barra sai da frente
-  renderAgentesFoco(mostrar && a.id === 'primos'); // fase 7: na Primos, no lugar dos setores, o J.A.R.V.I.S. vai para o canto e aparecem os AGENTES
-  if (mostrar && a.id === 'primos') el.hidden = true;
+  renderAgentesFoco(mostrar ? a : null); // fase 7: o J.A.R.V.I.S. vai para o canto (3D) e a área aparece ao lado: Primos = agentes; outras = resumo + setores
+  if (window.JarvisBrain && JarvisBrain.canto) JarvisBrain.canto(mostrar);
+  if (mostrar) el.hidden = true;
   if (!mostrar) return;
   const h = heroiArea(a.id), nv = nivelArea(a.id);
   el.innerHTML = `<div class="jv-heroi-selo"><span class="jv-heroi-ico">${iconeAreaSVG(a.id)}</span><span>${esc(a.nome)}</span><i style="background:${COR_NIVEL[nv.n]}" title="J.A.R.V.I.S.: ${NOME_NIVEL[nv.n]}"></i></div>
@@ -5106,13 +5107,17 @@ function htmlBarrasAgentes() {
     return `<button type="button" class="ag-barra" style="--k:${i}; --urg:${x ? x.u.cor : st.nivel === 'ok' ? '#30d158' : '#636366'}" onclick="abrirPaginaAgente('${esc(a.id)}')"><i aria-hidden="true"></i><span><b>${esc(a.nome)}</b><small>${x ? '› ' + esc(x.txt) : esc(st.metrica || a.funcao || '')}</small></span><em aria-hidden="true">›</em></button>`; }).join('')}</div>`;
 }
 /** Visão geral → toque na Primos: o J.A.R.V.I.S. (a luz) vai rapidinho para o canto esquerdo, a Primos aparece ao lado e os agentes em barras. */
-function renderAgentesFoco(ligar) {
+function renderAgentesFoco(a) {
   const cer = $j('cerebro'); if (!cer) return; let el = $j('jv-ag-foco');
-  if (!ligar) { if (el) { el.hidden = true; el.innerHTML = ''; } cer.classList.remove('jv-foco-ag'); return; }
+  if (!a) { if (el) { el.hidden = true; el.innerHTML = ''; el.dataset.area = ''; } cer.classList.remove('jv-foco-ag'); return; }
   if (!el) { el = document.createElement('div'); el.id = 'jv-ag-foco'; el.className = 'jv-ag-foco'; cer.querySelector('.jv-rodape').before(el); }
-  if (!el.hidden && el.innerHTML) { const b = el.querySelector('.ag-barras'); if (b) b.outerHTML = htmlBarrasAgentes(); return; }
-  el.innerHTML = `<div class="jvf-topo"><span class="jvf-luz" aria-hidden="true"><i></i></span><span class="jvf-area">${iconeAreaSVG('primos')}</span><div><small>J.A.R.V.I.S. › área</small><strong>Primos 3D</strong></div></div>
-    <p class="jvf-sub">Seus agentes · toque para abrir</p>${htmlBarrasAgentes()}`;
+  const corpo = () => { if (a.id === 'primos') return `<p class="jvf-sub">Seus agentes · toque para abrir</p>${htmlBarrasAgentes()}`;
+    const h = heroiArea(a.id);
+    return `<div class="jvf-heroi"><h2>${h.titulo}</h2><p>${h.fala}</p>${h.ind.length ? `<div class="jvf-ind">${h.ind.map(([v, r]) => `<div><strong>${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</div>` : ''}</div>
+      <p class="jvf-sub">Setores · toque para abrir</p><div class="ag-barras">${(a.secoes || []).map(([nome], i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${a.cor}" onclick="abrirMenuArea('${a.id}')"><i aria-hidden="true"></i><span><b>${esc(nome)}</b></span><em aria-hidden="true">›</em></button>`).join('')}</div>`; };
+  if (!el.hidden && el.dataset.area === a.id) { const b = el.querySelector('.jvf-corpo'); if (b) b.innerHTML = corpo(); return; }
+  el.dataset.area = a.id;
+  el.innerHTML = `<div class="jvf-topo"><span class="jvf-area" style="--area:${a.id === 'mercado' ? '#ffd60a' : '#ffffff'}">${iconeAreaSVG(a.id)}</span><div><small>J.A.R.V.I.S. › área</small><strong>${esc(a.nome)}</strong></div></div><div class="jvf-corpo">${corpo()}</div>`;
   el.hidden = false; cer.classList.add('jv-foco-ag');
 }
 /** A página de menu da área (a Primos 3D abre a página própria dela). */
@@ -7552,9 +7557,9 @@ function renderPaginaJarvis() {
   el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Comando central</small><strong id="jvpg-marca">J.A.R.V.I.S.</strong></div>
       <button type="button" class="ag-falar" onclick="iniciarConversaVoz('Página do J.A.R.V.I.S.')">🎙 Falar</button></header>
     <i class="ag-progresso" id="ag-progresso" style="--cor:#ffffff"></i>
-    <span class="jvpg-segue" id="jvpg-segue" aria-hidden="true"><i></i></span>
+    <canvas id="jvpg-garg" class="jvpg-garg fixo" aria-hidden="true"></canvas>
     <div class="ag-rolo jvpg" id="ag-rolo" style="--cor:#ffffff">
-      <section class="ag-heroi jvpg-heroi"><canvas id="jvpg-garg" class="jvpg-garg" aria-hidden="true"></canvas>
+      <section class="ag-heroi jvpg-heroi">
         <div class="ag-heroi-txt"><small>Comando central · ${esc(isoParaBR(j.dia || hojeISO()))}</small><h1>${saud}</h1><p>${j.manchete ? textoAgente(j.manchete) : 'Estou lendo os relatórios dos agentes. O primeiro filtro do dia sai às 7h.'}</p></div>
         <div class="ag-desca">role para ver tudo<i></i></div></section>
       <section class="ag-sec ag-nums">${nums.map(([v, r], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</section>
@@ -7570,25 +7575,33 @@ function renderPaginaJarvis() {
     </div>`;
   animarPaginaAgente(); gargantuaPagina(); seguirJarvisPagina();
 }
-/** A luz do J.A.R.V.I.S. ACOMPANHA a rolagem (fase 7, pedido do Rafael): sai do Gargantua da abertura, passeia de um lado
- *  para o outro entre os blocos enquanto você desce e, no fim, encolhe e pousa ao lado de "J.A.R.V.I.S." no topo. Subindo, volta. */
+/** A luz do J.A.R.V.I.S. ACOMPANHA a rolagem (fase 7, v2 — pedido do Rafael): é o PRÓPRIO Gargantua da abertura que sai do
+ *  lugar e desce com você — sem aparecer uma segunda bolinha. Fica sempre POR TRÁS do conteúdo: no PC passeia pelas margens e
+ *  só cruza a tela no vão entre um bloco e outro (nunca em cima do texto); no celular fica pequeno, apagado e desfocado (fundo).
+ *  No fim, encolhe e pousa ao lado de "J.A.R.V.I.S." no topo; subindo, volta ao tamanho da abertura. */
 function seguirJarvisPagina() {
-  const r = $j('ag-rolo'), o = $j('jvpg-segue'), pag = $j('ag-pag'); if (!r || !o || !pag) return;
-  const st = { x: 0, y: 0, s: 0, a: 0, ini: false }, liso = x => x * x * (3 - 2 * x), cl = x => Math.max(0, Math.min(1, x));
+  const r = $j('ag-rolo'), g = $j('jvpg-garg'), pag = $j('ag-pag'); if (!r || !g || !pag) return;
+  const st = { x: 0, y: 0, s: 1, a: 1, ini: false }, liso = x => x * x * (3 - 2 * x), cl = x => Math.max(0, Math.min(1, x));
+  let vaos = [], medidoEm = 0;
+  const medir = () => { const top = r.getBoundingClientRect().top; vaos = []; const secs = [...r.querySelectorAll('.ag-sec, .ag-fim')];
+    for (let k = 0; k < secs.length - 1; k++) { const a = secs[k].getBoundingClientRect(), b = secs[k + 1].getBoundingClientRect(); vaos.push((a.bottom + b.top) / 2 - top + r.scrollTop); } medidoEm = performance.now(); };
   const passo = T => {
-    if (cc.pagina !== 'jarvis' || !o.isConnected) return;
-    const W = pag.clientWidth, H = r.clientHeight, max = Math.max(1, r.scrollHeight - H), y0 = r.scrollTop, t = T / 1000;
-    const h = cl(y0 / H), fim = cl((y0 / max - 0.88) / 0.12), q = cl((y0 - H * 0.6) / Math.max(1, max - H * 0.6));
-    // caminho: começa onde está o Gargantua; no meio, vai e volta pelas laterais (sem cobrir o texto do meio); no fim, pousa no topo
-    let x = W * (0.5 + 0.4 * Math.sin(q * Math.PI * 3.2 - Math.PI / 2) * cl(q * 6)), y = H * (0.42 + 0.16 * Math.sin(q * Math.PI * 5.4)) + Math.sin(t * 1.3) * 6, s = 58;
-    const ini = { x: W * 0.5, y: H * 0.42 - y0 * 0.4, s: 150 }; const k1 = liso(cl((h - 0.15) / 0.6));
-    x = ini.x + (x - ini.x) * k1; y = ini.y + (y - ini.y) * k1; s = ini.s + (s - ini.s) * k1;
-    const m = $j('jvpg-marca'); if (m && fim > 0) { const b = m.getBoundingClientRect(), p = pag.getBoundingClientRect(); const k2 = liso(fim); x += (b.right - p.left + 14 - x) * k2; y += (b.top - p.top + b.height / 2 - y) * k2; s += (14 - s) * k2; }
-    const a = cl((h - 0.25) / 0.35); // na abertura quem aparece é o Gargantua grande; a luz assume quando ele some
+    if (cc.pagina !== 'jarvis' || !g.isConnected) return;
+    if (performance.now() - medidoEm > 1500) medir();
+    const W = pag.clientWidth, H = r.clientHeight, max = Math.max(1, r.scrollHeight - H), y0 = r.scrollTop, t = T / 1000, cel = W < 800;
+    const h = cl(y0 / (H * 0.8)), fim = cl((y0 / max - 0.9) / 0.1);
+    // lados: no PC, o meio da margem (fora do texto); no celular, rente à borda (por trás, desfocado)
+    const margem = Math.max(0, (W - 980) / 2), esq = cel ? W * 0.1 : Math.max(60, margem / 2), dir = W - esq;
+    const ancora = y0 + H * 0.5; let n = 0, perto = null; vaos.forEach(v => { if (v < ancora) n++; if (perto === null || Math.abs(v - ancora) < Math.abs(perto - ancora)) perto = v; });
+    let x = n % 2 ? dir : esq; if (perto !== null && Math.abs(ancora - perto) < 90) { const k = liso(cl((ancora - perto + 90) / 180)), antes = ancora < perto ? n : n - 1; const de = antes % 2 ? dir : esq, para = antes % 2 ? esq : dir; x = de + (para - de) * k; } // cruza a tela só no vão entre dois blocos
+    let y = H * 0.5 + Math.sin(t * 1.1) * 8, s = cel ? 0.2 : 0.34, a = cel ? 0.45 : 0.95;
+    const k1 = liso(h); x = W / 2 + (x - W / 2) * k1; y = (H * 0.42 - y0 * 0.3) + (y - (H * 0.42 - y0 * 0.3)) * k1; s = 1 + (s - 1) * k1; a = 1 + (a - 1) * k1;
+    const m = $j('jvpg-marca'); if (m && fim > 0) { const b = m.getBoundingClientRect(), p = pag.getBoundingClientRect(), k2 = liso(fim); x += (b.right - p.left + 16 - x) * k2; y += (b.top - p.top + b.height / 2 - y) * k2; s += (0.05 - s) * k2; a *= 1 - k2 * 0.85; }
+    m && m.classList.toggle('pousada', fim > 0.9);
     if (!st.ini) Object.assign(st, { x, y, s, a, ini: true });
-    st.x += (x - st.x) * 0.14; st.y += (y - st.y) * 0.14; st.s += (s - st.s) * 0.14; st.a += (a - st.a) * 0.14;
-    o.style.transform = `translate3d(${(st.x - st.s / 2).toFixed(1)}px, ${(st.y - st.s / 2).toFixed(1)}px, 0)`; o.style.width = o.style.height = st.s.toFixed(1) + 'px'; o.style.opacity = st.a.toFixed(3);
-    o.classList.toggle('pousada', fim > 0.95);
+    st.x += (x - st.x) * 0.12; st.y += (y - st.y) * 0.12; st.s += (s - st.s) * 0.12; st.a += (a - st.a) * 0.12;
+    g.style.transform = `translate3d(${(st.x - W / 2).toFixed(1)}px, ${(st.y - H * 0.42).toFixed(1)}px, 0) scale(${st.s.toFixed(4)})`; g.style.opacity = st.a.toFixed(3);
+    g.style.filter = cel && k1 > 0.5 ? `blur(${(1.5 * k1).toFixed(1)}px)` : '';
     cc.rafSegue = requestAnimationFrame(passo);
   };
   cancelAnimationFrame(cc.rafSegue); cc.rafSegue = requestAnimationFrame(passo);

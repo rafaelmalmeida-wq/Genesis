@@ -815,12 +815,21 @@ function quadro() {
   }
   const suav = agora < (J.entradaAte || 0) ? 0.04 : 0.09; // na abertura a câmera chega mais devagar
   J.rel += (J.relAlvo - J.rel) * suav; J.ox += (J.oxAlvo - J.ox) * 0.09; J.oy += (J.oyAlvo - J.oy) * 0.09;
-  const d = dist(); J.prof += ((J.foco ? d - J.raioFoco : d) - J.prof) * 0.09;
+  const d = dist(); J.prof += (((J.foco && !J.canto) ? d - J.raioFoco : d) - J.prof) * 0.09;
   const u = 2 * Math.max(20, J.prof) * Math.tan(J.camera.fov * Math.PI / 360) / (J.host.clientHeight || 1); // unidades do mundo por pixel (na profundidade do foco)
   J.margem = (J.margem || 0) + ((J.foco ? 0 : (J.margemAlvo || 0)) - (J.margem || 0)) * 0.08; // espaço para a coluna de avisos (PC)
   let cx = -(J.ox + J.margem) * u, cy = J.oy * u;
   if (J.pal.holo) { let alvo = 0; const fa = J.foco && J.porId["a-" + J.foco]; if (fa) { J.mundo.updateMatrixWorld(); alvo = _vf.copy(fa.p).applyMatrix4(J.mundo.matrixWorld).x * 0.5; } J.focoCx = (J.focoCx || 0) + (alvo - (J.focoCx || 0)) * 0.08; cx += J.focoCx; } // fase 7: área aberta à direita, o J.A.R.V.I.S. à esquerda
   const pr = J.par; pr.x += (pr.xa - pr.x) * 0.045; pr.y += (pr.ya - pr.y) * 0.045; // paralaxe: o mouse (PC) ou a inclinação do celular movem a câmera de leve
+  // fase 7: MODO CANTO — ao abrir uma área, o próprio J.A.R.V.I.S. (a luz do meio) desliza para o canto esquerdo e o holograma some
+  J.cantoK = (J.cantoK || 0) + ((J.canto ? 1 : 0) - (J.cantoK || 0)) * 0.1;
+  if (J.cantoK > 0.001) {
+    const W = J.host.clientWidth || 1, H = J.host.clientHeight || 1, cel = W < 800, uC = 2 * d * Math.tan(J.camera.fov * Math.PI / 360) / H;
+    const fx = cel ? 0.17 : 0.16, fy = cel ? 0.27 : 0.5, k = J.cantoK * J.cantoK * (3 - 2 * J.cantoK);
+    cx += ((0.5 - fx) * W * uC - cx) * k; cy += ((fy - 0.5) * H * uC - cy) * k;
+  }
+  if (J.mundo) J.mundo.visible = J.cantoK < 0.3; if (J.sub) J.sub.visible = J.cantoK < 0.3;
+  if (J.op.rotulos) J.op.rotulos.style.opacity = String(Math.max(0, 1 - J.cantoK * 2.5));
   J.camera.position.set(cx + pr.x * d * 0.16, cy + pr.y * d * 0.11, d); J.camera.lookAt(cx, cy, 0);
   J.cena.fog.near = d - R * 0.4; J.cena.fog.far = d + R * 2.2;
   [J.pontos, J.poeira].forEach(p => { if (p) { p.material.uniforms.uTempo.value = t; p.material.uniforms.uDist.value = d; } });
@@ -943,6 +952,8 @@ window.JarvisBrain = {
   },
   retomar() { J.ativo = true; redimensionar(); tocar(); },
   pausar() { J.ativo = false; cancelAnimationFrame(J.raf); J.raf = 0; },
+  /** fase 7: o J.A.R.V.I.S. vai para o canto esquerdo (área aberta) ou volta ao centro. */
+  canto(on) { J.canto = !!on; tocar(); },
   get foco() { return J.foco; },
   get visual() { return J.visual; }
 };
