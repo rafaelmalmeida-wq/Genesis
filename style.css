@@ -3114,3 +3114,13 @@ body.ag-aberta { overflow: hidden; }
 .est-cont input { padding: 10px 12px; border: 0; border-radius: 12px; background: rgba(255,255,255,0.08); color: #fff; font: inherit; text-align: right; }
 .est-cont-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px; } .est-salvar { background: #64d2ff !important; color: #00131c !important; }
 @media (max-width: 800px) { .est-seca { height: 70vh !important; min-height: 420px; border-radius: 22px; } .est-dados { grid-template-columns: repeat(2, 1fr); } .est-heroi { padding-left: 12px; padding-right: 12px; } .est-cont label { grid-template-columns: 22px 1fr 92px; } }
+
+/* ===== ENGENHARIA CIVIL (fase 8): cartões da cartilha e cabeçalho dos agentes no menu da área ===== */
+.eng-card { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px; margin: 8px 0; border-radius: 14px; background: rgba(127,127,127,.08); }
+.eng-card strong { font-size: 15px; }
+.eng-card small { opacity: .68; font-size: 12.5px; }
+.eng-card p { margin: 4px 0 0; font-size: 13.5px; line-height: 1.45; opacity: .9; }
+.eng-funcao { margin: 4px 0 10px; font-size: 13.5px; opacity: .78; }
+.eng-acoes { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.eng-acoes .btn { flex: 1 1 140px; }
+.eng-lista { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.6; }

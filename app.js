@@ -5068,8 +5068,9 @@ function heroiArea(area) {
   }
   if (area === 'eng') {
     const trab = shifts.filter(s => s.date >= hoje).sort((a, b) => (a.date + (a.time || '')).localeCompare(b.date + (b.time || '')));
-    return { titulo: trab.length ? `${esc(trab[0].desc || 'Trabalho')} · ${esc(rotuloData(trab[0].date))}` : notas ? plural(notas, 'nota de engenharia', 'notas de engenharia') : 'Pronta para seus projetos',
-      fala: trab.length ? `Próximo trabalho na agenda${trab[0].time ? ' às ' + esc(trab[0].time) : ''}.` : 'Projetos, obras, normas (NBR), cálculos e softwares. No menu você começa por qualquer setor.',
+    const ed = typeof engenhariaDados !== 'undefined' && engenhariaDados, np = ed ? (ed.projetos || []).length : 0;
+    return { titulo: trab.length ? `${esc(trab[0].desc || 'Trabalho')} · ${esc(rotuloData(trab[0].date))}` : np ? plural(np, 'projeto na sua cartilha', 'projetos na sua cartilha') : notas ? plural(notas, 'nota de engenharia', 'notas de engenharia') : 'Pronta para seus projetos',
+      fala: trab.length ? `Próximo trabalho na agenda${trab[0].time ? ' às ' + esc(trab[0].time) : ''}.` : np ? `Quatro agentes cuidam da sua engenharia: projetos, orçamentos, estudos da UFV e normas. ${((ed.orcamentos || {}).numeros || {}).pastasDeObra || 0} obras orçadas na Alcance já estão na memória.` : 'Projetos, obras, normas (NBR), cálculos e softwares. No menu você começa por qualquer setor.',
       ind: [[notas, 'notas'], [trab.length, 'na agenda'], [ligados, 'itens ligados']] };
   }
   if (area === 'sst') return { titulo: notas ? plural(notas, 'nota de segurança', 'notas de segurança') : 'Pronta para as NRs', fala: 'NRs, inspeções, treinamentos, EPIs, PGR/PCMSO e laudos. No menu você começa por qualquer setor.', ind: [[notas, 'notas'], [ligados, 'itens ligados']] };
@@ -5113,6 +5114,7 @@ function renderAgentesFoco(a) {
   if (!el) { el = document.createElement('div'); el.id = 'jv-ag-foco'; el.className = 'jv-ag-foco'; cer.querySelector('.jv-rodape').before(el); }
   const corpo = () => { if (a.id === 'primos') return `<p class="jvf-sub">Seus agentes · toque para abrir</p>${htmlBarrasAgentes()}`;
     const h = heroiArea(a.id);
+    if (a.id === 'eng') return `<div class="jvf-heroi"><h2>${h.titulo}</h2><p>${h.fala}</p></div><p class="jvf-sub">Seus agentes · toque para abrir</p>${htmlBarrasAgentesEng()}`;
     return `<div class="jvf-heroi"><h2>${h.titulo}</h2><p>${h.fala}</p>${h.ind.length ? `<div class="jvf-ind">${h.ind.map(([v, r]) => `<div><strong>${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</div>` : ''}</div>
       <p class="jvf-sub">Setores · toque para abrir</p><div class="ag-barras">${(a.secoes || []).map(([nome], i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${a.cor}" onclick="abrirMenuArea('${a.id}')"><i aria-hidden="true"></i><span><b>${esc(nome)}</b></span><em aria-hidden="true">›</em></button>`).join('')}</div>`; };
   if (!el.hidden && el.dataset.area === a.id) { const b = el.querySelector('.jvf-corpo'); if (b) b.innerHTML = corpo(); return; }
@@ -5141,11 +5143,11 @@ function abaMenuArea(aba) {
 function renderMenuArea() {
   const el = $j('jv-menu-area'); if (!el || el.hidden || !jv.menu) return;
   const a = AREAS_CEREBRO.find(x => x.id === jv.menu); if (!a) return;
-  const setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === a.id);
-  if (jv.abaMenu !== 'resumo' && !setores.some(s => s.id === jv.abaMenu)) jv.abaMenu = 'resumo';
+  const setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === a.id), eng = a.id === 'eng'; // Engenharia (fase 8): abas = agentes, não setores
+  if (jv.abaMenu !== 'resumo' && !(eng ? ABAS_ENG.some(([k]) => k === jv.abaMenu) : setores.some(s => s.id === jv.abaMenu))) jv.abaMenu = 'resumo';
   const nv = nivelArea(a.id), y = ($j('jv-menu-corpo') || {}).scrollTop || 0, entrando = jv.menuEntrando; jv.menuEntrando = false;
-  const abas = [['resumo', 'J.A.R.V.I.S.'], ...setores.map(s => [s.id, s.nome])];
-  const alvoNota = jv.abaMenu === 'resumo' ? 'a-' + a.id : jv.abaMenu;
+  const abas = eng ? ABAS_ENG : [['resumo', 'J.A.R.V.I.S.'], ...setores.map(s => [s.id, s.nome])];
+  const alvoNota = jv.abaMenu === 'resumo' || eng ? 'a-' + a.id : jv.abaMenu;
   const humor = a.id === 'mercado' ? humorMercado() : null;
   el.innerHTML = `<div class="jvp-janela jvm-janela${entrando ? ' entrando' : ''}${humor ? ' jvm-' + humor.tipo : ''}${a.id === 'mercado' ? ' jvm-mercado' : ''}" style="--area:${a.cor}">
     <header class="jvp-topo jvm-topo"><span class="jvm-ico">${iconeAreaSVG(a.id, '#ffffff')}</span><div class="jvp-marca"><strong>${esc(a.nome)}</strong><small>Menu do J.A.R.V.I.S.</small></div>
@@ -5156,7 +5158,7 @@ function renderMenuArea() {
       <button type="button" class="jvp-acao" onclick="notaMenuArea('${esc(alvoNota)}')"><span class="jvp-ico jvm-mais">＋</span><span>Nova nota</span></button>
     </div>
     <nav class="jvp-abas">${abas.map(([k, n]) => `<button type="button" data-aba="${esc(k)}" class="${jv.abaMenu === k ? 'on' : ''}" onclick="abaMenuArea('${esc(k)}')">${esc(n)}</button>`).join('')}</nav>
-    <div class="jvp-corpo" id="jv-menu-corpo">${jv.abaMenu === 'resumo' ? htmlResumoMenu(a) : htmlSetorMenu(cer.mapa[jv.abaMenu])}</div>
+    <div class="jvp-corpo" id="jv-menu-corpo">${eng ? htmlAbaEng(jv.abaMenu) : jv.abaMenu === 'resumo' ? htmlResumoMenu(a) : htmlSetorMenu(cer.mapa[jv.abaMenu])}</div>
   </div>`;
   const c = $j('jv-menu-corpo'); if (c) c.scrollTop = y;
   if (a.id === 'mercado' && jv.abaMenu === 'resumo') atualizarMercado(false);
@@ -5184,6 +5186,81 @@ function nomeDaAba(tab) { const b = document.querySelector(`#btn-${tab} .tab-lbl
 function abrirItemMenu(id) { const n = cer.mapa[id]; if (!n) return; fecharMenuArea(); if (n.abrir && n.abrir.tab) abrirNoCerebro(n); else irParaNoJarvis(id); }
 function notaMenuArea(id) { fecharMenuArea(); novaNotaDoCerebro(id); }
 function verNoCerebroMenu(id) { fecharMenuArea(); irParaNoJarvis(id); }
+
+// ============================================================================
+// ENGENHARIA CIVIL (fase 8) — a 2ª frente do J.A.R.V.I.S., no modelo da Primos: cartilha que o PC lê das pastas do Rafael
+// (só RESUMOS, clientes como "Cliente A") → cofre dados/engenharia.json → CACHE local (não passa pela planilha) + 4 agentes próprios.
+// Os agentes da Engenharia NÃO entram na Central de Comando (ela é da Primos): ficam no menu da área.
+// ============================================================================
+let engenhariaDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_engenharia')); } catch (e) { return null; } })();
+const AGENTES_ENG = [
+  { id: 'eng_projetos', setor: 'eng', aba: 'projetos', nome: 'Projetos', funcao: 'Cartilha de projetos: portfólio, apresentação e o que falta em cada um', skills: ['Portfólio e cartilha de projetos', 'Arquitetônico e BIM (Revit)', 'Hidrossanitário e elétrico', 'Compatibilização de projetos', 'Documentação: memorial, ART, pranchas'] },
+  { id: 'eng_orcamentos', setor: 'eng', aba: 'orcamentos', nome: 'Orçamentos', funcao: 'Orçar e revisar obras com a experiência da Alcance', skills: ['Levantamento de quantitativos', 'Composições e SINAPI/SICRO', 'Curva ABC (Faixa A) e Fixas', 'Dossiê e cotação com fornecedores', 'Leitura de edital e questionamentos'] },
+  { id: 'eng_estudos', setor: 'eng', aba: 'estudos', nome: 'Estudos UFV', funcao: 'Matérias, TCC e artigo viram resumos e plano de estudo', skills: ['Estruturas (concreto, aço, madeira)', 'Geotecnia e pavimentação', 'Hidráulica e saneamento', 'BIM e Segurança do Trabalho (TCC)', 'Resumos e revisão'] },
+  { id: 'eng_normas', setor: 'eng', aba: 'normas', nome: 'Normas e Cálculos', funcao: 'A NBR certa, pré-dimensionamento e checklists', skills: ['NBRs de projeto', 'Pré-dimensionamento', 'Conferência de cálculos', 'Checklists de projeto e obra', 'Ponte com a NR-18 (SST)'] }
+];
+const VOZ_AGENTES_ENG = {
+  eng_projetos: { voz: 'Iapetus', persona: 'Homem, voz calma de arquiteto-engenheiro organizado. Conhece cada projeto da cartilha do Rafael (casa em Uberaba, ordenha, chácara, elétrico, hidrossanitário, compatibilização) e sempre diz o que falta para o projeto ficar apresentável ou aprovado.' },
+  eng_orcamentos: { voz: 'Schedar', persona: 'Homem, voz segura de orçamentista de licitação. Pensa em quantitativo, composição, SINAPI, curva ABC e BDI; lembra da experiência do Rafael na Alcance (TJMG, CDHU, SESI) e mostra a conta em uma linha.' },
+  eng_estudos: { voz: 'Kore', persona: 'Mulher, voz clara de professora paciente. Explica do jeito simples, usa o material da UFV do Rafael (estruturas, solos, hidráulica, o TCC de BIM e SST e o artigo da escória) e termina com uma pergunta curta para fixar.' },
+  eng_normas: { voz: 'Algenib', persona: 'Homem, voz firme e precisa de calculista. Aponta a NBR certa e o item, confere pré-dimensionamentos com a conta à mostra e nunca afirma como definitivo o que exige cálculo completo e responsável técnico.' }
+};
+const ABAS_ENG = [['resumo', 'J.A.R.V.I.S.'], ['projetos', 'Projetos'], ['orcamentos', 'Orçamentos'], ['estudos', 'Estudos'], ['normas', 'Normas e cálculos']];
+function guardarEngenhariaLocal() { try { localStorage.setItem('lifeos_engenharia', JSON.stringify(engenhariaDados)); } catch (e) { } }
+function agenteEng(id) { return AGENTES_ENG.find(a => a.id === id || a.aba === id); }
+/** Barras dos agentes da Engenharia (Visão geral e menu) — tocar abre a aba do agente no menu. */
+function htmlBarrasAgentesEng() {
+  const d = engenhariaDados || {}, q = { projetos: (d.projetos || []).length, orcamentos: ((d.orcamentos || {}).obras || []).length, estudos: ((d.estudos || {}).disciplinas || []).length, normas: (d.normas || []).length };
+  const met = { projetos: q.projetos && plural(q.projetos, 'projeto na cartilha', 'projetos na cartilha'), orcamentos: q.orcamentos && plural(q.orcamentos, 'grupo de obras orçadas', 'grupos de obras orçadas'), estudos: q.estudos && plural(q.estudos, 'bloco de matérias', 'blocos de matérias'), normas: q.normas && plural(q.normas, 'norma de referência', 'normas de referência') };
+  return `<div class="ag-barras">${AGENTES_ENG.map((a, i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${q[a.aba] ? '#30d158' : '#636366'}" onclick="abrirMenuArea('eng', '${a.aba}')"><i aria-hidden="true"></i><span><b>${esc(a.nome)}</b><small>${esc(met[a.aba] || a.funcao)}</small></span><em aria-hidden="true">›</em></button>`).join('')}</div>`;
+}
+function conversarComAgenteEng(id) {
+  const a = agenteEng(id); if (!a) return;
+  abrirChatJarvis({ contexto: `Engenharia Civil › agente ${a.nome} (especialista em: ${a.skills.join(', ')}). Responda como esse especialista, usando a CARTILHA DA ENGENHARIA dos dados.`, area: 'eng' });
+}
+function falarComAgenteEng(id) {
+  const a = agenteEng(id), v = a && VOZ_AGENTES_ENG[a.id]; if (!a) return; if (!v) return conversarComAgenteEng(id);
+  iniciarConversaVoz(`Engenharia Civil › agente ${a.nome}`, 'eng', { voz: v.voz, persona: v.persona, nomeAgente: a.nome });
+}
+/** Cabeçalho do agente na aba dele: função, skills e os botões de conversa. */
+function htmlCabecaAgenteEng(a) {
+  return `<div class="jv-bloco eng-agente"><h5>Agente ${esc(a.nome)}</h5><p class="eng-funcao">${esc(a.funcao)}</p>
+    <div class="jv-setores">${a.skills.map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div>
+    <div class="eng-acoes"><button type="button" class="btn" onclick="fecharMenuArea(); conversarComAgenteEng('${a.id}')">Conversar</button><button type="button" class="btn" onclick="fecharMenuArea(); falarComAgenteEng('${a.id}')">Falar por voz</button></div></div>`;
+}
+function htmlAbaEng(aba) {
+  const d = engenhariaDados;
+  if (!d) return falaHTML('A cartilha da Engenharia ainda não chegou neste aparelho. Ela vem do cofre: confira a conexão em <b>Ajustes do J.A.R.V.I.S. → Computador</b>.') + `<div class="jv-bloco"><h5>Seus agentes</h5>${htmlBarrasAgentesEng()}</div>`;
+  const p = d.perfil || {}, o = d.orcamentos || {}, e = d.estudos || {}, nota = `<button type="button" class="btn jv-mais" onclick="notaMenuArea('a-eng')">＋ Nota em Engenharia Civil</button>`;
+  if (aba === 'projetos') return htmlCabecaAgenteEng(agenteEng('projetos'))
+    + `<div class="jv-bloco"><h5>Cartilha · ${plural((d.projetos || []).length, 'projeto', 'projetos')}</h5>${(d.projetos || []).map(x => `<div class="eng-card"><strong>${esc(x.titulo)}</strong><small>${esc([x.tipo, x.ano, x.software].filter(Boolean).join(' · '))}</small><small>${esc(x.cliente || '')}${x.status ? ' — ' + esc(x.status) : ''}</small><p>${esc(x.escopo || '')}</p></div>`).join('')}</div>` + nota;
+  if (aba === 'orcamentos') return htmlCabecaAgenteEng(agenteEng('orcamentos')) + falaHTML(esc(o.resumo || ''))
+    + (o.numeros ? indicadoresHTML([[String(o.numeros.pastasDeObra), 'obras analisadas'], [String(o.numeros.planilhas), 'planilhas'], [String(o.numeros.documentosPdf), 'documentos']]) : '')
+    + `<div class="jv-bloco"><h5>Obras em que você trabalhou</h5>${(o.obras || []).map(x => `<div class="eng-card"><strong>${esc(x.orgao)} · ${esc(x.obra)}</strong>${x.locais ? `<small>${esc(x.locais)}</small>` : ''}<small>${esc(x.anos || '')}</small></div>`).join('')}</div>` + nota;
+  if (aba === 'estudos') return htmlCabecaAgenteEng(agenteEng('estudos'))
+    + (p.tcc ? `<div class="jv-bloco"><h5>TCC · ${esc(String(p.tcc.ano || ''))}</h5><div class="eng-card"><strong>${esc(p.tcc.titulo)}</strong><p>${esc(p.tcc.resumo || '')}</p></div></div>` : '')
+    + (p.artigo ? `<div class="jv-bloco"><h5>Artigo</h5><div class="eng-card"><strong>${esc(p.artigo.titulo)}</strong><small>${esc(p.artigo.evento || '')}</small><p>${esc(p.artigo.resumo || '')}</p></div></div>` : '')
+    + `<div class="jv-bloco"><h5>Matérias da UFV</h5><ul class="eng-lista">${(e.disciplinas || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>${e.materialDeEstudo ? `<p class="eng-funcao">${esc(e.materialDeEstudo)}</p>` : ''}</div>` + nota;
+  if (aba === 'normas') return htmlCabecaAgenteEng(agenteEng('normas'))
+    + `<div class="jv-bloco"><h5>Normas de referência</h5><ul class="eng-lista">${(d.normas || []).map(x => `<li><b>${esc(x.codigo)}</b> — ${esc(x.tema)}</li>`).join('')}</ul></div>`
+    + falaHTML('As calculadoras (pré-dimensionamento de viga, laje e pilar, consumo de água, queda de esgoto) entram no próximo passo. Por enquanto, pergunte ao agente: ele mostra a conta.') + nota;
+  const xp = (p.experiencia || [])[0];
+  return falaHTML(`Sua engenharia num lugar só: <b>${plural((d.projetos || []).length, 'projeto', 'projetos')}</b> na cartilha, <b>${(o.numeros || {}).pastasDeObra || 0} obras</b> orçadas na Alcance e a UFV inteira para eu estudar com você.`)
+    + indicadoresHTML([[String((d.projetos || []).length), 'projetos'], [String((o.numeros || {}).pastasDeObra || 0), 'obras orçadas'], [String((d.normas || []).length), 'normas']])
+    + `<div class="jv-bloco"><h5>Seus agentes · toque para abrir</h5>${htmlBarrasAgentesEng()}</div>`
+    + `<div class="jv-bloco"><h5>Quem é o engenheiro</h5><div class="eng-card"><strong>${esc(p.formacao || 'Engenharia Civil')}</strong>${xp ? `<small>${esc(xp.onde)} — ${esc(xp.quando)}</small><p>${esc(xp.papel)}</p>` : ''}${(p.softwares || []).length ? `<small>${esc(p.softwares.join(' · '))}</small>` : ''}</div></div>` + nota;
+}
+/** Resumo da cartilha para o Gemini (já vem sem nomes de clientes particulares). */
+function dadosEngenhariaIA() {
+  const d = engenhariaDados; if (!d) return 'A cartilha da Engenharia ainda não chegou neste aparelho.';
+  const p = d.perfil || {}, o = d.orcamentos || {}, e = d.estudos || {};
+  return [`PERFIL: ${p.formacao || ''}. TCC: ${p.tcc ? p.tcc.titulo + ' — ' + p.tcc.resumo : '—'}. Artigo: ${p.artigo ? p.artigo.titulo + ' (' + p.artigo.evento + ')' : '—'}.`,
+    `EXPERIÊNCIA: ${(p.experiencia || []).map(x => `${x.onde} (${x.quando}): ${x.papel}`).join(' | ')}. Softwares: ${(p.softwares || []).join(', ')}.`,
+    `PROJETOS DA CARTILHA: ${(d.projetos || []).map(x => `${x.titulo} [${x.tipo}; ${x.ano}; ${x.cliente}; ${x.status}] ${x.escopo}`).join(' | ')}.`,
+    `ORÇAMENTOS (Alcance): ${o.resumo || ''} Obras: ${(o.obras || []).map(x => `${x.orgao} – ${x.obra}${x.locais ? ' (' + x.locais + ')' : ''} ${x.anos || ''}`).join('; ')}.`,
+    `ESTUDOS UFV: ${(e.disciplinas || []).join('; ')}.`,
+    `NORMAS DE REFERÊNCIA: ${(d.normas || []).map(x => `${x.codigo} (${x.tema})`).join('; ')}.`].join('\n');
+}
 
 // ============================================================================
 // PRIMOS 3D no J.A.R.V.I.S. — uma PÁGINA própria (com a cara da marca), menu simples e FUNCIONAL:
@@ -5884,6 +5961,7 @@ async function sincronizarCofre(forcar) {
     } else if (forcar) toast('A Primos 3D já está com os dados mais novos.', 3500);
     try { const k = await (await cofreBruto('dados/conteudo.json')).json(); if (k && k.tipo === 'jarvis-conteudo' && (!conteudoMkt || k.atualizadoEm !== conteudoMkt.atualizadoEm)) { conteudoMkt = k; try { localStorage.setItem('lifeos_conteudo', JSON.stringify(k)); } catch (e) { } if (cc.agente === 'marketing') renderCentral(); } } catch (e) { }
     try { const b = await (await cofreBruto('dados/impressoes.json')).json(); if (b && b.tipo === 'jarvis-impressoes' && (!impressoesBambu || b.lidoEm !== impressoesBambu.lidoEm)) { impressoesBambu = b; try { localStorage.setItem('lifeos_impressoes', JSON.stringify(b)); } catch (e) { } if (cc.agente === 'producao') montarFabrica3D(); } } catch (e) { }
+    try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
     try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } renderCentral(); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
   } catch (e) { if (forcar) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
   jv.sincronizando = false; renderAreasJarvis(); renderPrimosPagina(); renderAjustesJarvis(); setTimeout(renderAreasJarvis, 91000);
@@ -6257,7 +6335,8 @@ function dadosAppIA() {
 function dadosCompletosIA() {
   return `--- PRIMOS 3D (${jvConfig.iaDados === false ? 'o Rafael desligou o envio dos números' : 'números reais, sem nomes'}) ---\n`
     + (jvConfig.iaDados === false ? '(não enviados — responda sem números da empresa e sugira ligar em Ajustes → Privacidade se precisar)' : dadosPrimosIA())
-    + (jvConfig.iaTudo === false ? `\n--- AGENDA (só contagens) ---\n${agendaIA()}` : `\n--- O RESTO DO APP ---\n${dadosAppIA()}`);
+    + (jvConfig.iaTudo === false ? `\n--- AGENDA (só contagens) ---\n${agendaIA()}` : `\n--- O RESTO DO APP ---\n${dadosAppIA()}`)
+    + `\n--- CARTILHA DA ENGENHARIA CIVIL (resumos, sem nomes de clientes) ---\n${dadosEngenhariaIA()}`;
 }
 function sistemaJarvis(ctx) {
   const nome = String(profile.name || 'Rafael').trim().split(/\s+/)[0] || 'Rafael';

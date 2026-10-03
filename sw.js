@@ -1,4 +1,4 @@
-const CACHE_NAME = 'genesis-cache-v48';
+﻿const CACHE_NAME = 'genesis-cache-v49';
 const urlsToCache = [
   './',
   './index.html',
@@ -20,7 +20,7 @@ const urlsToCache = [
   './favicon-64.png'
 ];
 
-// Instala o guardiÃ£o offline e salva os arquivos do seu app
+// Instala o guardiÃƒÂ£o offline e salva os arquivos do seu app
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
@@ -28,7 +28,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// Ao ativar, apaga caches de versÃµes antigas e assume o controle na hora
+// Ao ativar, apaga caches de versÃƒÂµes antigas e assume o controle na hora
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
@@ -39,19 +39,19 @@ self.addEventListener('activate', event => {
   );
 });
 
-// EstratÃ©gia "internet primeiro, cache como reserva":
-// com internet vocÃª sempre recebe a versÃ£o mais nova do app;
-// sem internet, ele abre a Ãºltima versÃ£o salva.
+// EstratÃƒÂ©gia "internet primeiro, cache como reserva":
+// com internet vocÃƒÂª sempre recebe a versÃƒÂ£o mais nova do app;
+// sem internet, ele abre a ÃƒÂºltima versÃƒÂ£o salva.
 self.addEventListener('fetch', event => {
   const req = event.request;
 
-  // deixa passar direto o que nÃ£o Ã© leitura de arquivo do prÃ³prio app
-  // (Ã© aqui que a sincronizaÃ§Ã£o com o Google passa sem interferÃªncia)
+  // deixa passar direto o que nÃƒÂ£o ÃƒÂ© leitura de arquivo do prÃƒÂ³prio app
+  // (ÃƒÂ© aqui que a sincronizaÃƒÂ§ÃƒÂ£o com o Google passa sem interferÃƒÂªncia)
   if (req.method !== 'GET') return;
   if (!req.url.startsWith(self.location.origin)) return;
 
-  // "no-cache": sempre pergunta ao site se hÃ¡ versÃ£o nova (o GitHub Pages deixa o navegador guardar os
-  // arquivos por 10 min; sem isso uma atualizaÃ§Ã£o demorava atÃ© 10 min para aparecer). Se nÃ£o mudou, volta rÃ¡pido.
+  // "no-cache": sempre pergunta ao site se hÃƒÂ¡ versÃƒÂ£o nova (o GitHub Pages deixa o navegador guardar os
+  // arquivos por 10 min; sem isso uma atualizaÃƒÂ§ÃƒÂ£o demorava atÃƒÂ© 10 min para aparecer). Se nÃƒÂ£o mudou, volta rÃƒÂ¡pido.
   const pedido = req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : new Request(req, { cache: 'no-cache' });
   event.respondWith(
     fetch(pedido)
