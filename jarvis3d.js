@@ -279,7 +279,7 @@ function construir(grafo) {
   J.grafo = grafo;
   const { nos, porId } = dispor(grafo);
   J.nos = nos; J.porId = porId;
-  limparMundo(); J.mundo = new THREE.Group(); J.cena.add(J.mundo);
+  limparMundo(); J.mundo = new THREE.Group(); J.cena.add(J.mundo); J.secoesPorArea = null; J.pulsos = null;
   if (J.pal.orbita) aplicarOrbita(); else if (J.qAtual) J.mundo.quaternion.copy(J.qAtual); else J.mundo.rotation.set(0.18, -0.5, 0);
   const pal = J.pal, adit = pal.aditivo;
   const orbe = !!pal.orbe; // visual pérola: áreas = pérolas de verdade (malhas) em vez de bolhas desenhadas
@@ -290,12 +290,13 @@ function construir(grafo) {
   J.pontos = new THREE.Points(geometriaPontos(pos, cor, tamA, alfa, pulso, bolha), materialPontos(0.35, false)); J.pontos.renderOrder = 4; J.mundo.add(J.pontos);
   J.tamBase = Float32Array.from(tamA);
   // ligações: fios finíssimos (sem os fios que saem do centro — o centro agora é a esfera)
-  J.segs = grafo.links.map(l => [porId[l.a.id], porId[l.b.id]]).filter(x => x[0] && x[1] && x[0].tipo !== 'centro' && x[1].tipo !== 'centro');
+  J.segs = grafo.links.map(l => [porId[l.a.id], porId[l.b.id]]).filter(x => x[0] && x[1] && x[0].tipo !== 'centro' && x[1].tipo !== 'centro' && (!pal.holo || (x[0].area === x[1].area && [x[0].tipo, x[1].tipo].sort().join() === 'area,secao')));
   const seg = [], segCor = [];
   J.segs.forEach(([a, b]) => { seg.push(a.p.x, a.p.y, a.p.z, b.p.x, b.p.y, b.p.z); segCor.push(0, 0, 0, 0, 0, 0); });
   const gL = new THREE.BufferGeometry(); gL.setAttribute('position', new THREE.Float32BufferAttribute(seg, 3)); gL.setAttribute('color', new THREE.Float32BufferAttribute(segCor, 3));
   J.linhas = new THREE.LineSegments(gL, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: adit ? 0.55 : orbe ? 0.7 : 0.4, depthWrite: false, blending: mistura() }));
-  J.linhas.renderOrder = 1; J.linhas.visible = !pal.holo; J.mundo.add(J.linhas); // holograma: sem ligações (pedido do Rafael)
+  J.linhas.renderOrder = 1; J.mundo.add(J.linhas); // holograma (fase 7): só ligações discretas área → setores (cor controlada em ligacoesHolo)
+  nos.forEach(n => { n.p0 = n.p.clone(); }); // posição de origem (no foco os setores se abrem em roda em volta da área)
   // nuvens de informação (em volta de cada área) + poeira fina
   const rnd = semente(23); const dPos = [], dCor = [], dTam = [], dAlfa = [], dPulso = [], dBolha = []; const cp = corDe(pal.poeira);
   if (pal.holo) {
@@ -345,8 +346,9 @@ function construir(grafo) {
       [a, b].forEach(s => { s.position.copy(n.p); s.scale.setScalar(10.2); s.renderOrder = 6; s.userData.no = n; s.userData.op0 = 1; J.mundo.add(s); J.icones.push(s); });
       J.moedas = { a, b, idx: 0 }; return;
     }
-    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaIcone(n.area, J.op.icones[n.area]), transparent: true, opacity: pal.iconeLuz ? 0.95 : adit ? 0.55 : orbe ? 0.82 : 0.42, depthWrite: false, depthTest: !orbe, blending: pal.iconeLuz ? THREE.AdditiveBlending : THREE.NormalBlending }));
-    s.position.copy(n.p); s.scale.setScalar(orbe ? 9.2 : 7.4); s.renderOrder = 6; s.userData.no = n; s.userData.op0 = s.material.opacity; J.mundo.add(s); J.icones.push(s);
+    const defs = [J.op.icones[n.area]].concat(J.op.icones[n.area].alt || []), texs = defs.map((d, k) => texturaIcone(n.area + (k ? '#' + k : ''), d)); // fase 7: vários símbolos por área
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: texs[0], transparent: true, opacity: pal.iconeLuz ? 0.95 : adit ? 0.55 : orbe ? 0.82 : 0.42, depthWrite: false, depthTest: !orbe, blending: pal.iconeLuz ? THREE.AdditiveBlending : THREE.NormalBlending }));
+    s.position.copy(n.p); s.scale.setScalar(orbe ? 9.2 : 7.4); s.renderOrder = 6; s.userData.no = n; s.userData.op0 = s.material.opacity; s.userData.texs = texs; s.userData.idx = 0; J.mundo.add(s); J.icones.push(s);
   });
   // holograma: a linha da órbita (anel fino de luz) e três "satélites" correndo nela
   J.satelites = []; J.orbitaLinha = null;
@@ -362,7 +364,7 @@ function construir(grafo) {
     const ar = nos.filter(n => n.tipo === 'area').sort((a, b) => a.ang - b.ang), pts = [];
     ar.forEach((a, i) => { const b = ar[(i + 2) % ar.length]; pts.push(a.p.x, a.p.y, a.p.z, b.p.x, b.p.y, b.p.z); });
     const gC = new THREE.BufferGeometry(); gC.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    J.constel = new THREE.LineSegments(gC, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.07, depthWrite: false, blending: THREE.AdditiveBlending })); J.constel.renderOrder = 1; J.mundo.add(J.constel);
+    J.constel = new THREE.LineSegments(gC, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.07, depthWrite: false, blending: THREE.AdditiveBlending })); J.constel.renderOrder = 1; J.constel.visible = false; J.mundo.add(J.constel); // fase 7: sem a constelação (as ligações agora são área → setores)
   } else J.constel = null;
   construirOrbe();
   construirNucleo();
@@ -434,7 +436,8 @@ function construirOrbe() {
         if (tipo === 0) g.add(arco(0, Math.PI * 2)); else if (tipo === 1) { g.add(arco(0, 1.9)); g.add(arco(2.6, 4.1)); g.add(arco(4.6, 5.9)); } else for (let k = 0; k < 24; k++) g.add(arco(k / 24 * Math.PI * 2, k / 24 * Math.PI * 2 + 0.11));
         g.userData = { vel, op }; giro.add(g); giro.userData.aneis.push(g);
       });
-      giro.scale.setScalar(0.34); J.orbe.add(giro); J.orbe.userData.giro = giro;
+      giro.scale.setScalar(0.34); giro.visible = false; J.orbe.add(giro); // fase 7: sem os anéis em volta (pedido do Rafael)
+ J.orbe.userData.giro = giro;
     }
     const chao = new THREE.Sprite(new THREE.SpriteMaterial({ map: J.tex || (J.tex = texturaAura()), color: corDe(pal.luz), transparent: true, opacity: 0.1, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     chao.scale.set(R * 2.1, R * 0.34, 1); chao.position.set(0, -R * 1.08, 0); chao.renderOrder = -3;
@@ -465,55 +468,51 @@ function construirNucleo() {
   const gm = new THREE.BufferGeometry(); gm.setAttribute('position', new THREE.Float32BufferAttribute(marcas, 3)); g2.add(new THREE.LineSegments(gm, mat(orbe ? 0.22 : 0.3)));
   if (!pal.holo) { g3.add(new THREE.Line(arco(27, 0.3, 1.0, 24), mat(0.45))); g3.add(new THREE.Line(arco(27, 3.4, 4.3, 24), mat(0.45))); } // holograma: sem os arcos longos (davam cara de galáxia) if (!orbe) g3.add(new THREE.Line(arco(30, 1.9, 2.2, 10), mat(0.35)));
   if (pal.holo) g2.visible = false; // holograma: sem a régua circular (cara de galáxia)
+  if (pal.holo) { J.hud.visible = false; halo.renderOrder = 13; miolo.renderOrder = 14; } // fase 7: sem arcos em volta; a luz fica por cima da faixa do Gargantua
   J.hud.add(g1, g2, g3); J.hud.userData = { g1, g2, g3 }; J.hud.renderOrder = 6; J.cena.add(J.hud);
 }
-// --- SINGULARIDADE (holograma, fase 6): o J.A.R.V.I.S. é um ponto de luz com personalidade, não uma esfera.
-// Disco escuro (horizonte) + anel de fótons fino (vira onda quando ele fala) + halo de lente + acréscimo girando.
-// A "pupila" olha para o mouse/celular, pisca de vez em quando e acelera quando ele pensa.
-function texturaAcrescimo() {
+// --- GARGANTUA (holograma, fase 7 — escolha do Rafael, opção B): o J.A.R.V.I.S. é uma luz branca forte no meio do vácuo,
+// com uma faixa de luz difusa atravessando (o disco de acréscimo visto de lado) e um arco de luz curvado por cima (lente),
+// como o buraco negro do Interstellar. Sombra em volta bem suave, SEM circunferências e SEM piscar: só respira.
+// Quando ele fala, a luz e a faixa pulsam com a voz.
+function texturaArco() {
   const T = 512, cv = document.createElement('canvas'); cv.width = cv.height = T; const x = cv.getContext('2d'), m = T / 2;
-  for (let k = 0; k < 360; k++) { const a = k / 360 * Math.PI * 2, brilho = 0.35 + 0.65 * Math.pow((Math.cos(a - 0.6) + 1) / 2, 2.2); // um lado mais claro (efeito Doppler)
-    const g = x.createRadialGradient(m, m, T * 0.2, m, m, T * 0.48); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.42, `rgba(255,255,255,${0.55 * brilho})`); g.addColorStop(0.5, `rgba(255,255,255,${0.9 * brilho})`); g.addColorStop(0.62, `rgba(255,255,255,${0.18 * brilho})`); g.addColorStop(1, 'rgba(255,255,255,0)');
-    x.fillStyle = g; x.beginPath(); x.moveTo(m, m); x.arc(m, m, T * 0.48, a, a + Math.PI / 170); x.closePath(); x.fill(); }
+  x.filter = `blur(${T * 0.025}px)`; x.lineCap = 'round';
+  for (let k = 0; k < 3; k++) { x.strokeStyle = `rgba(255,255,255,${[0.55, 0.35, 0.9][k]})`; x.lineWidth = T * [0.07, 0.12, 0.025][k]; x.beginPath(); x.ellipse(m, m, T * 0.3, T * 0.3, 0, Math.PI * 1.04, Math.PI * 1.96); x.stroke(); }
+  x.filter = `blur(${T * 0.02}px)`; x.strokeStyle = 'rgba(255,255,255,0.22)'; x.lineWidth = T * 0.04; x.beginPath(); x.ellipse(m, m, T * 0.3, T * 0.3, 0, Math.PI * 0.12, Math.PI * 0.88); x.stroke(); // reflexo fraco embaixo
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 function texturaDisco() {
   const T = 256, cv = document.createElement('canvas'); cv.width = cv.height = T; const x = cv.getContext('2d'); const g = x.createRadialGradient(T / 2, T / 2, 0, T / 2, T / 2, T / 2);
-  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.62, 'rgba(0,0,0,1)'); g.addColorStop(0.8, 'rgba(0,0,0,0.6)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, T, T);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(0.5, 'rgba(0,0,0,0.8)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, T, T);
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
 function construirSingularidade() {
   if (J.sing) { J.cena.remove(J.sing); J.sing.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.material) { if (o.material.map && o.material.map !== J.tex) o.material.map.dispose(); o.material.dispose(); } }); J.sing = null; }
   if (!J.pal.holo) return;
   const g = new THREE.Group(), tex = J.tex || (J.tex = texturaAura());
-  const lente = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, color: '#ffffff', transparent: true, opacity: 0.1, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending })); lente.scale.setScalar(120);
-  const acres = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaAcrescimo(), color: '#ffffff', transparent: true, opacity: 0.55, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending })); acres.scale.set(58, 58, 1);
-  const disco = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaDisco(), transparent: true, opacity: 1, depthWrite: false, depthTest: false })); disco.scale.setScalar(26);
-  const N = 192, pos = new Float32Array((N + 1) * 3); const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const foton = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.95, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending }));
-  const foton2 = new THREE.Line(geo.clone(), new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.3, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending }));
-  [lente, acres, disco, foton2, foton].forEach((o, i) => { o.renderOrder = 7 + i; g.add(o); });
-  g.userData = { lente, acres, disco, foton, foton2, N, piscarEm: performance.now() + 4000, piscar: 0 };
+  const luz = (map, op) => new THREE.Sprite(new THREE.SpriteMaterial({ map, color: '#ffffff', transparent: true, opacity: op, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending }));
+  const lente = luz(tex, 0.1); lente.scale.setScalar(130);
+  const faixa = luz(tex, 0.5); faixa.scale.set(170, 26, 1);      // a faixa larga e difusa
+  const fio = luz(tex, 0.6); fio.scale.set(120, 6, 1);           // o miolo fino e brilhante da faixa
+  const arco = luz(texturaArco(), 0.4); arco.scale.setScalar(58); // o arco curvado por cima
+  const disco = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaDisco(), transparent: true, opacity: 0.42, depthWrite: false, depthTest: false })); disco.scale.setScalar(30); // sombra suave (pedido: não tão escura)
+  const corona = luz(tex, 0.45); corona.scale.setScalar(48);
+  [lente, faixa, arco, disco, corona, fio].forEach((o, i) => { o.renderOrder = 7 + i; g.add(o); });
+  g.userData = { lente, faixa, fio, arco, disco, corona, piscar: 0 };
   J.sing = g; J.cena.add(g);
 }
 function atualizarSingularidade(t, onda, fala) {
-  const s = J.sing; if (!s) return; const u = s.userData, agora = performance.now();
-  s.quaternion.copy(J.camera.quaternion); // sempre de frente para você
-  // piscar: a cada 6–11 s o "olho" fecha e abre (mais rápido quando ele pensa)
-  if (agora > u.piscarEm) { u.piscar = 1; u.piscarEm = agora + (J.pensando ? 3000 : 6000 + Math.random() * 5000); }
-  u.piscar = Math.max(0, u.piscar - 0.09); const fecha = Math.sin(u.piscar * Math.PI);
-  const r0 = 13 * (1 + onda * 0.05 + J.energia * 0.08 + fala * 0.12), arr = u.foton.geometry.attributes.position.array, arr2 = u.foton2.geometry.attributes.position.array;
-  for (let k = 0; k <= u.N; k++) { const a = k / u.N * Math.PI * 2;
-    const ondaVoz = fala * (Math.sin(a * 7 + t * 9) * 0.6 + Math.sin(a * 13 - t * 13) * 0.4) * 2.4; // a voz dele vira onda no anel
-    const tremor = J.energia * Math.sin(a * 5 + t * 6) * 0.5, r = r0 + ondaVoz + tremor;
-    arr[k * 3] = Math.cos(a) * r; arr[k * 3 + 1] = Math.sin(a) * r * (1 - fecha * 0.85); arr[k * 3 + 2] = 0;
-    arr2[k * 3] = Math.cos(a) * (r * 1.55 + Math.sin(a * 3 + t) * 0.6); arr2[k * 3 + 1] = Math.sin(a) * (r * 1.55) * (1 - fecha * 0.85); arr2[k * 3 + 2] = 0; }
-  u.foton.geometry.attributes.position.needsUpdate = true; u.foton2.geometry.attributes.position.needsUpdate = true;
-  u.acres.material.rotation += 0.004 + J.energia * 0.03 + fala * 0.02; u.acres.scale.set(58 * (1 + fala * 0.15), 58 * (1 + fala * 0.15) * (1 - fecha * 0.8), 1);
-  u.acres.material.opacity = (0.42 + onda * 0.15 + fala * 0.3) * (J.foco ? 0.4 : 1);
-  u.lente.material.opacity = (0.08 + onda * 0.05 + J.energia * 0.08 + fala * 0.12) * (J.foco ? 0.5 : 1);
-  u.disco.scale.set(26, 26 * (1 - fecha * 0.85), 1);
-  u.foton.material.opacity = (J.foco ? 0.5 : 0.95); u.foton2.material.opacity = (0.22 + onda * 0.1) * (J.foco ? 0.4 : 1);
+  const s = J.sing; if (!s) return; const u = s.userData, f = J.foco ? 0.55 : 1;
+  s.quaternion.copy(J.camera.quaternion); s.rotateZ(-0.08); // sempre de frente para você, a faixa levemente inclinada
+  s.position.copy(J.nucleo ? J.nucleo.position : _vc.set(0, 0, 0));
+  const voz = fala * (0.6 + 0.4 * Math.sin(t * 9) * Math.sin(t * 5.3));
+  u.lente.material.opacity = (0.08 + onda * 0.05 + J.energia * 0.08 + voz * 0.12) * f;
+  u.faixa.scale.set(170 * (1 + voz * 0.12), 26 * (1 + onda * 0.08 + voz * 0.3), 1); u.faixa.material.opacity = (0.38 + onda * 0.14 + J.energia * 0.15 + voz * 0.3) * f;
+  u.fio.scale.set(120 * (1 + onda * 0.05 + voz * 0.1), 6, 1); u.fio.material.opacity = (0.5 + onda * 0.2 + voz * 0.3) * f;
+  u.arco.scale.setScalar(58 * (1 + onda * 0.03 + voz * 0.06)); u.arco.material.opacity = (0.3 + onda * 0.12 + J.energia * 0.15 + voz * 0.25) * f;
+  u.corona.scale.setScalar(48 * (1 + onda * 0.22 + J.energia * 0.2 + voz * 0.5)); u.corona.material.opacity = (0.32 + onda * 0.22 + voz * 0.3) * f;
+  u.disco.material.opacity = 0.42 * f;
 }
 function construirAneis() {
   if (J.aneis) { J.cena.remove(J.aneis); J.aneis.traverse(x => { if (x.geometry) x.geometry.dispose(); if (x.material) x.material.dispose(); }); }
@@ -588,7 +587,7 @@ function atualizarRotulos() {
       if (lugar) { ocupados.push(opcoes[lugar]); el._r = opcoes[lugar]; } else visivel = false;
     }
     if (!visivel) { if (el.style.opacity !== '0') el.style.opacity = '0'; return; }
-    const op = n.tipo === 'area' ? (J.foco ? (n.area === J.foco ? 1 : 0.35) : 0.55 + frente * 0.45) : 0.45 + frente * 0.55;
+    const op = n.tipo === 'area' ? (J.foco ? (n.area === J.foco ? 1 : J.pal.holo ? 0 : 0.35) : 0.55 + frente * 0.45) : 0.45 + frente * 0.55;
     const r = el._r;
     el.style.transform = `translate3d(${r.x0.toFixed(1)}px, ${r.y0.toFixed(1)}px, 0)`;
     el.dataset.lugar = lugar;
@@ -642,7 +641,7 @@ function spinParaFrente(p) { const o = orbitaEstado(); const th = Math.atan2(p.z
 /** Gira o mundo para que o ponto p (coordenadas do mundo) fique de frente para a câmera. */
 function trazerParaFrente(p) {
   J.giroEntrada = 0; // tocou numa área durante a volta da abertura: o foco manda
-  if (J.pal.orbita) { const o = orbitaEstado(); J.raioFoco = p.length(); o.spinAlvo = spinParaFrente(p); o.tiltAlvo = 0.02; o.vel = 0; return; } // órbita quase reta: a área para no meio da tela, não embaixo
+  if (J.pal.orbita) { const o = orbitaEstado(); J.raioFoco = p.length(); o.spinAlvo = spinParaFrente(p) + (J.pal.holo ? 0.5 : 0); o.tiltAlvo = 0.02; o.vel = 0; return; } // órbita quase reta: a área para no meio da tela, não embaixo
   const atual = p.clone().applyQuaternion(J.mundo.quaternion); if (atual.length() < 1) return;
   J.raioFoco = p.length(); // o empurrão na tela é medido na profundidade do que está em foco
   const q = new THREE.Quaternion().setFromUnitVectors(atual.normalize(), new THREE.Vector3(0, 0, 1));
@@ -650,7 +649,7 @@ function trazerParaFrente(p) {
 }
 function focarArea(area, avisar) {
   const a = J.porId['a-' + area]; if (!a) return;
-  trazerParaFrente(a.p); J.relAlvo = REL_AREA; J.autoGiro = false; J.velRot = { x: 0, y: 0 }; J.sel = null;
+  trazerParaFrente(a.p); J.relAlvo = J.pal.holo ? 0.9 : REL_AREA; J.autoGiro = false; J.velRot = { x: 0, y: 0 }; J.sel = null;
   aplicarFoco(area); tocar();
   if (avisar !== false && J.op.onArea) J.op.onArea(area);
 }
@@ -736,9 +735,67 @@ function frenteAreas(t) {
   (J.bordas || []).forEach(b => { const f = b.userData.no ? fator(b.userData.no) : 1; b.scale.setScalar((0.62 + 0.6 * liso(f)) * 1.03); b.material.uniforms.uForca.value = 0.6 + 1.1 * liso(f); });
   (J.icones || []).forEach(s => { const n = s.userData.no; if (!n) return; const f = fator(n), mostra = liso(Math.max(0, Math.min(1, (f - 0.3) / 0.45)));
     s.scale.setScalar((n.area === 'mercado' ? 10.2 : 9.2) * (0.62 + 0.6 * liso(f))); s.material.rotation = Math.sin(t * 0.9 + n.i) * 0.12 * mostra; // ícone vivo: balança de leve
-    if (J.moedas && (s === J.moedas.a || s === J.moedas.b)) { s.userData.foco = mostra; } else s.material.opacity = (s.userData.op0 || 0.95) * mostra; });
+    s.userData.mostra = mostra; if (J.moedas && (s === J.moedas.a || s === J.moedas.b)) { s.userData.foco = mostra; } else s.material.opacity = (s.userData.op0 || 0.95) * mostra; });
   (J.auras || []).forEach(s => { const n = s.userData.no; if (!n) return; const f = fator(n); s.material.opacity = (s.userData.op0 || 0.2) * (0.25 + 0.9 * liso(f)); s.scale.setScalar(22 * (0.7 + 0.6 * liso(f))); });
   J.frente = {}; (J.perolas || []).forEach(m => { J.frente[m.userData.no.id] = m.userData.f; });
+}
+// --- fase 7: área que passa NA FRENTE do J.A.R.V.I.S. é desenhada por cima dele (antes a luz central cobria a área = o "bug") ---
+const _vc = new THREE.Vector3();
+function ordemFrente() {
+  if (!J.mundo) return; J.mundo.updateMatrixWorld(); J.camera.updateMatrixWorld();
+  const zc = _vc.set(0, 0, 0).applyMatrix4(J.camera.matrixWorldInverse).z;
+  [J.perolas, J.bordas, J.icones, J.auras].forEach(lista => (lista || []).forEach(o => {
+    const n = o.userData.no; if (!n) return; if (o.userData.ro0 === undefined) o.userData.ro0 = o.renderOrder;
+    const z = _vf.copy(n.p).applyMatrix4(J.mundo.matrixWorld).applyMatrix4(J.camera.matrixWorldInverse).z;
+    o.renderOrder = o.userData.ro0 + (z > zc ? 20 : 0);
+  }));
+}
+// --- fase 7: cada área tem vários símbolos e troca com o tempo (holograma: troca enquanto passa por trás; área aberta: a cada 6 s) ---
+function trocarIcones(t) {
+  (J.icones || []).forEach(s => {
+    const u = s.userData; if (!u.texs || u.texs.length < 2) return;
+    const muda = i => { if (u.idx !== i) { u.idx = i; s.material.map = u.texs[i]; } };
+    if (J.pal.holo && !J.foco) { if (u.mostra > 0.6) u.vista = true; if (u.vista && u.mostra < 0.03) { u.vista = false; muda((u.idx + 1) % u.texs.length); } return; }
+    if (J.foco && u.no.area !== J.foco) return;
+    const P = J.foco ? 6 : 8, tt = t + u.no.i * 1.3, fr = tt % P; muda(Math.floor(tt / P) % u.texs.length);
+    s.material.opacity = (u.op0 || 0.9) * (J.foco ? 1 : (u.foco === undefined ? 1 : u.foco)) * Math.min(1, fr / 0.45, (P - fr) / 0.45); // apaga e acende na troca
+  });
+}
+// --- fase 7 (holograma): os setores de cada área ficam numa rodinha em volta dela, ligados por fios bem discretos;
+// ao abrir a área, a roda cresce, os nomes aparecem e pontinhos de luz correm pelos fios (os agentes trabalhando).
+// O J.A.R.V.I.S. vai para a esquerda e a área fica à direita.
+const _cPreto = new THREE.Color(0, 0, 0), _vr = new THREE.Vector3(), _vu = new THREE.Vector3(), _qi = new THREE.Quaternion();
+function arranjoHolo(t) {
+  if (!J.pal.holo || !J.mundo || !J.pontos) return;
+  _qi.copy(J.mundo.quaternion).invert();
+  _vr.set(1, 0, 0).applyQuaternion(J.camera.quaternion).applyQuaternion(_qi); _vu.set(0, 1, 0).applyQuaternion(J.camera.quaternion).applyQuaternion(_qi);
+  const alfa = J.pontos.geometry.getAttribute('aAlfa'), tam = J.pontos.geometry.getAttribute('aTam'), pos = J.pontos.geometry.getAttribute('position');
+  const porArea = J.secoesPorArea || (J.secoesPorArea = J.nos.filter(n => n.tipo === 'secao').reduce((m, n) => { (m[n.area] = m[n.area] || []).push(n); return m; }, {}));
+  J.nos.forEach(n => {
+    if (n.tipo === 'item') { alfa.array[n.i] = n.id === J.sel ? 1 : 0; return; }
+    if (n.tipo !== 'secao') return;
+    const a = J.porId['a-' + n.area]; if (!a) return;
+    const lista = porArea[n.area], k = lista.indexOf(n), aberta = J.foco === n.area, f = aberta ? 1 : J.foco ? 0 : (J.frente ? (J.frente[a.id] ?? 0.5) : 0.5);
+    const esc = aberta ? 1 : 0.62 + 0.6 * f * f * (3 - 2 * f), RR = aberta ? 20 : 11 * esc, ang = k / lista.length * Math.PI * 2 + t * (aberta ? 0.05 : 0.18) - Math.PI / 2;
+    _vf.copy(a.p).addScaledVector(_vr, Math.cos(ang) * RR).addScaledVector(_vu, Math.sin(ang) * RR * (aberta ? 1 : 0.62));
+    n.p.lerp(_vf, 0.12); pos.setXYZ(n.i, n.p.x, n.p.y, n.p.z);
+    alfa.array[n.i] = aberta ? 1 : J.foco ? 0 : 0.1 + 0.55 * f * f; tam.array[n.i] = (J.tamBase[n.i] || 3) * (aberta ? 1.1 : 0.55 * esc);
+  });
+  pos.needsUpdate = alfa.needsUpdate = tam.needsUpdate = true;
+  // fios: só área → setor; quase invisíveis na visão geral, mais firmes na área aberta
+  const lp = J.linhas.geometry.getAttribute('position'), lc = J.linhas.geometry.getAttribute('color'), base = corDe(J.pal.linha);
+  J.segs.forEach(([a, b], k) => {
+    lp.setXYZ(k * 2, a.p.x, a.p.y, a.p.z); lp.setXYZ(k * 2 + 1, b.p.x, b.p.y, b.p.z);
+    const sec = a.tipo === 'secao' ? a : b, ar = a.tipo === 'area' ? a : b;
+    let peso = 0;
+    if (sec.tipo === 'secao' && ar.tipo === 'area' && sec.area === ar.area) { const f = J.foco ? (J.foco === ar.area ? 1 : 0) : (J.frente ? (J.frente[ar.id] ?? 0.5) : 0.5); peso = J.foco ? (f ? 0.3 : 0) : 0.03 + 0.13 * f * f; }
+    const c = peso ? J.fundo.clone().lerp(base, peso) : _cPreto; lc.setXYZ(k * 2, c.r, c.g, c.b); lc.setXYZ(k * 2 + 1, c.r, c.g, c.b);
+  });
+  lp.needsUpdate = lc.needsUpdate = true;
+  // pontinhos de luz correndo da área para cada setor (só na área aberta)
+  if (!J.pulsos) { J.pulsos = []; for (let k = 0; k < 10; k++) { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: J.tex || (J.tex = texturaAura()), color: '#ffffff', transparent: true, opacity: 0, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending })); s.scale.setScalar(2.6); s.renderOrder = 30; J.mundo.add(s); J.pulsos.push(s); } }
+  const lista = J.foco ? (porArea[J.foco] || []) : [], a = J.foco ? J.porId['a-' + J.foco] : null;
+  J.pulsos.forEach((s, k) => { const n = lista[k]; if (!n || !a) { s.material.opacity = 0; return; } const pr = (t * 0.35 + k * 0.37) % 1; s.position.copy(a.p).lerp(n.p, pr); s.material.opacity = 0.9 * Math.sin(pr * Math.PI); });
 }
 // --- laço de desenho ---
 function quadro() {
@@ -761,7 +818,8 @@ function quadro() {
   const d = dist(); J.prof += ((J.foco ? d - J.raioFoco : d) - J.prof) * 0.09;
   const u = 2 * Math.max(20, J.prof) * Math.tan(J.camera.fov * Math.PI / 360) / (J.host.clientHeight || 1); // unidades do mundo por pixel (na profundidade do foco)
   J.margem = (J.margem || 0) + ((J.foco ? 0 : (J.margemAlvo || 0)) - (J.margem || 0)) * 0.08; // espaço para a coluna de avisos (PC)
-  const cx = -(J.ox + J.margem) * u, cy = J.oy * u;
+  let cx = -(J.ox + J.margem) * u, cy = J.oy * u;
+  if (J.pal.holo) { let alvo = 0; const fa = J.foco && J.porId["a-" + J.foco]; if (fa) { J.mundo.updateMatrixWorld(); alvo = _vf.copy(fa.p).applyMatrix4(J.mundo.matrixWorld).x * 0.5; } J.focoCx = (J.focoCx || 0) + (alvo - (J.focoCx || 0)) * 0.08; cx += J.focoCx; } // fase 7: área aberta à direita, o J.A.R.V.I.S. à esquerda
   const pr = J.par; pr.x += (pr.xa - pr.x) * 0.045; pr.y += (pr.ya - pr.y) * 0.045; // paralaxe: o mouse (PC) ou a inclinação do celular movem a câmera de leve
   J.camera.position.set(cx + pr.x * d * 0.16, cy + pr.y * d * 0.11, d); J.camera.lookAt(cx, cy, 0);
   J.cena.fog.near = d - R * 0.4; J.cena.fog.far = d + R * 2.2;
@@ -780,12 +838,13 @@ function quadro() {
   }
   if (J.pal.holo && J.nucleo) { // a pupila: pequena, intensa, olha para o mouse/celular
     const { halo, miolo } = J.nucleo.userData, fecha = J.sing ? Math.sin(J.sing.userData.piscar * Math.PI) : 0;
-    miolo.scale.set(4.6 + onda * 1.4 + J.energia * 2 + fala * 4, (4.6 + onda * 1.4 + J.energia * 2 + fala * 4) * (1 - fecha * 0.9), 1);
-    halo.scale.setScalar(16 * (1 + onda * 0.25 + fala * 0.7)); halo.material.opacity = Math.min(1, 0.5 + onda * 0.3 + fala * 0.4) * (J.foco ? 0.5 : 1);
-    miolo.position.set(J.par.x * 2.6, J.par.y * 2, 0).applyQuaternion(J.camera.quaternion); halo.position.copy(miolo.position);
+    const m0 = 9 + onda * 2.6 + J.energia * 2.5 + fala * 5; miolo.scale.set(m0, m0 * (1 - fecha * 0.9), 1); miolo.material.opacity = 1; // fase 7: luz maior e mais forte, só respira
+    halo.scale.setScalar(24 * (1 + onda * 0.3 + fala * 0.7)); halo.material.opacity = Math.min(1, 0.7 + onda * 0.3 + fala * 0.4) * (J.foco ? 0.6 : 1);
+    miolo.position.set(0, 0, 0); halo.position.set(0, 0, 0);
   }
   atualizarSingularidade(t, onda, fala);
   if (J.pal.holo && !J.foco) frenteAreas(t);
+  arranjoHolo(t); ordemFrente(); trocarIcones(t);
   if (J.orbe) { const [of, od] = J.pal.cascaOp || [0.5, 0.35]; J.orbe.userData.fora.material.opacity = (J.foco ? of * 0.6 : of) + onda * 0.04; J.orbe.userData.dentro.material.opacity = J.foco ? od * 0.5 : od; }
   if (J.orbe && J.orbe.userData.grade) { // holograma: a grade gira devagar e a borda de luz respira (mais forte quando ele pensa)
     const u2 = J.orbe.userData; if (u2.giro) u2.giro.userData.aneis.forEach(g => { g.rotation.y += g.userData.vel * 0.016 * (1 + J.energia * 3); g.children.forEach(l => { l.material.opacity = g.userData.op * (J.foco ? 0.35 : 1) * (0.8 + onda * 0.3); }); }); u2.grade.rotation.y = t * 0.06; u2.grade.rotation.x = Math.sin(t * 0.13) * 0.12;

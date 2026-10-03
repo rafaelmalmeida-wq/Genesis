@@ -4742,15 +4742,15 @@ function iconeAreaSVG(id, cor) { return `<svg viewBox="0 0 64 64" fill="none" st
 
 /** TEMAS do J.A.R.V.I.S. (Ajustes → Aparência). Cada um muda o 3D (jarvis3d.js), a página inicial e o chat. */
 const TEMAS_JARVIS = {
-  perola: { nome: 'Pérola', desc: 'Branco-pérola quente, luz dourada. O padrão.', escuro: false, bola: 'radial-gradient(circle at 35% 30%, #ffffff, #f1e8da 45%, #d8cab4 78%, #b9a98f)', fundo: '#f2f0eb', luz: '#f2c27a' },
+  perola: { nome: 'Pérola', desc: 'Branco-pérola quente, luz dourada.', escuro: false, bola: 'radial-gradient(circle at 35% 30%, #ffffff, #f1e8da 45%, #d8cab4 78%, #b9a98f)', fundo: '#f2f0eb', luz: '#f2c27a' },
   vidro: { nome: 'Holograma de vidro', desc: 'Escuro, esfera de vidro e áreas em órbita.', escuro: true, bola: 'radial-gradient(circle at 34% 28%, rgba(255,255,255,.9) 0 4%, rgba(127,212,255,.35) 12%, rgba(13,27,42,.9) 48%, #03060b 72%), radial-gradient(circle, transparent 60%, rgba(127,212,255,.8) 71%, transparent 74%)', fundo: '#03060b', luz: '#7fd4ff' },
   cristal: { nome: 'Cristal', desc: 'Vidro frio e limpo, luz azul-gelo.', escuro: false, bola: 'radial-gradient(circle at 35% 30%, #ffffff, #e9f0f8 45%, #c6d3e2 78%, #9fb0c4)', fundo: '#edf1f5', luz: '#86bfff' },
   grafite: { nome: 'Grafite', desc: 'Titânio escuro acetinado, luz âmbar.', escuro: true, bola: 'radial-gradient(circle at 35% 30%, #8a9098, #4d5259 45%, #2b2e33 78%, #17191c)', fundo: '#1d1f23', luz: '#f2c27a' },
-  escuro: { nome: 'Holograma', desc: 'Preto com HUD luminoso, estilo filme.', escuro: true, bola: 'radial-gradient(circle at 50% 50%, #ffffff 0 8%, rgba(200,210,230,.5) 20%, rgba(30,34,42,.9) 55%, #050608)', fundo: '#050608', luz: '#ffffff' }
+  escuro: { nome: 'Holograma', desc: 'Vácuo preto com a luz do J.A.R.V.I.S. no meio (Gargantua). O padrão.', escuro: true, bola: 'radial-gradient(circle at 50% 50%, #ffffff 0 8%, rgba(200,210,230,.5) 20%, rgba(30,34,42,.9) 55%, #050608)', fundo: '#050608', luz: '#ffffff' }
 };
 /** Tema atual do J.A.R.V.I.S. (preferência do aparelho). Quem estava no escuro antigo volta ao pérola uma vez.
- *  O Holograma de vidro (fase 5) é uma opção em Ajustes → Aparência; o padrão continua o pérola (decisão do Rafael). */
-function visualJarvis() { if (typeof prefs === 'undefined') return 'perola'; if (!prefs.jvPerolaAplicado) { prefs.jvPerolaAplicado = true; prefs.jarvisVisual = 'perola'; salvarPrefsJarvis(); } return TEMAS_JARVIS[prefs.jarvisVisual] ? prefs.jarvisVisual : 'perola'; }
+ *  O Holograma de vidro (fase 5) é uma opção em Ajustes → Aparência; desde a fase 7 o padrão é o Holograma (Gargantua). */
+function visualJarvis() { if (typeof prefs === 'undefined') return 'escuro'; if (!prefs.jvHoloPadrao) { prefs.jvHoloPadrao = true; prefs.jvPerolaAplicado = true; prefs.jarvisVisual = 'escuro'; salvarPrefsJarvis(); } return TEMAS_JARVIS[prefs.jarvisVisual] ? prefs.jarvisVisual : 'escuro'; } // fase 7: Holograma (Gargantua) é o padrão — decisão do Rafael 03/10/2026 (migração única; ele ainda pode trocar em Ajustes)
 function temaEscuroJarvis() { return !!(TEMAS_JARVIS[visualJarvis()] || {}).escuro; }
 function salvarPrefsJarvis() { try { localStorage.setItem('lifeos_prefs', JSON.stringify(prefs)); } catch (e) { } } // preferência do aparelho, como a câmera do cérebro
 function salvarJvConfig() { localStorage.setItem('lifeos_jarvis_config', JSON.stringify(jvConfig)); } // chaves só deste aparelho (não sincroniza)
@@ -4794,7 +4794,19 @@ function aplicarVisualJarvis() {
 function escolherTemaJarvis(v) { if (!TEMAS_JARVIS[v]) return; prefs.jarvisVisual = v; salvarPrefsJarvis(); aplicarVisualJarvis(); renderAjustesJarvis(); toast(`Tema ${TEMAS_JARVIS[v].nome} aplicado.`, 2500); }
 function trocarVisualJarvis() { const ks = Object.keys(TEMAS_JARVIS); escolherTemaJarvis(ks[(ks.indexOf(visualJarvis()) + 1) % ks.length]); }
 /** Símbolos das áreas para o 3D (vetor, desenhado em alta resolução lá dentro). */
-function iconesPara3D() { const m = {}; AREAS_CEREBRO.forEach(a => { m[a.id] = IMG_AREA[a.id] ? { img: IMG_AREA[a.id] } : { svg: iconeAreaSVG(a.id, '#ffffff') }; }); return m; }
+// fase 7: cada área tem outros símbolos que se revezam no 3D (troca quando passa por trás / a cada 6 s com a área aberta)
+const ICONES_AREA_ALT = {
+  primos: [{ img: 'img/primos-p.png' }, '<rect x="10" y="8" width="44" height="48" rx="5"/><path d="M10 19H54"/><path d="M27 19V26H37V19"/><path d="M32 26V31"/><path d="M22 49H42V43H22Z"/><path d="M17 56V51M47 56V51" opacity=".5"/>'],
+  eng: ['<path d="M14 56V10"/><path d="M8 56H24"/><path d="M14 10H54"/><path d="M14 19L23 10"/><path d="M46 10V26"/><rect x="41" y="26" width="10" height="7"/><path d="M14 23L46 10" opacity=".55"/>', '<path d="M10 54V10L54 54Z"/><path d="M18 46V32L32 46Z"/><path d="M10 20H14M10 30H16M10 40H14" opacity=".6"/>'],
+  sst: ['<path d="M8 44H56"/><path d="M12 44C12 30 20 20 32 20C44 20 52 30 52 44"/><path d="M28 20V14H36V20"/><path d="M24 23V34M40 23V34" opacity=".6"/><path d="M10 44V49H54V44"/>', '<path d="M32 9L57 53H7Z"/><path d="M32 25V38"/><path d="M32 45V46"/>'],
+  academia: ['<path d="M32 53C14 41 8 31 12 22C16 13 27 13 32 22C37 13 48 13 52 22C56 31 50 41 32 53Z"/><path d="M14 33H24L28 26L34 40L38 33H50" opacity=".7"/>', '<path d="M24 22C24 13 40 13 40 22"/><path d="M22 22H42"/><circle cx="32" cy="38" r="16"/>'],
+  dia: ['<circle cx="32" cy="32" r="10"/><path d="M32 8V14M32 50V56M8 32H14M50 32H56M15 15L19 19M45 45L49 49M15 49L19 45M45 19L49 15"/>', '<path d="M12 26H44V40C44 48 38 54 28 54C18 54 12 48 12 40Z"/><path d="M44 30H49C53 30 55 33 55 36C55 40 52 42 48 42H44"/><path d="M20 10C18 14 22 16 20 20M28 10C26 14 30 16 28 20M36 10C34 14 38 16 36 20" opacity=".6"/>'],
+  familia: ['<circle cx="22" cy="20" r="7"/><circle cx="42" cy="20" r="7"/><path d="M10 54V44C10 36 15 32 22 32C29 32 32 36 32 40C32 36 35 32 42 32C49 32 54 36 54 44V54"/>', '<path d="M32 55V30"/><path d="M32 40C24 40 16 34 16 24C16 16 23 10 32 10C41 10 48 16 48 24C48 34 40 40 32 40Z"/><path d="M24 55H40"/>']
+};
+function iconesPara3D() {
+  const svg = d => `<svg viewBox="0 0 64 64" fill="none" stroke="#ffffff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+  const m = {}; AREAS_CEREBRO.forEach(a => { m[a.id] = IMG_AREA[a.id] ? { img: IMG_AREA[a.id] } : { svg: iconeAreaSVG(a.id, '#ffffff') }; m[a.id].alt = (ICONES_AREA_ALT[a.id] || []).map(d => typeof d === 'string' ? { svg: svg(d) } : d); }); return m;
+}
 
 function renderJarvis() {
   const g = montarGrafoCerebro();
