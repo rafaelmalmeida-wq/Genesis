@@ -5906,7 +5906,8 @@ function primosProducao(pc) {
   return h;
 }
 async function fotoCofre(caminho) {
-  if (!jv.fotos.has(caminho)) jv.fotos.set(caminho, cofreBruto(caminho).then(r => r.blob()).then(b => URL.createObjectURL(b)).catch(() => ''));
+  const tipo = /\.svg$/i.test(caminho) ? 'image/svg+xml' : /\.webp$/i.test(caminho) ? 'image/webp' : ''; // SVG só aparece com o tipo certo
+  if (!jv.fotos.has(caminho)) jv.fotos.set(caminho, cofreBruto(caminho).then(r => r.blob()).then(b => URL.createObjectURL(tipo ? new Blob([b], { type: tipo }) : b)).catch(() => ''));
   return jv.fotos.get(caminho);
 }
 function carregarFotosPrimos() { if (!claudeConfigurado()) return; document.querySelectorAll('#jv-primos img[data-cofre]').forEach(async img => { const u = await fotoCofre(img.dataset.cofre); if (u) { img.src = u; img.classList.add('ok'); } }); }
@@ -5983,7 +5984,8 @@ async function sincronizarCofre(forcar) {
     } else if (forcar) toast('A Primos 3D já está com os dados mais novos.', 3500);
     try { const k = await (await cofreBruto('dados/conteudo.json')).json(); if (k && k.tipo === 'jarvis-conteudo' && (!conteudoMkt || k.atualizadoEm !== conteudoMkt.atualizadoEm)) { conteudoMkt = k; try { localStorage.setItem('lifeos_conteudo', JSON.stringify(k)); } catch (e) { } if (cc.agente === 'marketing') renderCentral(); } } catch (e) { }
     try { const b = await (await cofreBruto('dados/impressoes.json')).json(); if (b && b.tipo === 'jarvis-impressoes' && (!impressoesBambu || b.lidoEm !== impressoesBambu.lidoEm)) { impressoesBambu = b; try { localStorage.setItem('lifeos_impressoes', JSON.stringify(b)); } catch (e) { } if (cc.agente === 'producao') montarFabrica3D(); } } catch (e) { }
-    try { const dv = await (await cofreBruto('dados/dev.json')).json(); if (dv && dv.tipo === 'jarvis-dev') { devDados = dv; try { localStorage.setItem('lifeos_dev', JSON.stringify(dv)); } catch (e) { } } } catch (e) { } // projetos do Desenvolvedor (fase 8)
+    try { const dv = await (await cofreBruto('dados/dev.json')).json(); if (dv && dv.tipo === 'jarvis-dev') { const mudou = JSON.stringify(dv) !== JSON.stringify(devDados); devDados = dv; try { localStorage.setItem('lifeos_dev', JSON.stringify(dv)); } catch (e) { } if (mudou && cc.agente === 'dev') { renderCentral(); renderPaginaAgente(); } } } catch (e) { } // projetos do Desenvolvedor (fase 8)
+    try { const g = await (await cofreBruto('dados/giros.json')).json(); if (g && g.tipo === 'jarvis-giros' && (!girosDados || g.atualizadoEm !== girosDados.atualizadoEm)) { girosDados = g; try { localStorage.setItem('lifeos_giros', JSON.stringify(g)); } catch (e) { } if (cc.agente === 'producao') { renderCentral(); renderPaginaAgente(); } } } catch (e) { } // miniaturas 3D da fila
     try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
     try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } renderCentral(); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
   } catch (e) { if (forcar) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
@@ -7556,9 +7558,9 @@ const ORIGEM_FILA = { voz: '🎙 você', chat: '💬 você', app: '✎ você', a
 /** Painel do agente de Produção: fila do dia (nuvem) + a sua fila + a fábrica em 3D + datas que vêm aí. */
 function htmlAgenteProducao(a) {
   const r = relatorioAgente('producao') || {}, abertos = filaImpressao.filter(f => f.status !== 'feito'), feitos = filaImpressao.filter(f => f.status === 'feito').slice(-5).reverse();
-  const dia = (r.filaDia || []).length ? ccBloco(`Fila do dia · ${esc(isoParaBR(r.dia || '').slice(0, 5))}`, `<ol class="cc-filadia">${r.filaDia.map(f => `<li><span><b>${esc(f.titulo)}${f.qtd ? ` · ${esc(String(f.qtd))} un.` : ''}</b><small>${esc([f.maquina, f.horas ? f.horas + ' h' : '', f.motivo].filter(Boolean).join(' · '))}</small></span>${f.origem ? `<em>${esc(ORIGEM_FILA[f.origem] || f.origem)}</em>` : ''}</li>`).join('')}</ol>`) : ccBloco('Fila do dia', '<p class="cc-txt">A primeira fila do dia sai na próxima rodada (7h) — ou toque em <b>▶ Rodar agora</b>.</p>');
+  const dia = (r.filaDia || []).length ? ccBloco(`Fila do dia · ${esc(isoParaBR(r.dia || '').slice(0, 5))}`, `<ol class="cc-filadia">${r.filaDia.map(f => `<li>${miniaturaFila(f.titulo) ? miniFilaHTML(f.titulo, COR_FILA[semAcentoCer(f.cor)] || '#8e8e93') : ''}<span><b>${esc(f.titulo)}${f.qtd ? ` · ${esc(String(f.qtd))} un.` : ''}</b><small>${esc([f.maquina, f.horas ? f.horas + ' h' : '', f.motivo].filter(Boolean).join(' · '))}</small></span>${f.origem ? `<em>${esc(ORIGEM_FILA[f.origem] || f.origem)}</em>` : ''}</li>`).join('')}</ol>`) : ccBloco('Fila do dia', '<p class="cc-txt">A primeira fila do dia sai na próxima rodada (7h) — ou toque em <b>▶ Rodar agora</b>.</p>');
   const datas = (r.datas || []).length ? ccBloco('Datas que vêm aí', `<ul class="cc-lista">${r.datas.map(d => `<li><span><b>${esc(d.tema)}</b><small>${esc(isoParaBR(d.data || ''))}${d.comecarEm ? ` · começar a imprimir até ${esc(isoParaBR(d.comecarEm))}` : ''}</small></span></li>`).join('')}</ul>`) : '';
-  const linha = f => `<li class="${f.status}"><i style="background:${COR_FILA[semAcentoCer(f.cor)] || '#8e8e93'}"></i><span><b>${esc(f.titulo)} · ${f.qtd} un.</b><small>${esc([f.material, f.cor, ORIGEM_FILA[f.origem] || ''].filter(Boolean).join(' · '))}</small></span>
+  const linha = f => `<li class="${f.status}">${miniFilaHTML(f.titulo, COR_FILA[semAcentoCer(f.cor)] || '#8e8e93')}<span><b>${esc(f.titulo)} · ${f.qtd} un.</b><small>${esc([f.material, f.cor, ORIGEM_FILA[f.origem] || ''].filter(Boolean).join(' · '))}</small></span>
     ${f.status === 'feito' ? '<em>✓</em>' : `<button type="button" class="cc-mini${f.status === 'imprimindo' ? '' : ' sec'}" onclick="mudarFila(${f.id}, '${f.status === 'imprimindo' ? 'feito' : 'imprimindo'}')">${f.status === 'imprimindo' ? '✓ Pronto' : '▶ Imprimir'}</button>`}<button type="button" class="cc-mini sec" onclick="removerFila(${f.id})" aria-label="Tirar da fila">✕</button></li>`;
   return cabecalhoAgente(a)
     + `<section class="cc-bloco cc-fab-bloco"><h4>Fábrica · ao vivo</h4><div id="cc-fab" class="cc-fab"><div class="cc-seca-carregando"><span class="spin"></span> Ligando as impressoras…</div></div><p class="cc-nota">${impressoesBambu ? `As A1 mostram o que está imprimindo DE VERDADE (conta Bambu, lida às ${esc(String(impressoesBambu.lidoEm || '').slice(11, 16))}); a Kobra X mostra o que você marcou como "imprimindo" ou o 1º da fila do dia.` : 'As impressoras mostram o que está em "imprimindo" (ou o 1º da fila do dia).'}</p></section>`
@@ -8155,10 +8157,64 @@ function htmlAgenteDev(a) {
     + ccNums([[ps.filter(p => p.status === 'imagem').length, 'para você aprovar'], [ps.filter(p => p.status === '3mf').length, '3MF prontos'], [ps.length, 'projetos']])
     + `<nav class="dev-abas">${ABAS_DEV.map(([k, n]) => `<button type="button" class="${aba === k ? 'on' : ''}" onclick="abaDev('${k}')">${esc(n)}<small>${conta(k)}</small></button>`).join('')}</nav>`
     + ccBloco(`${esc((ABAS_DEV.find(x => x[0] === aba) || [, ''])[1])} · ${plural(lista.length, 'projeto', 'projetos')}`, lista.length ? `<ul class="dev-lista">${lista.map(p => { const e = ETAPAS_DEV[p.status || 'ideia'] || ETAPAS_DEV.ideia;
-        return `<li><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b>${p.personaliza ? `<small>Personaliza: ${esc(p.personaliza)}</small>` : ''}<small>${esc(p.codigo)} ${esc(p.versao || '')} · falta: ${esc(p.falta || '—')}</small></li>`; }).join('')}</ul>`
+        return `<li class="dev-item" onclick="abrirProjetoDev('${esc(p.codigo)}')">${previaDevHTML(p, e)}<div class="dev-info"><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b>${p.personaliza ? `<small>Personaliza: ${esc(p.personaliza)}</small>` : ''}<small>${esc(p.codigo)} ${esc(p.versao || '')} · falta: ${esc(p.falta || '—')}</small>${(p.arquivos || []).length ? `<em class="dev-arqs">⬇ ${plural(p.arquivos.length, 'arquivo', 'arquivos')}</em>` : ''}</div></li>`; }).join('')}</ul>`
       : '<p class="cc-txt">Nenhum projeto neste nicho ainda. Peça uma ideia ao Desenvolvedor.</p>')
     + ccBloco('Como ele trabalha', `<p class="cc-txt">${esc((devDados && devDados.fluxo) || 'ideia → imagem (você aprova) → 3MF editável → feito')}. Ele monta a imagem de apresentação (com o Estúdio de fotos), espera o seu “pode seguir” e só então faz o 3MF com o texto editável no Bambu Studio.</p>`)
     + botaoConversarAgente(a);
+}
+// Prévia do projeto: o PC (giros.ps1) renderiza o 3MF girando (WebP animado) ou usa a imagem — fica no cofre em midia/dev/.
+function previaDevHTML(p, e) {
+  return `<div class="dev-prev${p.previaTipo === 'giro' ? ' giro' : ''}">${p.previa ? `<img data-cofre="${esc(p.previa)}" alt="" loading="lazy">` : ''}<span style="--c:${e[1]}">${p.status === '3mf' || p.status === 'feito' ? '◆' : p.status === 'imagem' ? '◐' : '✦'}</span></div>`;
+}
+function abrirProjetoDev(codigo) {
+  const p = ((devDados && devDados.projetos) || []).find(x => x.codigo === codigo); if (!p) return;
+  const e = ETAPAS_DEV[p.status || 'ideia'] || ETAPAS_DEV.ideia;
+  let el = document.getElementById('dev-janela');
+  if (!el) { el = document.createElement('div'); el.id = 'dev-janela'; el.className = 'dev-janela'; el.hidden = true; el.addEventListener('click', ev => { if (ev.target === el) fecharProjetoDev(); }); document.body.appendChild(el); }
+  const arqs = p.arquivos || [], ico = n => /\.3mf$/i.test(n) ? '🧊' : /\.stl$/i.test(n) ? '🔺' : /\.svg$/i.test(n) ? '✒️' : '🖼';
+  el.innerHTML = `<div class="dev-jan">
+    <button type="button" class="dev-x" onclick="fecharProjetoDev()" aria-label="Fechar">✕</button>
+    <div class="dev-palco${p.previaTipo === 'giro' ? ' giro' : ''}">${p.previa ? `<img data-cofre="${esc(p.previa)}" alt="Prévia de ${esc(p.nome)}">` : `<span class="dev-palco-vazio">✦<small>Ainda sem imagem — o Desenvolvedor faz na próxima etapa.</small></span>`}</div>
+    <span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span>
+    <h3>${esc(p.nome)}</h3><p class="dev-cod">${esc(p.codigo)} ${esc(p.versao || '')}${p.etapa ? ' · ' + esc(p.etapa) : ''}${p.atualizadoEm ? ' · ' + esc(isoParaBR(p.atualizadoEm)) : ''}</p>
+    ${p.personaliza ? `<p class="dev-txt"><b>Personaliza:</b> ${esc(p.personaliza)}</p>` : ''}<p class="dev-txt"><b>Falta:</b> ${esc(p.falta || '—')}</p>
+    ${arqs.length ? `<div class="dev-baixar">${arqs.map((a, i) => `<button type="button" onclick="baixarArquivoDev('${esc(p.codigo)}', ${i})"><span>${ico(a.nome)}</span><b>${esc(a.nome)}</b><small>${a.kb >= 1024 ? (a.kb / 1024).toFixed(1).replace('.', ',') + ' MB' : a.kb + ' KB'} · baixar</small></button>`).join('')}</div>` : '<p class="dev-txt dev-nota">Os arquivos aparecem aqui quando o 3MF ficar pronto.</p>'}
+    ${p.pastaPC ? `<button type="button" class="dev-pasta" onclick="copiarPastaDev('${esc(p.codigo)}')">📁 Copiar o caminho da pasta no PC</button><p class="dev-nota">No computador: cole na barra de endereço do Explorador de Arquivos (Win + E) e dê Enter.</p>` : ''}
+  </div>`;
+  if (el.hidden) empilharCamada('devprojeto', fecharProjetoDev);
+  el.hidden = false; carregarMidiasCofre(el);
+}
+function fecharProjetoDev(daVolta) { const el = document.getElementById('dev-janela'); if (!el || el.hidden) return; el.hidden = true; if (!daVolta) desempilharCamada('devprojeto'); }
+async function baixarArquivoDev(codigo, i) {
+  const p = ((devDados && devDados.projetos) || []).find(x => x.codigo === codigo), a = p && (p.arquivos || [])[i]; if (!a) return;
+  if (!claudeConfigurado()) { toast('Conecte o J.A.R.V.I.S. ao computador (Ajustes → 2) para baixar do cofre.'); return; }
+  toast('Baixando ' + a.nome + '…');
+  try {
+    const b = await (await cofreBruto(a.cofre)).blob(), u = URL.createObjectURL(b), l = document.createElement('a');
+    l.href = u; l.download = a.nome; document.body.appendChild(l); l.click(); l.remove(); setTimeout(() => URL.revokeObjectURL(u), 60000);
+  } catch (e) { toast('Não consegui baixar agora (' + e.message + ').'); }
+}
+function copiarPastaDev(codigo) {
+  const p = ((devDados && devDados.projetos) || []).find(x => x.codigo === codigo); if (!p || !p.pastaPC) return;
+  (navigator.clipboard ? navigator.clipboard.writeText(p.pastaPC) : Promise.reject()).then(() => toast('Caminho copiado. No PC: Win + E, cole na barra de endereço e Enter.', 5000), () => toast(p.pastaPC, 8000));
+}
+// --- MINIATURA 3D da fila de impressão: o PC renderiza os 3MF da Central girando (cofre dados/giros.json + midia/3d/);
+//     sem 3MF parecido, usa a foto do catálogo da Shopee. Casamento por palavras do título (genéricas valem meio ponto).
+let girosDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_giros')); } catch (e) { return null; } })();
+const GIRO_PARADAS = new Set(['de', 'da', 'do', 'das', 'dos', 'com', 'para', 'em', 'pla', 'petg', 'abs', 'tpu', 'silk', 'un', 'unidade', 'unidades', 'cor', 'cores', 'preto', 'preta', 'branco', 'branca', 'cinza', 'vermelho', 'vermelha', 'azul', 'verde', 'amarelo', 'amarela', 'laranja', 'rosa', 'roxo', 'dourado', 'dourada', 'prata', 'marrom', 'bege', 'transparente']);
+const GIRO_GENERICAS = new Set(['chaveiro', 'suporte', 'placa', 'celular', 'base', 'logo', 'peca', 'trofeu']);
+function palavrasGiro(t) { return [...new Set(semAcentoCer(t).split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !/^\d+$/.test(w) && !GIRO_PARADAS.has(w)).map(w => w.replace(/(oes|aes)$/, 'ao').replace(/s$/, '')))]; }
+function pontosGiro(titulo, alvo) { const a = new Set(palavrasGiro(alvo)); return palavrasGiro(titulo).reduce((s, w) => s + (a.has(w) ? (GIRO_GENERICAS.has(w) ? 0.5 : 1) : 0), 0); }
+function miniaturaFila(titulo) {
+  if (!titulo) return null;
+  let melhor = null;
+  ((girosDados && girosDados.modelos) || []).forEach(m => { const s = pontosGiro(titulo, `${m.nome} ${m.cliente || ''} ${(m.palavras || []).join(' ')}`); if (s >= 1 && (!melhor || s > melhor.s)) melhor = { s, src: m.giro, giro: true, nome: m.nome }; });
+  ((primosCentral && primosCentral.shopee) || []).forEach(p => { if (!p.foto) return; const s = pontosGiro(titulo, p.produto) - 0.25; if (s >= 1 && (!melhor || s > melhor.s)) melhor = { s, src: p.foto, giro: false, nome: p.produto }; });
+  return melhor;
+}
+function miniFilaHTML(titulo, cor) {
+  const m = miniaturaFila(titulo), dot = `<i style="background:${cor}"></i>`;
+  return m ? `<span class="cc-giro${m.giro ? ' gira' : ''}" title="${esc(m.nome)}"><img data-cofre="${esc(m.src)}" alt="" loading="lazy">${dot}</span>` : dot;
 }
 function ccBloco(titulo, corpo) { return `<section class="cc-bloco"><h4>${titulo}</h4>${corpo}</section>`; }
 function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente('${esc(a.id)}')">Perguntar a este agente</button>`; }
