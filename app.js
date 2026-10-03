@@ -5812,6 +5812,7 @@ function cofreBruto(caminho) {
     .then(r => { if (!r.ok) throw new Error(String(r.status)); return r; });
 }
 let relatoriosAgentes = (() => { try { return JSON.parse(localStorage.getItem('lifeos_relatorios')); } catch (e) { return null; } })();
+let conteudoMkt = (() => { try { return JSON.parse(localStorage.getItem('lifeos_conteudo')); } catch (e) { return null; } })(); // vídeos do estúdio do Marketing (cofre: dados/conteudo.json) — CACHE local
 let impressoesBambu = (() => { try { return JSON.parse(localStorage.getItem('lifeos_impressoes')); } catch (e) { return null; } })(); // histórico da Bambu (cofre: dados/impressoes.json) — CACHE local // Central: relatórios dos agentes (GitHub Actions do cofre, 1×/dia) — CACHE local, como a Primos
 function guardarPrimosLocal() { try { localStorage.setItem('lifeos_primoscentral', JSON.stringify(primosCentral)); } catch (e) { } } // cache do que veio do cofre (não passa pela planilha)
 async function sincronizarCofre(forcar) {
@@ -5827,6 +5828,7 @@ async function sincronizarCofre(forcar) {
       renderPrimosPagina();
       toast(primeira ? '🟢 J.A.R.V.I.S. conectado à Primos 3D Central.' : `🟢 J.A.R.V.I.S. atualizou a Primos 3D (Central de ${isoParaBR(d.geradoEm.slice(0, 10)).slice(0, 5)} às ${d.geradoEm.slice(11, 16)}).`, 5000);
     } else if (forcar) toast('A Primos 3D já está com os dados mais novos.', 3500);
+    try { const k = await (await cofreBruto('dados/conteudo.json')).json(); if (k && k.tipo === 'jarvis-conteudo' && (!conteudoMkt || k.atualizadoEm !== conteudoMkt.atualizadoEm)) { conteudoMkt = k; try { localStorage.setItem('lifeos_conteudo', JSON.stringify(k)); } catch (e) { } if (cc.agente === 'marketing') renderCentral(); } } catch (e) { }
     try { const b = await (await cofreBruto('dados/impressoes.json')).json(); if (b && b.tipo === 'jarvis-impressoes' && (!impressoesBambu || b.lidoEm !== impressoesBambu.lidoEm)) { impressoesBambu = b; try { localStorage.setItem('lifeos_impressoes', JSON.stringify(b)); } catch (e) { } if (cc.agente === 'producao') montarFabrica3D(); } } catch (e) { }
     try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } renderCentral(); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
   } catch (e) { if (forcar) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
@@ -7083,7 +7085,7 @@ function renderCentral() {
   renderCanvasCentral();
   const p = $j('cc-painel');
   if (cc.novo) { p.hidden = false; p.innerHTML = htmlNovoAgente(); }
-  else if (cc.agente) { p.hidden = false; p.innerHTML = htmlPainelAgente(cc.agente); p.scrollTop = 0; }
+  else if (cc.agente) { p.hidden = false; p.innerHTML = htmlPainelAgente(cc.agente); p.scrollTop = 0; carregarMidiasCofre(p); }
   else { p.hidden = true; p.innerHTML = ''; }
   el.classList.toggle('com-painel', !p.hidden);
   if (cc.agente === 'estoque') montarSecadora3D(); else if (cc.seca3d) cc.seca3d.renderer.domElement.remove();
@@ -7438,8 +7440,7 @@ function renderPaginaAgente() {
   if (id === 'estoque') { const h = $j('ag-3d'); if (h) { h.id = 'cc-seca'; montarSecadora3D(); } }
   if (id === 'producao') { const h = $j('ag-3d'); if (h) { h.id = 'cc-fab'; montarFabrica3D(); } }
   if (aba === 'chaveiros') montarExpositor3D();
-  el.querySelectorAll('img[data-cofre]').forEach(async img => { const u = await fotoCofre(img.dataset.cofre).catch(() => null); if (u) { img.src = u; img.classList.add('ok'); } });
-  el.querySelectorAll('video[data-cofre]').forEach(async v => { const u = await videoCofre(v.dataset.cofre).catch(() => null); if (u) { v.muted = true; v.playsInline = true; v.src = u; v.play().catch(() => { }); } });
+  carregarMidiasCofre(el);
   animarPaginaAgente();
 }
 /** A rolagem comanda: --h (0→1 na 1ª tela) no rolo; --p em cada seção/bloco; números contam ao aparecer; 3D gira junto. */
@@ -7626,6 +7627,22 @@ function graficosFinanceiro(pc) {
   return g1 + g2 + g3;
 }
 
+// --- CONTEÚDO do agente de Marketing: vídeos montados de madrugada no PC (prévia leve no cofre; o completo fica na pasta) ---
+function htmlConteudoMarketing() {
+  const v = (conteudoMkt && conteudoMkt.videos) || [], r = relatorioAgente('marketing') || {};
+  const prox = (r.roteiros || []).length ? `<p class="cc-nota">Próximos vídeos (roteiro de hoje): ${r.roteiros.map(x => '<b>' + esc(x.produto) + '</b> — “' + esc(x.gancho) + '”').join(' · ')}</p>` : '';
+  if (!v.length) return ccBloco('Conteúdo pronto', `<p class="cc-txt">O estúdio monta 1 vídeo por noite (3h) com as fotos e vídeos da pasta <b>06 Shopee - Produtos</b> e guarda em <b>J.A.R.V.I.S</b> dentro dela. Os primeiros aparecem aqui.</p>${prox}`);
+  return ccBloco(`Conteúdo pronto · ${plural(v.length, 'vídeo', 'vídeos')}`, `<div class="cc-videos">${v.slice(0, 8).map((x, i) => `<article class="cc-video"><video data-cofre="${esc(x.video)}" data-poster="${esc(x.capa)}" muted loop playsinline preload="none" onclick="this.paused ? this.play() : this.pause()"></video>
+    <div><small>${esc(isoParaBR(x.data || ''))} · ${esc(x.categoria || '')}</small><b>${esc(x.gancho || x.produto)}</b><span>${esc(x.produto || '')}</span>
+    <button type="button" class="cc-mini sec" onclick="copiarLegendaMkt(${i})">Copiar legenda</button><em title="${esc(x.pasta || '')}">📁 ${esc((x.pasta || '').split('\\').pop())}</em></div></article>`).join('')}</div>${prox}<p class="cc-nota">Para postar: abra o vídeo completo da pasta no celular, escolha um áudio em alta no TikTok e cole a legenda. O J.A.R.V.I.S. nunca posta sozinho.</p>`);
+}
+function copiarLegendaMkt(i) { const x = ((conteudoMkt && conteudoMkt.videos) || [])[i]; if (!x) return; const t = `${x.legenda || ''}\n\n${x.hashtags || ''}`.trim(); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Legenda copiada.'), () => toast('Não consegui copiar.')); }
+/** Carrega fotos/vídeos/capas do cofre dentro de um pedaço da tela (painel ou página). */
+function carregarMidiasCofre(raiz) {
+  if (!raiz || !claudeConfigurado()) return;
+  raiz.querySelectorAll('img[data-cofre]:not(.ok)').forEach(async img => { const u = await fotoCofre(img.dataset.cofre).catch(() => null); if (u) { img.src = u; img.classList.add('ok'); } });
+  raiz.querySelectorAll('video[data-cofre]:not([data-ok])').forEach(async v => { v.dataset.ok = '1'; if (v.dataset.poster) { const p = await fotoCofre(v.dataset.poster).catch(() => null); if (p) v.poster = p; } const u = await videoCofre(v.dataset.cofre).catch(() => null); if (u) { v.muted = true; v.playsInline = true; v.src = u; v.play().catch(() => { }); } });
+}
 // --- agente FINANCEIRO (id contabil) ---
 function htmlAgenteContabil(a) {
   const pc = primosCentral; if (!pc || !pc.caixa) return cabecalhoAgente(a) + ccBloco('Sem dados', '<p class="cc-txt">Conecte o computador (Ajustes do J.A.R.V.I.S. → 2) para eu ler a Central.</p>');
@@ -7665,6 +7682,7 @@ function htmlAgenteMarketing(a) {
     + (temas.length ? ccBloco('O que engaja (curtidas por view)', `<ul class="cc-lista">${temas.map(x => `<li><span><b>${esc(x.tema)}</b><small>${esc(x.leitura || '')}</small></span><em class="cc-pct">${String(x.taxa).replace('.', ',')}%</em></li>`).join('')}</ul>`) : '')
     + (pub.faixa ? ccBloco('Seu público hoje', `<p class="cc-txt">${pub.homens}% homens · ${esc(pub.faixa)} · pico ${esc(pub.pico || '')}</p>`) : '')
     + ((t.buscas || []).length ? ccBloco('O que as pessoas buscam', `<div class="cc-tags solto">${t.buscas.map(b => `<em>${esc(b)}</em>`).join('')}</div>`) : '')
+    + htmlConteudoMarketing()
     + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('marketing')">Abrir o marketing completo</button>` + botaoConversarAgente(a);
 }
 
