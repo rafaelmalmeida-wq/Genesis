@@ -7086,12 +7086,22 @@ const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafa
   { id: 'producao', setor: 'primos', nome: 'Impressão e Produção', funcao: 'Viabilidade, fatiamento, fila e qualidade', skills: ['Análise de viabilidade de impressão', 'Preparação e fatiamento', 'Programação da produção', 'Controle de qualidade e falhas', 'Apontamento de produção e manutenção'], aba: 'producao' },
   { id: 'vendas', setor: 'primos', nome: 'Captação e Vendas', funcao: 'Prospecção, propostas e funil', skills: ['Prospecção e segmentação comercial', 'Qualificação de oportunidades', 'Abordagem e acompanhamento comercial', 'Proposta e negociação', 'Gestão de funil e fechamento'], aba: 'vendas' },
   { id: 'consignacao', setor: 'primos', nome: 'Consignação', funcao: 'Parceiros, remessas, acertos e mix', skills: ['Gestão de parceiros e pontos', 'Controle de remessas, vendas e devoluções', 'Conferência de acerto e comissões', 'Gestão de catálogo e personalização', 'Desempenho e reposição por ponto'], aba: 'chaveiros' },
-  { id: 'shopee', setor: 'primos', nome: 'Shopee', funcao: 'Loja, anúncios e pedidos da Shopee (skills a definir)', skills: [], semNuvem: true },
-  { id: 'dev', setor: 'primos', nome: 'Desenvolvedor', funcao: 'Skills a definir com o Rafael', skills: [], semNuvem: true }
+  { id: 'shopee', setor: 'primos', nome: 'Shopee', funcao: 'Mercado, anúncios, catálogo, preço e desempenho da loja', skills: ['Inteligência de mercado 3D', 'Anúncios que vendem', 'Catálogo e publicação', 'Preço e rentabilidade por anúncio', 'Desempenho e Shopee Ads'] },
+  { id: 'dev', setor: 'primos', nome: 'Desenvolvedor', funcao: 'Produtos 3D: modelagem, placas, chaveiros com logo, luminárias e 3MF', skills: ['Modelagem paramétrica FDM', 'Placas, nomes e carimbos', 'Chaveiros e brindes com logo', 'Luminárias e funcionais', 'Projeto 3MF no Bambu Studio'] }
 ];
 /** O que cada skill faz (pedido do Rafael 02/10/2026) — aparece no painel do agente e vai no "manual" dele na nuvem (rodar.mjs). */
 const SKILLS_DESC = {
   'Metas e plano de ação': 'Lê as metas que você e o sócio definiram (empresa, Rafael, sócio), mostra onde vocês estão, quanto falta, o ritmo por semana e a ação da semana para chegar lá.',
+  'Inteligência de mercado 3D': 'Concorrentes, preços, personalização, avaliações e reclamações em placas, chaveiros e luminárias; ranking de oportunidades, sem confundir curtidas ou downloads com vendas.',
+  'Anúncios que vendem': 'Título, descrição, ficha técnica, perguntas frequentes e instruções de personalização; plano de capa e vídeo sem inventar nada do produto.',
+  'Catálogo e publicação': 'SKU, categoria, variações, fotos, estoque, peso e prazo conferidos com Estoque, Produção e Financeiro. Entrega o rascunho; quem publica é você.',
+  'Preço e rentabilidade por anúncio': 'Custo real + embalagem + taxas da Shopee + descontos, frete e Ads: quanto sobra por venda e quais ofertas continuam rentáveis.',
+  'Desempenho e Shopee Ads': 'Visitas, cliques, conversão, pedidos, devoluções e Ads × lucro, com antes e depois. ROAS não é lucro; nunca aumenta gasto sozinho.',
+  'Modelagem paramétrica FDM': 'Ideia e medidas viram modelo editável (Fusion ou CAD), com encaixes, folgas e reforços, em famílias personalizáveis.',
+  'Placas, nomes e carimbos': 'Placas de profissões com base, símbolo, nome e profissão separados; carimbos com relevo, espelhamento e material certos.',
+  'Chaveiros e brindes com logo': 'Logo autorizado → vetor → camadas de cor, argola reforçada e acabamento; confere a licença de modelos de terceiros.',
+  'Luminárias e funcionais': 'Corpo, tampa, difusor, encaixes e passagem de cabos para os LEDs reais, com lista de componentes e testes de calor e encaixe.',
+  'Projeto 3MF no Bambu Studio': 'Cores, orientação, suportes e perfil da máquina; fatia, confere camadas, tempo e consumo, reabre o arquivo e entrega fonte + 3MF + relatório.',
   'Cadastro e padronização de itens': 'Organizar filamentos, componentes, embalagens e produtos acabados por código, categoria, característica e localização.',
   'Controle de entrada e saída': 'Registrar compras, consumos, devoluções, perdas e movimentações, mantendo histórico e saldo atualizados.',
   'Gestão de filamentos e insumos': 'Controlar peso disponível por bobina, material, cor e lote, além das condições de armazenamento.',
@@ -7206,7 +7216,7 @@ function agentesCentral() { return todosAgentes().filter(a => a.setor === 'primo
 // mostram a troca de informação (com o número real que passa). Arrastar o fundo = mover; roda/pinça = zoom; arrastar o
 // bloco = reposicionar (fica salvo neste aparelho: prefs.ccPos); tocar no bloco = abre o agente (conversa, comandos, resultados).
 const CV = { cam: null, arrasto: null, ptrs: new Map(), pinca: null };
-const CV_PRIMOS = ['contabil', 'marketing', 'estoque', 'producao', 'vendas', 'consignacao'];
+const CV_PRIMOS = ['contabil', 'marketing', 'estoque', 'producao', 'vendas', 'consignacao', 'shopee', 'dev'];
 const celCanvas = () => window.innerWidth < 700;
 const chavePosCanvas = () => celCanvas() ? 'ccPosCel' : 'ccPos'; // celular e PC guardam arranjos diferentes
 function posPadraoCanvas() {
@@ -7558,6 +7568,53 @@ function gargantuaPagina() {
   cc.jvPagRaf = requestAnimationFrame(quadro);
 }
 // =====================================================================================================================
+// PÁGINA DO MARKETING (fase 7, pedido do Rafael 03/10/2026): menos informação de uma vez — o essencial na frente (o que fazer,
+// os vídeos prontos num carrossel, os roteiros do dia) e o detalhe atrás de botões (números do TikTok, público, tendências,
+// relatório). Tocar num vídeo abre o PLAYER grande (play/pausa, tela cheia, volume pelos controles do aparelho).
+// =====================================================================================================================
+function detalheMkt(titulo, corpo) { return `<details class="mkt-det"><summary><span>${titulo}</span><i aria-hidden="true">›</i></summary><div>${corpo}</div></details>`; }
+function renderPaginaMarketing() {
+  const el = $j('ag-pag'); if (!el) return; const a = todosAgentes().find(x => x.id === 'marketing'), s = setorCentral(a.setor);
+  const pc = primosCentral || {}, r = relatorioAgente('marketing') || {}, mk = pc.marketing || {}, t = mk.tiktok || {}, tk = pc.tiktokPerfil || {}, p7 = t.periodo7d || {}, pub = t.publico || {};
+  const vids = (conteudoMkt && conteudoMkt.videos) || [], rot = r.roteiros || [], prod = r.paraProducao || [];
+  const temas = (t.temas || []).slice().sort((x, y) => (y.taxa || 0) - (x.taxa || 0)).slice(0, 4);
+  const nums = [[vids.length, 'vídeos prontos'], [rot.length, 'roteiros de hoje'], [(pc.shopee || []).length, 'produtos com material'], [prod.length, 'ideias para imprimir']];
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
+      <button type="button" class="ag-falar" onclick="falarComAgente('marketing')">🎙 Falar</button></header>
+    <i class="ag-progresso" id="ag-progresso" style="--cor:${s.cor}"></i>
+    <div class="ag-rolo mkt" id="ag-rolo" style="--cor:${s.cor}">
+      <section class="ag-heroi"><div class="ag-heroi-txt"><small>Primos 3D · agente</small><h1>Marketing</h1><p>${r.manchete ? textoAgente(r.manchete) : esc(a.funcao || '')}</p></div><div class="ag-palco">${palcoPagina('marketing')}</div><div class="ag-desca">role para ver tudo<i></i></div></section>
+      <section class="ag-sec ag-nums">${nums.map(([v, rr], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(rr)}</small></div>`).join('')}</section>
+      ${vids.length ? finBloco('Vídeos prontos', `<p class="ag-sub">Toque para assistir. O som em alta você escolhe no TikTok na hora de postar.</p><div class="mkt-reel">${vids.slice(0, 12).map((x, i) => `<button type="button" class="mkt-card" style="--k:${i}" onclick="abrirVideoMkt(${i})"><img data-cofre="${esc(x.capa)}" alt=""><span class="mkt-play" aria-hidden="true">▶</span><b>${esc(x.gancho || x.produto)}</b><small>${esc(x.produto || '')}</small></button>`).join('')}</div>`) : finBloco('Vídeos prontos', '<p class="cc-txt">O estúdio monta 3 vídeos por noite com as fotos e vídeos das pastas da Shopee. Os primeiros aparecem aqui.</p>')}
+      ${rot.length ? finBloco('Roteiros de hoje', `<div class="mkt-rots">${rot.map((x, k) => `<article class="mkt-rot" style="--k:${k}"><small>${esc(x.produto)}</small><b>“${esc(x.gancho)}”</b>${x.audio ? `<span>🎵 ${esc(x.audio)}</span>` : ''}${x.estilo ? `<em>${esc(x.estilo)}</em>` : ''}</article>`).join('')}</div>`) : ''}
+      ${prod.length ? finBloco('O Marketing pediu para imprimir', `<ul class="cc-lista">${prod.map(x => `<li><span><b>${esc(x.titulo)}</b><small>${esc(x.motivo || '')}</small></span></li>`).join('')}</ul>`) : ''}
+      <section class="ag-sec ag-corpo mkt-mais"><h2 class="jvpg-tit">Mais detalhes</h2>
+        ${detalheMkt('Números do TikTok', `<div class="mkt-tk"><div><b>${esc(String(tk.seguidores ?? '—'))}</b><small>seguidores</small></div><div><b>${p7.views ? (p7.views / 1000).toFixed(1).replace('.', ',') + ' mil' : '—'}</b><small>views em 7 dias</small></div><div><b>${esc(String(tk.curtidas ?? '—'))}</b><small>curtidas</small></div><div><b>${esc(String(tk.videos ?? '—'))}</b><small>vídeos</small></div></div>${mk.atualizadoEm ? `<p class="cc-nota">Lido em ${esc(isoParaBR(mk.atualizadoEm))}.</p>` : ''}`)}
+        ${temas.length || pub.faixa || (t.buscas || []).length ? detalheMkt('Público e o que engaja', `${pub.faixa ? `<p class="cc-txt">${pub.homens}% homens · ${esc(pub.faixa)} · pico ${esc(pub.pico || '')}</p>` : ''}${temas.length ? `<ul class="cc-lista">${temas.map(x => `<li><span><b>${esc(x.tema)}</b><small>${esc(x.leitura || '')}</small></span><em class="cc-pct">${String(x.taxa).replace('.', ',')}%</em></li>`).join('')}</ul>` : ''}${(t.buscas || []).length ? `<div class="cc-tags solto">${t.buscas.map(b => `<em>${esc(b)}</em>`).join('')}</div>` : ''}`) : ''}
+        ${r.tendencias ? detalheMkt('Tendências do dia (sons e edição)', `<div class="cc-txt mkt-tend">${mdJarvis(r.tendencias)}</div>`) : ''}
+        ${detalheMkt('Relatório, comando e skills do agente', htmlPainelAgente('marketing').replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<button type="button" class="cc-btn ag-abrir"[^>]*>[^<]*<\/button>/, ''))}
+      </section>
+      <footer class="ag-fim">J.A.R.V.I.S. · Marketing da Primos 3D</footer>
+    </div>`;
+  carregarMidiasCofre(el); animarPaginaAgente();
+}
+/** O PLAYER grande dos vídeos prontos (prévia do cofre; o completo fica na pasta do PC). */
+async function abrirVideoMkt(i) {
+  const x = ((conteudoMkt && conteudoMkt.videos) || [])[i]; if (!x) return;
+  let el = $j('mkt-player'); if (!el) { el = document.createElement('div'); el.id = 'mkt-player'; el.className = 'mkt-player'; document.body.appendChild(el); }
+  el.innerHTML = `<div class="mkt-player-fundo" onclick="fecharVideoMkt()"></div><div class="mkt-player-box"><button type="button" class="mkt-x" onclick="fecharVideoMkt()" aria-label="Fechar">✕</button>
+    <video id="mkt-video" controls playsinline autoplay loop preload="auto"></video>
+    <div class="mkt-player-info"><small>${esc(isoParaBR(x.data || ''))} · ${esc(x.produto || '')}</small><b>${esc(x.gancho || '')}</b>${x.audio ? `<span>🎵 ${esc(x.audio)}</span>` : ''}
+      <div class="mkt-player-acoes"><button type="button" class="cc-btn" onclick="copiarLegendaMkt(${i})">Copiar legenda</button></div>
+      <p class="cc-nota">Esta é a prévia leve (sem som). O vídeo completo está em 📁 ${esc((x.pasta || '').split('\\').pop())} no PC.</p></div></div>`;
+  if (!el.classList.contains("aberto")) empilharCamada("video", fecharVideoMkt);
+  el.hidden = false; el.classList.add('aberto');
+  const v = $j('mkt-video'); const u = await videoCofre(x.video).catch(() => null);
+  if (u && v) { v.src = u; v.play().catch(() => { }); } else if (v) v.insertAdjacentHTML('afterend', '<p class="cc-nota">Não consegui baixar o vídeo agora (o app precisa estar conectado ao computador).</p>');
+}
+function fecharVideoMkt(daVolta) { const el = $j('mkt-player'); if (!el || !el.classList.contains('aberto')) return; const v = $j('mkt-video'); if (v) v.pause(); el.classList.remove('aberto'); el.hidden = true; if (daVolta !== true) desempilharCamada('video'); }
+
+// =====================================================================================================================
 // PÁGINA DO FINANCEIRO (fase 7, pedido do Rafael 03/10/2026): mais limpa, cara de DINHEIRO (moeda de ouro com a logo da
 // Primos, sem mármore), gráficos de pizza, o essencial na frente e links para o detalhe; METAS (empresa, Rafael, sócio —
 // o agente lê e guia o caminho) e a CALCULADORA DE PREÇO com 3 cenários (conservador · realista · volume).
@@ -7588,7 +7645,7 @@ function renderPaginaFinanceiro() {
     <i class="ag-progresso" id="ag-progresso" style="--cor:#d4a53c"></i>
     <div class="ag-rolo fin" id="ag-rolo" style="--cor:#d4a53c">
       <section class="ag-heroi"><div class="ag-heroi-txt"><small>Primos 3D · agente</small><h1>Financeiro</h1><p>${r.manchete ? textoAgente(r.manchete) : esc(a.funcao || '')}</p></div>
-        <div class="ag-palco"><div class="ag-moeda-palco"><div class="fin-moeda"><i class="f"><img src="img/primos-logo.jpg" alt=""></i><i class="v"><b>${pctFr(pct)}</b><small>já voltou</small></i>${Array.from({ length: 14 }, (_, k) => `<i class="b" style="transform:translateZ(${(k - 6.5).toFixed(1)}px)"></i>`).join('')}</div>
+        <div class="ag-palco"><div class="ag-moeda-palco">${cifraoOuro()}
           ${[[reais(vl.total), 'recebido'], [N.paybackMesesNoRitmoAtual ? Math.round(N.paybackMesesNoRitmoAtual) + ' meses' : '—', 'payback'], [reais(cx.saldo), 'caixa'], [reais(N.valuationPatrimonial), 'valor']].map(([v, rr], k) => `<span class="ag-orbita fin-orb" style="--k:${k}"><b>${v}</b><small>${rr}</small></span>`).join('')}</div></div>
         <div class="ag-desca">role para ver tudo<i></i></div></section>
       <section class="ag-sec ag-nums">${numerosPagina('contabil').map(([v, rr], k) => `<div class="ag-num fin-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(rr)}</small></div>`).join('')}</section>
@@ -7598,7 +7655,7 @@ function renderPaginaFinanceiro() {
       <section class="ag-sec ag-corpo">${graficosFinanceiro(pc, { semCategorias: true })}</section>
       ${entradas.length ? finBloco('Últimas entradas', `<ul class="fin-entradas">${entradas.map(e => `<li><span class="fin-tag ${e.tipo}">${e.tipo === 'venda' ? '↑' : '◆'}</span><span><b>${esc(String(e.txt).slice(0, 60))}</b><small>${esc(isoParaBR(e.data))} · ${esc(e.sub || '')}</small></span><strong>${reais(e.valor)}</strong></li>`).join('')}</ul>`, linkFin('Todos os lançamentos', IR_CONTABIL)) : ''}
       ${finBloco('Metas', `<div id="fin-metas">${htmlMetasFin()}</div>`)}
-      ${finBloco('Calculadora de preço', `<div id="fin-calc">${htmlCalcFin()}</div>`, linkFin('Preço mínimo por canal', IR_ANALISE))}
+      ${finBloco('Calculadora de preço', `<div id="fin-calc" class="fin-calc-box">${htmlCalcFin()}</div><button type="button" class="cc-btn fin-conversa calc-abrir" onclick="abrirCalculadoraCompleta()">Abrir a calculadora completa ›</button>`, linkFin('Preço mínimo por canal', IR_ANALISE))}
       ${finBloco('Relatório e comando do agente', `<details class="fin-det"><summary>Abrir o relatório de hoje, o comando e as skills</summary>${htmlPainelAgente('contabil').replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<button type="button" class="cc-btn ag-abrir"[^>]*>[^<]*<\/button>/, '')}</details>`)}
       <footer class="ag-fim">J.A.R.V.I.S. · Financeiro da Primos 3D</footer>
     </div>`;
@@ -7673,6 +7730,100 @@ function htmlCalcFinRes() {
     <button type="button" class="cc-btn" onclick="abrirChatJarvis({ contexto: 'Calculadora do Financeiro: ${esc(`${c.g} g, ${c.h} h (${c.imp}), lote ${c.n}, ${c.canal}, custo ${reais(custo)}`)} — me ajude a escolher o preço', area: 'primos' })">Perguntar ao J.A.R.V.I.S. qual cenário usar</button>`;
 }
 function atualizarCalcFin() { const el = $j('fin-calc-res'); if (el) el.innerHTML = htmlCalcFinRes(); }
+/** Cifrão de ouro em 3D (camadas empilhadas = espessura), no lugar da moeda com a logo (pedido do Rafael). */
+function cifraoOuro() { return `<div class="fin-cifrao" aria-hidden="true">${Array.from({ length: 12 }, (_, k) => `<span style="transform:translateZ(${(k * 2.2 - 12).toFixed(1)}px)"${k === 11 ? ' class="frente"' : ''}>$</span>`).join('')}</div>`; }
+
+// =====================================================================================================================
+// CALCULADORA COMPLETA (fase 7, pedido do Rafael 03/10/2026): página própria, ligada ao Financeiro. Usa os dados do dia
+// (parâmetros, filamentos comprados, máquinas, impressões da Bambu, vendas) e AUDITA os dados: avisa o que pode estar
+// errado ou faltando para o preço ficar completo. Compara com as peças que você já vende e manda o orçamento ao Financeiro.
+// =====================================================================================================================
+function abrirCalculadoraCompleta() {
+  let el = $j('ag-pag'); if (!el) { el = document.createElement('div'); el.id = 'ag-pag'; el.className = 'ag'; el.hidden = true; document.body.appendChild(el); }
+  if (el.hidden) empilharCamada('pagina', fecharPaginaAgente); else if (cc.pagina && cc.pagina !== 'calc') { cc.calcDe = cc.pagina; empilharCamada('calc', voltarDaCalc); } // aberta de uma página (Financeiro): o voltar volta para ela
+  cc.pagina = 'calc'; el.hidden = false; document.body.classList.add('ag-aberta');
+  const c = jv.calcF || (jv.calcF = { g: 20, h: 1.5, n: 1, imp: 'A1', acab: 5, aces: 0, emb: true, canal: 'Direto', qtd: 1 });
+  Object.assign(c, { desc: c.desc ?? 0, frete: c.frete ?? 0, ads: c.ads ?? 0, hora: c.hora ?? '' });
+  renderCalculadoraCompleta();
+}
+function voltarDaCalc(daVolta) { if (cc.pagina !== 'calc' || !cc.calcDe) return; cc.pagina = cc.calcDe; cc.calcDe = null; renderPaginaAgente(); if (daVolta !== true) desempilharCamada('calc'); }
+/** O que o Financeiro confere nos dados antes de confiar no preço. */
+function auditoriaPreco(pc, c) {
+  const par = pc.parametros || {}, L = [], ok = (t) => L.push(['ok', t]), av = (t) => L.push(['aviso', t]), falta = (t) => L.push(['falta', t]);
+  const fil = (pc.filamentos || []).filter(f => f.custoKg > 0), ult = fil.slice().sort((a, b) => (b.data || '').localeCompare(a.data || '')).slice(0, 5);
+  const medUlt = ult.length ? ult.reduce((s, f) => s + f.custoKg, 0) / ult.length : 0, med = par.custoMedioPLA || 0;
+  if (medUlt && med) { const dif = (medUlt - med) / med; Math.abs(dif) > 0.1 ? av(`Filamento: a planilha usa ${reais(med)}/kg, mas as últimas ${ult.length} compras saíram a ${reais(medUlt)}/kg (${dif > 0 ? '+' : ''}${(dif * 100).toFixed(0)}%). Confira a célula de custo médio.`) : ok(`Filamento a ${reais(med)}/kg bate com as últimas compras (${reais(medUlt)}/kg).`); }
+  else falta('Custo médio do filamento não encontrado na planilha.');
+  const m = (pc.maquinas || []).find(x => c.imp === 'Kobra' ? /kobra/i.test(x.nome) : /bambu|a1/i.test(x.nome));
+  m ? ok(`Máquina ${m.nome}: ${reais(m.custoH)}/h (energia ${reais(m.energiaH)} + depreciação ${reais(m.deprecH)} + manutenção ${reais(m.manutH)}).`) : falta('Custo/hora da máquina não está na planilha.');
+  (par.horaTrabalho || 0) ? av(`Mão de obra a ${reais(par.horaTrabalho)}/h — é esse o valor da sua hora? Se não for, o preço sai errado em peças com muito acabamento.`) : falta('Valor da sua hora de trabalho (aba Parâmetros).');
+  const imp = ((impressoesBambu && impressoesBambu.impressoes) || []), falhas = imp.filter(t => /fail|cancel/i.test(String(t.status || t.estado || ''))).length;
+  if (imp.length >= 10) { const taxa = falhas / imp.length, res = par.reservaFalhas || 0.08; Math.abs(taxa - res) > 0.04 ? av(`Falhas: a reserva é ${(res * 100).toFixed(0)}%, mas na Bambu ${(taxa * 100).toFixed(0)}% das últimas ${imp.length} impressões falharam ou foram canceladas.`) : ok(`Reserva de falhas (${(res * 100).toFixed(0)}%) parecida com o real da Bambu (${(taxa * 100).toFixed(0)}%).`); }
+  else av(`Reserva de falhas de ${((par.reservaFalhas || 0.08) * 100).toFixed(0)}% ainda é estimativa (pouco histórico da Bambu).`);
+  if (c.canal === 'Shopee') { av('Shopee: a calculadora usa 20% + R$ 4 por item (até R$ 79,99). Confirme a taxa da SUA conta na Central do Vendedor e se você entra em frete grátis/cupom.'); if (!Number(c.frete)) falta('Frete subsidiado por pedido (se você participar do frete grátis).'); }
+  if (c.canal === 'Consignado') ok(`Comissão do expositor: ${((par.comissaoExpositor || 0.3) * 100).toFixed(0)}%.`);
+  if (!c.emb) av('Sem caixinha: em pedido de cliente/Shopee quase sempre vai embalagem.');
+  if (Number(c.g) > 200) falta('Peça grande: conferir a embalagem e o peso para o frete.');
+  if (Number(c.h) > 0 && Number(c.g) > 0 && Number(c.g) / Number(c.h) > 60) av('Muitas gramas por hora: confira se o tempo é do lote inteiro (o Bambu Studio mostra o tempo da placa toda).');
+  if (pc.geradoEm) { const d = diasEntre(pc.geradoEm.slice(0, 10), hojeISO()); d > 3 ? av(`Os dados da planilha são de ${isoParaBR(pc.geradoEm.slice(0, 10))} (${d} dias). Abra o app no PC ou rode "Atualizar dados do J.A.R.V.I.S.".`) : ok(`Dados da planilha de ${isoParaBR(pc.geradoEm.slice(0, 10))} — atualizados.`); }
+  return L;
+}
+function renderCalculadoraCompleta() {
+  const el = $j('ag-pag'); if (!el) return; const pc = primosCentral;
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="cc.calcDe ? voltarDaCalc() : fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Financeiro · Primos 3D</small><strong>Calculadora de preço</strong></div>
+      <button type="button" class="ag-falar" onclick="conversarComAgente('contabil')">💬 Financeiro</button></header>
+    <div class="ag-rolo fin calc" id="ag-rolo" style="--cor:#d4a53c"><section class="ag-sec calc-topo"><small class="calc-kick">Calculadora completa</small><h1 class="calc-h1">Quanto cobrar?</h1><p class="ag-sub">Atualizada com o que você gasta, compra e recebe. ${pc && pc.geradoEm ? `Dados de ${esc(isoParaBR(pc.geradoEm.slice(0, 10)))}.` : ''}</p></section>
+      ${pc ? `<section class="ag-sec" id="calc-corpo">${htmlCalcCompleta()}</section>` : '<section class="ag-sec"><p class="cc-txt">Sem dados da Central neste aparelho.</p></section>'}
+      <footer class="ag-fim">J.A.R.V.I.S. · Financeiro</footer></div>`;
+}
+function htmlCalcCompleta() {
+  const pc = primosCentral, c = jv.calcF, par = pc.parametros || {};
+  const campo = (rot, k, passo, dica) => `<label>${rot}<input type="number" inputmode="decimal" min="0" step="${passo}" value="${esc(String(c[k] ?? ''))}" oninput="jv.calcF.${k}=this.value; atualizarCalcCompleta()">${dica ? `<small>${dica}</small>` : ''}</label>`;
+  return `<div class="calc-grid">
+      <div class="calc-caixa"><h3>A peça</h3><div class="jvp-calc fin-calc">${campo('Filamento (g)', 'g', 0.1, 'do Bambu Studio, da placa toda')}${campo('Tempo (h)', 'h', 0.05, 'tempo da placa')}${campo('Peças na placa', 'n', 1)}${campo('Acabamento (min/peça)', 'acab', 1)}${campo('Acessórios (R$/peça)', 'aces', 0.01, 'argola, ímã, LED…')}${campo('Quantidade do pedido', 'qtd', 1)}</div>
+        <div class="jvp-seg">${['A1', 'Kobra'].map(k => `<button type="button" class="${c.imp === k ? 'on' : ''}" onclick="jv.calcF.imp='${k}'; refazerCalcCompleta()">${k === 'A1' ? 'Bambu A1' : 'Kobra X'}</button>`).join('')}<button type="button" class="${c.emb ? 'on' : ''}" onclick="jv.calcF.emb=!jv.calcF.emb; refazerCalcCompleta()">Com caixinha</button></div></div>
+      <div class="calc-caixa"><h3>A venda</h3><div class="jvp-seg">${['Direto', 'Shopee', 'Consignado'].map(k => `<button type="button" class="${c.canal === k ? 'on' : ''}" onclick="jv.calcF.canal='${k}'; refazerCalcCompleta()">${k === 'Direto' ? 'Cliente direto' : k}</button>`).join('')}</div>
+        <div class="jvp-calc fin-calc">${campo('Desconto/cupom (%)', 'desc', 1)}${campo('Frete que você paga (R$/pedido)', 'frete', 0.5)}${campo('Anúncio/Ads (% do preço)', 'ads', 1)}${campo('Preço que pensa cobrar', 'preco', 0.1, 'opcional')}</div></div>
+    </div>
+    <div id="calc-res">${htmlCalcCompletaRes()}</div>`;
+}
+function htmlCalcCompletaRes() {
+  const pc = primosCentral, c = jv.calcF, par = pc.parametros || {}, base = calcularPeca(pc, { ...c, preco: '' });
+  const fixos = (par.das || 82.05) + 89.9, mes = hojeISO().slice(0, 7), pecasMes = Math.max(20, (pc.vendas || []).filter(v => (v.data || '').startsWith(mes)).reduce((s, v) => s + (v.qtd || 1), 0));
+  const qtd = Math.max(1, Number(c.qtd) || 1), rateio = fixos / pecasMes, freteUn = (Number(c.frete) || 0) / qtd, custo = base.custo + rateio + freteUn;
+  const desc = (Number(c.desc) || 0) / 100, ads = (Number(c.ads) || 0) / 100, mA = par.margemAlvo || 0.4;
+  const margens = { conservador: Math.min(0.6, mA + 0.15), realista: mA, volume: Math.max(0.15, mA - 0.15) };
+  const precoPara = (canal, m) => precoComMargem(par, canal, custo, m + ads) / Math.max(0.3, 1 - desc);
+  const lucroDe = (canal, p) => { const pv = p * (1 - desc); return pv - taxaCanal(par, canal, pv) - pv * ads - custo; };
+  const cens = CENARIOS_FIN.map(([k, nome, d]) => { const p = precoBonito(precoPara(c.canal, margens[k])), l = lucroDe(c.canal, p);
+    return `<div class="fin-cen ${k}"><small>${nome}</small><strong>${reais(p)}</strong><span>lucro <b>${reais(l)}</b> por peça (${pctFr(l / p)})</span>${qtd > 1 ? `<span>pedido de ${qtd}: <b>${reais(p * qtd)}</b> · lucro ${reais(l * qtd)}</span>` : ''}<em>${d}</em><span class="fin-cen-meta">${l > 0 ? `${Math.ceil(fixos / l)} peças/mês pagam os fixos` : 'prejuízo neste preço'}</span></div>`; }).join('');
+  // composição do custo (barra empilhada)
+  const partes = [['Filamento', base.fil, '#d4a53c'], ['Máquina', base.maq, '#0a84ff'], ['Mão de obra', base.mao, '#bf5af2'], ['Falhas', base.fal, '#ff453a'], ['Caixinha + acessórios', base.emb + base.aces, '#64d2ff'], ['Custos fixos', rateio, '#8e8e93'], ['Frete', freteUn, '#ff9f0a']].filter(x => x[1] > 0.005);
+  const comp = `<div class="calc-comp">${partes.map(([n, v, cor]) => `<i style="--w:${(v / custo * 100).toFixed(1)}%; --c:${cor}" title="${esc(n)}: ${reais(v)}"></i>`).join('')}</div><ul class="fin-leg calc-leg">${partes.map(([n, v, cor]) => `<li><i style="background:${cor}"></i><span>${esc(n)}</span><b>${reais(v)}</b><small>${(v / custo * 100).toFixed(0)}%</small></li>`).join('')}</ul>`;
+  // o mesmo produto nos 3 canais (realista)
+  const canais = ['Direto', 'Shopee', 'Consignado'].map(k => { const p = precoBonito(precoPara(k, mA)); return `<div><small>${k === 'Direto' ? 'Cliente direto' : k}</small><b>${reais(p)}</b><span>lucro ${reais(lucroDe(k, p))}</span></div>`; }).join('');
+  // seu preço
+  const pp = Number(String(c.preco || '').replace(',', '.')) || 0, lp = pp ? lucroDe(c.canal, pp) : null;
+  const seu = pp ? `<div class="calc-seu ${lp >= 0 ? (lp / pp >= mA - 0.001 ? 'bom' : 'ok') : 'ruim'}">A <b>${reais(pp)}</b> você ${lp >= 0 ? 'ganha' : 'perde'} <b>${reais(Math.abs(lp))}</b> por peça (${pctFr(lp / pp)}). ${lp < 0 ? 'Abaixo do custo.' : lp / pp < mA ? `Abaixo da sua margem-alvo de ${pctFr(mA)}.` : 'Dentro da margem-alvo.'}</div>` : '';
+  // peças parecidas que você já vende (por grama)
+  const pg = custo / Math.max(1, Number(c.g) / Math.max(1, Number(c.n) || 1));
+  const viz = (pc.custoPeca || []).filter(p => p.gramasLote && (p.preco || p.precoMin)).map(p => ({ ...p, g: p.gramasLote / (p.pecasLote || 1) })).sort((a, b) => Math.abs(a.g - Number(c.g) / (Number(c.n) || 1)) - Math.abs(b.g - Number(c.g) / (Number(c.n) || 1))).slice(0, 4);
+  const aud = auditoriaPreco(pc, c);
+  return `<div class="fin-cens">${cens}</div>${seu}
+    <div class="calc-grid"><div class="calc-caixa"><h3>De onde vem o custo · ${reais(custo)}/peça</h3>${comp}</div>
+      <div class="calc-caixa"><h3>O mesmo produto em cada canal</h3><div class="calc-canais">${canais}</div><p class="cc-nota">Margem-alvo de ${pctFr(mA)}${desc ? `, com ${(desc * 100).toFixed(0)}% de desconto` : ''}${ads ? ` e ${(ads * 100).toFixed(0)}% de Ads` : ''}.</p></div></div>
+    <div class="calc-caixa"><h3>O Financeiro conferiu os dados</h3><ul class="calc-aud">${aud.map(([t, x]) => `<li class="${t}"><i>${t === 'ok' ? '✓' : t === 'aviso' ? '!' : '＋'}</i><span>${esc(x)}</span></li>`).join('')}</ul></div>
+    ${viz.length ? `<div class="calc-caixa"><h3>Peças parecidas (pelo peso)</h3><ul class="cc-lista">${viz.map(p => `<li><span><b>${esc(p.produto)}</b><small>${p.g.toFixed(0)} g · custo ${reais(p.custo)} · ${esc(p.canal || '')}</small></span><em class="cc-pct">${reais(p.preco || p.precoMin)}</em></li>`).join('')}</ul></div>` : ''}
+    <div class="calc-acoes"><button type="button" class="cc-btn fin-conversa" onclick="salvarOrcamentoCalc()">Mandar este orçamento ao Financeiro</button>
+      <button type="button" class="cc-btn" onclick="abrirChatJarvis({ contexto: 'Calculadora completa: ${esc(`${c.g} g, ${c.h} h (${c.imp}), placa com ${c.n}, ${c.canal}, custo ${reais(custo)}/peça, qtd ${qtd}`)} — analise o preço comigo', area: 'primos' })">Analisar com o J.A.R.V.I.S.</button></div>`;
+}
+function atualizarCalcCompleta() { const el = $j('calc-res'); if (el) el.innerHTML = htmlCalcCompletaRes(); }
+function refazerCalcCompleta() { const el = $j('calc-corpo'); if (el) el.innerHTML = htmlCalcCompleta(); }
+function salvarOrcamentoCalc() {
+  const pc = primosCentral, c = jv.calcF, par = pc.parametros || {}, base = calcularPeca(pc, { ...c, preco: '' });
+  const p = precoBonito(precoComMargem(par, c.canal, base.custo, par.margemAlvo || 0.4));
+  registrarRecado(['contabil', c.canal === 'Shopee' ? 'shopee' : 'vendas'], `Orçamento na calculadora: ${c.g} g, ${c.h} h na ${c.imp === 'A1' ? 'A1' : 'Kobra'}, placa com ${c.n}, qtd ${c.qtd || 1}, canal ${c.canal} — custo ${reais(base.custo)}/peça, preço realista ${reais(p)}${c.preco ? `, Rafael pensou em ${reais(Number(String(c.preco).replace(',', '.')))}` : ''}.`, 'pedido', 'app');
+}
 function refazerCalcFin() { const el = $j('fin-calc'); if (el) el.innerHTML = htmlCalcFin(); }
 function numerosPagina(id) {
   const pc = primosCentral || {}, N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, R = v => reais(v);
@@ -7701,8 +7852,10 @@ function palcoPagina(id) {
 }
 function renderPaginaAgente() {
   const el = $j('ag-pag'), id = cc.pagina; if (!el || el.hidden || !id) return;
+  if (id === 'calc') return renderCalculadoraCompleta();
   if (id === 'jarvis') return renderPaginaJarvis();
   if (id === 'contabil') return renderPaginaFinanceiro();
+  if (id === 'marketing') return renderPaginaMarketing();
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -7916,7 +8069,7 @@ function htmlConteudoMarketing() {
   const v = (conteudoMkt && conteudoMkt.videos) || [], r = relatorioAgente('marketing') || {};
   const prox = (r.roteiros || []).length ? `<p class="cc-nota">Próximos vídeos (roteiro de hoje): ${r.roteiros.map(x => '<b>' + esc(x.produto) + '</b> — “' + esc(x.gancho) + '”').join(' · ')}</p>` : '';
   if (!v.length) return ccBloco('Conteúdo pronto', `<p class="cc-txt">O estúdio monta 1 vídeo por noite (3h) com as fotos e vídeos da pasta <b>06 Shopee - Produtos</b> e guarda em <b>J.A.R.V.I.S</b> dentro dela. Os primeiros aparecem aqui.</p>${prox}`);
-  return ccBloco(`Conteúdo pronto · ${plural(v.length, 'vídeo', 'vídeos')}`, `<div class="cc-videos">${v.slice(0, 8).map((x, i) => `<article class="cc-video"><video data-cofre="${esc(x.video)}" data-poster="${esc(x.capa)}" muted loop playsinline preload="none" onclick="this.paused ? this.play() : this.pause()"></video>
+  return ccBloco(`Conteúdo pronto · ${plural(v.length, 'vídeo', 'vídeos')}`, `<div class="cc-videos">${v.slice(0, 8).map((x, i) => `<article class="cc-video"><video data-cofre="${esc(x.video)}" data-poster="${esc(x.capa)}" muted loop playsinline preload="none" onclick="abrirVideoMkt(${i})"></video>
     <div><small>${esc(isoParaBR(x.data || ''))} · ${esc(x.categoria || '')}</small><b>${esc(x.gancho || x.produto)}</b><span>${esc(x.produto || '')}</span>${x.audio ? `<span class="cc-nota">🎵 ${esc(x.audio)}${x.estilo ? ' · ' + esc(x.estilo) : ''}</span>` : ''}
     <button type="button" class="cc-mini sec" onclick="copiarLegendaMkt(${i})">Copiar legenda</button><em title="${esc(x.pasta || '')}">📁 ${esc((x.pasta || '').split('\\').pop())}</em></div></article>`).join('')}</div>${prox}<p class="cc-nota">Para postar: abra o vídeo completo da pasta no celular, escolha um áudio em alta no TikTok e cole a legenda. O J.A.R.V.I.S. nunca posta sozinho.</p>`);
 }

@@ -2957,3 +2957,61 @@ body.ag-aberta { overflow: hidden; }
 .ag-rolo.fin .jvp-seg { background: rgba(255,255,255,0.06); }
 .ag-rolo.fin .jvp-seg button { color: #c7c7cc; background: transparent; }
 .ag-rolo.fin .jvp-seg button.on { background: #d4a53c; color: #1a1205; }
+
+/* FASE 7 (pedido do Rafael 03/10/2026): sem o aspecto de MÁRMORE em todo o app — os blocos ficam em vidro escuro liso */
+.cc, .ag { --marmore: linear-gradient(transparent, transparent) !important; }
+
+/* FASE 7 — PÁGINA DO MARKETING (essencial na frente, detalhe atrás de botões) + PLAYER grande dos vídeos */
+.mkt-reel { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 4px 2px 14px; scrollbar-width: none; }
+.mkt-reel::-webkit-scrollbar { display: none; }
+.mkt-card { position: relative; flex: 0 0 min(42vw, 190px); aspect-ratio: 9 / 16; border: 0; padding: 0; border-radius: 20px; overflow: hidden; background: #111; color: #fff; text-align: left; cursor: pointer; scroll-snap-align: start;
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.14); animation: mktEntra .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--k) * 70ms); transition: transform .25s; }
+@keyframes mktEntra { from { opacity: 0; transform: translateY(24px) scale(0.94); } }
+.mkt-card:hover { transform: translateY(-4px); } .mkt-card:active { transform: scale(0.97); }
+.mkt-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mkt-card::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(0,0,0,0.85)); }
+.mkt-card b, .mkt-card small { position: absolute; left: 12px; right: 12px; z-index: 1; } .mkt-card b { bottom: 30px; font-size: 0.86rem; line-height: 1.25; } .mkt-card small { bottom: 12px; font-size: 0.7rem; color: #c7c7cc; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mkt-play { position: absolute; z-index: 1; left: 50%; top: 42%; transform: translate(-50%, -50%); width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,0.22); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); font-size: 1.1rem; padding-left: 3px; animation: mktPulso 2.4s ease-in-out infinite; }
+@keyframes mktPulso { 50% { transform: translate(-50%, -50%) scale(1.1); background: rgba(255,255,255,0.32); } }
+.mkt-rots { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.mkt-rot { display: grid; gap: 6px; padding: 18px; border-radius: 22px; background: rgba(255,255,255,0.045); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.12); animation: mktEntra .7s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--k) * 90ms); }
+.mkt-rot small { font-size: 0.7rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--cor, #bf5af2); } .mkt-rot b { font-size: 1.05rem; line-height: 1.3; } .mkt-rot span { font-size: 0.84rem; color: #d1d1d6; } .mkt-rot em { font-style: normal; font-size: 0.78rem; color: #8e8e93; }
+.mkt-det { border-radius: 18px; background: rgba(255,255,255,0.04); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.1); margin-bottom: 10px; overflow: hidden; }
+.mkt-det summary { list-style: none; display: flex; justify-content: space-between; align-items: center; padding: 16px 18px; cursor: pointer; font-weight: 600; }
+.mkt-det summary::-webkit-details-marker { display: none; }
+.mkt-det summary i { font-style: normal; color: #8e8e93; transition: transform .25s; } .mkt-det[open] summary i { transform: rotate(90deg); }
+.mkt-det > div { padding: 0 18px 18px; animation: mktAbre .35s ease both; } @keyframes mktAbre { from { opacity: 0; transform: translateY(-6px); } }
+.mkt-tk { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; } .mkt-tk div { padding: 14px; border-radius: 16px; background: rgba(255,255,255,0.05); } .mkt-tk b { display: block; font-size: 1.3rem; } .mkt-tk small { color: #8e8e93; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.mkt-player { position: fixed; inset: 0; z-index: 9900; display: grid; place-items: center; }
+.mkt-player[hidden] { display: none; }
+.mkt-player-fundo { position: absolute; inset: 0; background: rgba(0,0,0,0.82); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); animation: mktAbre .3s ease both; }
+.mkt-player-box { position: relative; display: flex; gap: 22px; align-items: center; max-width: min(94vw, 820px); max-height: 92vh; color: #fff; animation: mktEntra .45s cubic-bezier(.2,.8,.2,1) both; --k: 0; }
+.mkt-player-box video { height: min(80vh, 760px); max-width: 92vw; aspect-ratio: 9 / 16; border-radius: 22px; background: #000; box-shadow: 0 30px 80px rgba(0,0,0,0.6); }
+.mkt-player-info { display: grid; gap: 8px; max-width: 280px; } .mkt-player-info small { color: #8e8e93; } .mkt-player-info b { font-size: 1.2rem; } .mkt-player-info span { color: #d1d1d6; }
+.mkt-x { position: absolute; z-index: 2; top: -8px; right: -8px; width: 38px; height: 38px; border: 0; border-radius: 50%; background: rgba(255,255,255,0.16); color: #fff; font-size: 1rem; cursor: pointer; }
+@media (max-width: 800px) { .mkt-player-box { flex-direction: column; gap: 12px; } .mkt-player-box video { height: min(68vh, 640px); } .mkt-player-info { max-width: 92vw; text-align: center; } .mkt-x { top: 4px; right: 4px; } }
+
+/* FASE 7 — cifrão de ouro 3D (no lugar da moeda com a logo) + calculadora mais presente + calculadora completa */
+.fin-cifrao { position: relative; width: min(46vw, 300px); height: min(56vw, 360px); transform-style: preserve-3d; animation: finCifrao 7s ease-in-out infinite; transform: rotateX(8deg) rotateY(calc(var(--h, 0) * 540deg)); }
+@keyframes finCifrao { 0%, 100% { rotate: y -28deg; translate: 0 0; } 50% { rotate: y 28deg; translate: 0 -10px; } }
+.fin-cifrao span { position: absolute; inset: 0; display: grid; place-items: center; font: 800 min(52vw, 340px)/1 -apple-system, "SF Pro Display", "Segoe UI", sans-serif; color: #6b4708; }
+.fin-cifrao span.frente { background: linear-gradient(180deg, #fff6c8 8%, #ffd766 35%, #d4a53c 60%, #8a5c10 92%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 28px rgba(255,200,80,0.45)); }
+.fin-calc-box { padding: 20px; border-radius: 26px; background: radial-gradient(120% 120% at 0% 0%, rgba(212,165,60,0.14), rgba(255,255,255,0.03) 60%); box-shadow: inset 0 0 0 0.5px rgba(255,214,120,0.3), 0 20px 50px rgba(0,0,0,0.35); }
+.calc-abrir { width: 100%; margin-top: 14px; padding: 16px !important; font-size: 1rem !important; }
+.calc-topo { padding-top: 110px !important; } .calc-kick { color: #d4a53c; letter-spacing: 0.18em; text-transform: uppercase; font-size: 0.74rem; }
+.calc-h1 { margin: 8px 0; font-size: clamp(2.4rem, 7vw, 4.4rem); letter-spacing: -0.04em; background: linear-gradient(180deg, #fff 30%, #d4a53c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.calc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.calc-caixa { padding: 18px; border-radius: 24px; background: rgba(255,255,255,0.04); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.1); margin-bottom: 14px; }
+.calc-caixa h3 { margin: 0 0 12px; font-size: 0.82rem; letter-spacing: 0.1em; text-transform: uppercase; color: #a1a1a6; }
+.ag-rolo.fin .jvp-calc label small { display: block; font-size: 0.68rem; color: #6e6e73; margin-top: 3px; }
+.calc-comp { display: flex; height: 16px; border-radius: 99px; overflow: hidden; margin-bottom: 14px; }
+.calc-comp i { width: var(--w); background: var(--c); animation: calcBarra .9s cubic-bezier(.2,.8,.2,1) both; } @keyframes calcBarra { from { width: 0; } }
+.calc-canais { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .calc-canais div { padding: 12px; border-radius: 16px; background: rgba(255,255,255,0.05); display: grid; gap: 2px; }
+.calc-canais small { color: #8e8e93; font-size: 0.72rem; } .calc-canais b { font-size: 1.2rem; color: #ffe08a; } .calc-canais span { font-size: 0.74rem; color: #aeaeb2; }
+.calc-seu { margin: 0 0 14px; padding: 14px 16px; border-radius: 16px; font-size: 0.92rem; } .calc-seu.bom { background: rgba(48,209,88,0.12); } .calc-seu.ok { background: rgba(255,159,10,0.12); } .calc-seu.ruim { background: rgba(255,69,58,0.14); }
+.calc-aud { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.calc-aud li { display: grid; grid-template-columns: 24px 1fr; gap: 10px; font-size: 0.86rem; line-height: 1.4; color: #d1d1d6; }
+.calc-aud i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 0.75rem; font-weight: 800; }
+.calc-aud .ok i { background: rgba(48,209,88,0.18); color: #30d158; } .calc-aud .aviso i { background: rgba(255,159,10,0.18); color: #ff9f0a; } .calc-aud .falta i { background: rgba(10,132,255,0.18); color: #0a84ff; }
+.calc-acoes { display: grid; gap: 10px; margin-bottom: 30px; }
+@media (max-width: 800px) { .calc-canais { grid-template-columns: 1fr; } .fin-cifrao { width: 60vw; height: 70vw; } }
