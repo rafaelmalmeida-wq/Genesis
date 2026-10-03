@@ -2741,3 +2741,19 @@ body.jv-em-voz #cerebro .jv-central-btn { opacity: 0; pointer-events: none; }
   .jv-dest.jv-aviso { flex: 0 0 calc(100vw - 64px); max-width: none; scroll-snap-align: start; padding: 10px 12px 10px 15px; }
   .jv-dest.jv-aviso strong { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.84rem; }
 }
+/* --- agente de Produção: fábrica 3D + filas --- */
+.cc-fab { position: relative; height: 380px; margin: 0 -20px; overflow: hidden; background: radial-gradient(70% 60% at 50% 55%, rgba(255,255,255,0.06), transparent 70%); }
+.cc-fab canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cc-fab-bloco .cc-fab { transform: scale(calc(0.94 + 0.06 * min(1, var(--p, 1) * 2))); }
+.cc-filadia { margin: 0; padding: 0; list-style: none; counter-reset: fd; }
+.cc-filadia li { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 0 10px 34px; border-bottom: 0.5px solid rgba(255,255,255,0.06); counter-increment: fd; }
+.cc-filadia li::before { content: counter(fd); position: absolute; left: 0; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; font-size: 0.74rem; font-weight: 700; background: linear-gradient(135deg, #0a84ff, #5e5ce6); color: #fff; }
+.cc-filadia span { flex: 1; min-width: 0; } .cc-filadia b { display: block; font-size: 0.88rem; font-weight: 600; } .cc-filadia small { color: #8e8e93; font-size: 0.74rem; }
+.cc-filadia em, .cc-fila em { font-style: normal; font-size: 0.7rem; color: #aeaeb2; white-space: nowrap; }
+.cc-fila { list-style: none; margin: 0 0 10px; padding: 0; }
+.cc-fila li { display: flex; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 0.5px solid rgba(255,255,255,0.06); }
+.cc-fila li > i { width: 14px; height: 14px; border-radius: 4px; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.3); }
+.cc-fila li span { flex: 1; min-width: 0; } .cc-fila b { display: block; font-size: 0.86rem; font-weight: 500; } .cc-fila small { color: #8e8e93; font-size: 0.72rem; }
+.cc-fila li.imprimindo b::after { content: " · imprimindo"; color: #0a84ff; font-weight: 600; }
+.cc-fila li.feito { opacity: 0.45; }
+@media (max-width: 800px) { .cc-fab { height: 320px; margin: 0 -16px; } }

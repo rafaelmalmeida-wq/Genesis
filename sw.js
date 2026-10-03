@@ -1,4 +1,4 @@
-const CACHE_NAME = 'genesis-cache-v31';
+const CACHE_NAME = 'genesis-cache-v32';
 const urlsToCache = [
   './',
   './index.html',
@@ -7,6 +7,7 @@ const urlsToCache = [
   './jarvis3d.js',
   './expositor3d.js',
   './secadora3d.js',
+  './fabrica3d.js',
   './vendor/three.module.min.js',
   './img/primos-p.png',
   './img/primos-logo.jpg',

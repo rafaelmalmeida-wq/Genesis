@@ -47,6 +47,7 @@ let familia = JSON.parse(localStorage.getItem('lifeos_familia')) || [];     // J
 let memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || [];   // JARVIS: o "subplano" (curiosidades, desabafos, conversas)
 let primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || [];
 let agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; // Central de Comando: agentes criados pelo Rafael — { id, setor, nome, missao, skills: [], criado }
+let filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; // Produção: o que o Rafael quer imprimir (voz/chat/app) — { id, titulo, qtd, material, cor, origem, status: fila|imprimindo|feito, criado, obs }
 let estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; setTimeout(renderCentral, 0); // Estoque da Primos (o que o app registra além da Central) — { id, data, tipo: compra|consumo|ajuste, material, cor, kg, valor, status: caminho|chegou, obs } // Primos: ações do plano do J.A.R.V.I.S. marcadas como feitas (✓) — { id, chave, texto, prazo, feito }
 let jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; // J.A.R.V.I.S.: a conversa do chat (curta: as mais recentes, sincroniza)
 let media = JSON.parse(localStorage.getItem('lifeos_media')) || [];         // filmes, séries, docs
@@ -6371,6 +6372,9 @@ async function conversarJarvis(texto, anexos = []) {
   if ($j('jv-chat').hidden) { abrirChatJarvis({}); }
   if (jv.iaPensando && jv.controle) { try { jv.controle.abort(); } catch (e) { } }
   const eu = msgChat({ de: 'eu', t: texto, img: anexos.length, ctx: jv.contexto });
+  const pf = !anexos.length && detectarFila(texto);
+  if (pf) { const it = adicionarFila(pf, 'chat'); const m = msgChat({ de: 'jv', t: `🖨️ Anotei na **fila de impressão**: **${it.titulo}** · ${it.qtd} un.${it.material || it.cor ? ' · ' + [it.material, it.cor].filter(Boolean).join(' ') : ''}. O agente de Produção encaixa na fila do dia.` });
+    m.acoes = [['Ver a fila', `fecharChatJarvis(); abrirCentral('primos'); abrirAgenteCentral('producao')`], ['Desfazer', `desfazerFila(${it.id}, ${m.id})`]]; gravarChat(); renderChatJarvis(); return; }
   if (anexos.length) jv.miniaturas[eu.id] = anexos.map(a => a.dados);
   jv.rolarChat = true; gravarChat(); renderChatJarvis();
   // 1) lançamento rápido no app (entendido aqui mesmo)
@@ -6602,7 +6606,7 @@ function suportaVozAoVivo() { return !!(window.WebSocket && navigator.mediaDevic
 function iniciarConversaVoz(contexto, area, op = {}) {
   if (vz.ativo) { encerrarConversaVoz(); return; }
   if (!iaLigada() || !navigator.onLine || !suportaVozAoVivo() || jvConfig.vozModo === 'classica') { abrirChatJarvis({ contexto, area, ouvir: true }); return; }
-  vz.contexto = contexto || nomePaginaJarvis(); vz.area = area !== undefined ? area : (jv.area || null); vz.saudar = !!op.saudar;
+  vz.contexto = contexto || nomePaginaJarvis(); vz.area = area !== undefined ? area : (jv.area || null); vz.saudar = !!op.saudar; vz.vozAgente = op.voz || null; vz.persona = op.persona || ''; vz.nomeAgente = op.nomeAgente || '';
   if ($j('jv-conversa').hidden) { $j('jv-conversa').hidden = false; document.body.classList.add('jv-em-voz'); empilharCamada('voz', encerrarConversaVoz); }
   if (!$j('jv-chat').hidden) fecharChatJarvis();
   vz.legEu = ''; vz.legEle = ''; vz.dica = 'Fale normalmente. Toque na esfera para interromper o J.A.R.V.I.S.';
@@ -6668,7 +6672,7 @@ function traduzirFechamentoVoz(codigo, motivo) {
 }
 /** Configuração da sessão: modelo, voz, personalidade + dados, legendas e ferramentas (cada nível tira um pedaço). */
 function setupVoz(modelo) {
-  const s = { model: 'models/' + modelo, generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: jvConfig.vozNome || VOZES_JARVIS[0][0] } } } }, systemInstruction: { parts: [{ text: sistemaVoz() }] } };
+  const s = { model: 'models/' + modelo, generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: vz.vozAgente || jvConfig.vozNome || VOZES_JARVIS[0][0] } } } }, systemInstruction: { parts: [{ text: sistemaVoz() }] } };
   if (vz.nivelSetup < 3) { s.inputAudioTranscription = {}; s.outputAudioTranscription = {}; }
   if (vz.nivelSetup < 2) s.tools = [{ functionDeclarations: ferramentasVoz() }];
   if (vz.nivelSetup < 1) s.tools.push({ googleSearch: {} });
@@ -6680,6 +6684,7 @@ function ferramentasVoz() {
     { name: 'lembrar_sobre_rafael', description: 'Guarda um fato duradouro sobre o Rafael (um gosto, o jeito dele, uma preferência, um objetivo) para você se adaptar a ele nas próximas conversas. Use com moderação.', parameters: { type: 'OBJECT', properties: { fato: { type: 'STRING' } }, required: ['fato'] } }
   ];
   if (claudeConfigurado()) f.push({ name: 'pedir_ao_computador', description: 'Manda uma tarefa para o Claude, no computador do Rafael: lançar ou corrigir algo na planilha da Primos 3D, guardar ou ler algo na Primos 3D Central, ou mudar o app. Confirme com ele em uma frase antes de mandar.', parameters: { type: 'OBJECT', properties: { tarefa: { type: 'STRING', description: 'O que o Claude deve fazer, em 1 frase objetiva' } }, required: ['tarefa'] } });
+  f.push({ name: 'adicionar_fila_impressao', description: 'Anota um item na FILA DE IMPRESSÃO da Primos 3D (o agente de Produção organiza a fila do dia). Use quando o Rafael disser que quer/precisa imprimir algo ou pedir para pôr na fila. Não precisa confirmar.', parameters: { type: 'OBJECT', properties: { titulo: { type: 'STRING', description: 'o que imprimir (ex.: chaveiro Nossa Senhora)' }, qtd: { type: 'NUMBER' }, material: { type: 'STRING' }, cor: { type: 'STRING' }, obs: { type: 'STRING' } }, required: ['titulo'] } });
   return f;
 }
 /** A personalidade falada + o que ele já aprendeu sobre o Rafael + as últimas mensagens + os dados do app. */
@@ -6687,6 +6692,14 @@ function sistemaVoz() {
   const nome = String(profile.name || 'Rafael').trim().split(/\s+/)[0] || 'Rafael';
   const agora = new Date(), dia = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }), hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const recentes = jarvisChat.filter(m => (m.de === 'eu' || m.de === 'jv' || m.de === 'pc') && m.t).slice(-8).map(m => `${m.de === 'eu' ? nome : m.de === 'pc' ? 'Claude (no computador)' : 'J.A.R.V.I.S.'}: ${anonimizar(String(m.t).replace(/[*_#`]/g, ''), vz.mapa).slice(0, 300)}`).join('\n');
+  if (vz.persona) return `Você é o agente ${vz.nomeAgente} da Primos 3D, que trabalha sob o comando do J.A.R.V.I.S., numa CONVERSA POR VOZ ao vivo com o ${nome}, o dono.
+PERSONALIDADE: ${vz.persona}
+COMO FALAR: português do Brasil, frases curtas feitas para ouvir (1 a 4), sem listas nem símbolos; números arredondados. Uma pergunta por vez. Nunca invente números: use o bloco DADOS.
+LIMITES: você não envia mensagens, não posta, não compra e não paga nada; isso é com ele.
+FERRAMENTAS: adicionar_fila_impressao quando ele quiser imprimir algo; abrir_tela para mostrar algo no app.
+AGORA: ${dia}, ${hora}.
+=== DADOS ===
+${dadosCompletosIA()}`;
   return `Você é o J.A.R.V.I.S., o assistente pessoal do ${nome}, numa CONVERSA POR VOZ ao vivo pelo celular dele.
 VOZ E JEITO: fale português do Brasil fluente, com um leve sotaque britânico — como um inglês culto que mora no Brasil há anos: voz grave e calma, dicção clara e elegante. Tem a inteligência e a perspicácia do Alfred, mas é bem menos formal: chame-o de "${nome}" (quase nunca "senhor"), fale de igual para igual, com humor seco e leve na medida. Adapte-se a ele: o ${nome} é direto, informal, fala rápido e às vezes pensa alto enquanto dita — acompanhe o ritmo, sem sermão e sem enrolação.
 COMO FALAR: frases curtas e naturais, feitas para ouvir (de 1 a 4 frases; mais só se ele pedir). Nada de listas, símbolos, markdown ou links. Números arredondados e ditos com naturalidade ("uns trezentos e cinquenta reais", "quase vinte e dois mil"). Uma pergunta por vez. Se faltar dado, diga qual falta e como conseguir.
@@ -6759,6 +6772,7 @@ function executarFerramentasVoz(chamadas) {
     const a = c.args || {}; let r;
     try {
       if (c.name === 'abrir_tela' && DESTINOS_JARVIS[a.destino]) { const d = a.destino; setTimeout(() => irDestinoJarvis(d), 0); r = { ok: true, aberto: DESTINOS_JARVIS[d][0] }; }
+      else if (c.name === 'adicionar_fila_impressao' && a.titulo) { const it = adicionarFila({ titulo: String(a.titulo), qtd: a.qtd, material: a.material, cor: a.cor, obs: a.obs }, 'voz'); toast(`🖨️ Na fila: ${it.titulo} · ${it.qtd} un.`, 4000); r = { ok: true, aviso: 'Anotado na fila de impressão; o agente de Produção vai encaixar na fila do dia.' }; }
       else if (c.name === 'lembrar_sobre_rafael' && a.fato) { guardarMemoria({ tipo: 'perfil', texto: String(a.fato).slice(0, 240) }); r = { ok: true }; }
       else if (c.name === 'pedir_ao_computador' && a.tarefa && claudeConfigurado()) { vz.pediuEm = Date.now(); const tipo = classificarPedidoPC(String(a.tarefa)); enviarAoComputadorAuto(desanonimizar(vz.legEu || a.tarefa, vz.mapa), [], vz.contexto, vz.area, desanonimizar(String(a.tarefa), vz.mapa)); r = tipo === 'proibido' ? { ok: false, erro: 'Bloqueado pela segurança: compras, pagamentos, enviar mensagens/e-mails e postar ficam só com o Rafael. Diga isso a ele.' } : tipo === 'grava' ? { ok: true, aviso: 'Isso grava dados: apareceu no chat um cartão para o Rafael confirmar. Diga a ele para tocar em Confirmar no chat.' } : { ok: true, aviso: 'Pedido de leitura enviado ao Claude no computador; a resposta aparece no chat do app.' }; }
       else r = { ok: false, erro: 'não consegui fazer isso' };
@@ -7019,7 +7033,7 @@ function abrirCentral(setor) {
 function fecharCentral(daVolta) {
   const el = $j('jv-central'); if (!el || el.hidden) return;
   el.hidden = true; document.body.classList.remove('cc-aberta'); cc.agente = null; cc.novo = false; cc.ultimoQuadro = null;
-  if (cc.seca3d) cc.seca3d.renderer.domElement.remove();
+  if (cc.seca3d) cc.seca3d.renderer.domElement.remove(); if (cc.fab3d) cc.fab3d.renderer.domElement.remove();
   if (!daVolta) desempilharCamada('central');
 }
 function escolherSetorCentral(id) { cc.setor = id; cc.agente = null; cc.novo = false; renderCentral(); }
@@ -7070,7 +7084,8 @@ function renderCentral() {
   else if (cc.agente) { p.hidden = false; p.innerHTML = htmlPainelAgente(cc.agente); p.scrollTop = 0; }
   else { p.hidden = true; p.innerHTML = ''; }
   el.classList.toggle('com-painel', !p.hidden);
-  if (cc.agente === 'estoque') montarSecadora3D(); else if (cc.seca3d) cc.seca3d.renderer.domElement.remove(); // o 3D só anda com o Estoque aberto
+  if (cc.agente === 'estoque') montarSecadora3D(); else if (cc.seca3d) cc.seca3d.renderer.domElement.remove();
+  if (cc.agente === 'producao') montarFabrica3D(); else if (cc.fab3d) cc.fab3d.renderer.domElement.remove(); // o 3D só anda com o Estoque aberto
   animarPainelCentral(); animarQuadroCentral();
   requestAnimationFrame(desenharFiosCanvas); setTimeout(desenharFiosCanvas, 260); // de novo depois que as fontes assentam
 }
@@ -7273,6 +7288,79 @@ function enviarComandoAgente(ev, id) {
   if (PC_PROIBIDO.test(t)) { toast('🛡️ Isso nenhum agente faz: compras, pagamentos, mensagens e posts ficam com você.', 5000); return; }
   inp.value = ''; controlarAgente('rodar', id, t);
 }
+// --- FILA DE IMPRESSÃO (agente de Produção, fase 6) -------------------------------------------------------------
+// O Rafael fala/escreve "quero imprimir 20 chaveiros de Nossa Senhora em PLA dourado" → entra em filaImpressao (módulo
+// sincronizado). Uma cópia SEM nomes de clientes (fila + pedidos em aberto) vai ao cofre (dados/fila.json) para o agente de
+// Produção montar a FILA DO DIA na nuvem, junto com o que o Marketing viu viralizar, a Shopee e as datas comerciais.
+const RE_FILA = /^(?:(?:eu\s+)?(?:quero|vou|preciso|precisamos|bora|tenho que|temos que|vamos)\s+)?(?:imprimir|adiciona(?:r)?\s+(?:na|a)\s+fila(?:\s+de\s+impress[aã]o)?|coloca(?:r)?\s+na\s+fila(?:\s+de\s+impress[aã]o)?|p[oõ]e\s+na\s+fila)\b[:\s,]*(.+)$/i;
+function detectarFila(texto) {
+  const t = String(texto || '').trim(); const m = t.match(RE_FILA); if (!m || /\?$/.test(t)) return null;
+  let resto = m[1].trim(), qtd = 1; const q = resto.match(/^(\d{1,4})\s*(?:x|un\.?|unidades?|pe[cç]as?)?\s*(?:de\s+)?/i); if (q) { qtd = Number(q[1]); resto = resto.slice(q[0].length); }
+  const s = semAcentoCer(resto), mat = (s.match(/\b(pla|petg|tpu|abs|asa|silk|seda)\b/) || [])[1];
+  const corM = s.match(/\b(preto|preta|branco|branca|cinza|vermelho|vermelha|azul|verde|amarelo|amarela|laranja|rosa|roxo|roxa|dourado|dourada|prata|bege|marrom|natural|transparente)\b/);
+  const titulo = resto.replace(/\s+(?:em|de|no)\s+(?:pla|petg|tpu|abs|asa|silk|seda)\b.*$/i, '').replace(/[.!]+$/, '').trim();
+  if (titulo.length < 2) return null;
+  return { titulo: titulo.charAt(0).toUpperCase() + titulo.slice(1), qtd, material: mat ? mat.toUpperCase().replace('SEDA', 'Silk') : '', cor: corM ? corM[1] : '' };
+}
+function adicionarFila(it, origem) {
+  const novo = { id: novoId(), titulo: String(it.titulo).slice(0, 80), qtd: Math.max(1, Math.min(9999, Number(it.qtd) || 1)), material: it.material || '', cor: it.cor || '', origem: origem || 'app', status: 'fila', criado: new Date().toISOString(), obs: String(it.obs || '').slice(0, 200) };
+  filaImpressao.push(novo); salvar('filaimpressao', filaImpressao); publicarFilaCofre(); if (cc.agente === 'producao') renderCentral(); return novo;
+}
+function mudarFila(id, status) { const f = filaImpressao.find(x => x.id === id); if (!f) return; f.status = status; if (status === 'feito') f.feitoEm = new Date().toISOString(); salvar('filaimpressao', filaImpressao); publicarFilaCofre(); renderCentral(); }
+function removerFila(id) { filaImpressao = filaImpressao.filter(x => x.id !== id); salvar('filaimpressao', filaImpressao); publicarFilaCofre(); renderCentral(); }
+function desfazerFila(id, msgId) { removerFila(id); const m = jarvisChat.find(x => x.id === msgId); if (m) { m.acoes = []; m.cartao = (m.cartao || '') + '<p class="jvc-ok">✕ Tirei da fila.</p>'; gravarChat(); renderChatJarvis(); } }
+/** Cópia para o cofre (debounce de 4 s): fila + pedidos em aberto sem nome de cliente. Só se o computador estiver conectado. */
+function publicarFilaCofre() {
+  clearTimeout(cc.tFila); if (!claudeConfigurado()) return;
+  cc.tFila = setTimeout(async () => {
+    const pedidos = orders.filter(o => pedidoAberto(o)).map(o => ({ peca: o.title, qtd: o.qty, material: o.material, cor: o.color, prazo: o.due, etapa: o.status, pago: !!o.paid }));
+    const dados = { tipo: 'jarvis-fila', quando: new Date().toISOString(), fila: filaImpressao.filter(f => f.status !== 'feito' || (Date.now() - Date.parse(f.feitoEm || 0)) < 14 * 864e5), pedidos };
+    try { let sha = null; try { sha = (await gh('/contents/dados/fila.json?ref=main')).sha; } catch (e) { }
+      await gh('/contents/dados/fila.json', { method: 'PUT', body: JSON.stringify({ message: 'App: fila de impressão', content: btoa(unescape(encodeURIComponent(JSON.stringify(dados, null, 1)))), ...(sha ? { sha } : {}) }) }); } catch (e) { }
+  }, 4000);
+}
+const COR_FILA = { preto: '#1d1d20', preta: '#1d1d20', branco: '#f1f1ee', branca: '#f1f1ee', cinza: '#8a8d93', vermelho: '#d3262a', vermelha: '#d3262a', azul: '#2457c5', verde: '#1f9d55', amarelo: '#f6c51d', amarela: '#f6c51d', laranja: '#ff7a1a', rosa: '#e64d97', roxo: '#7a4fe0', roxa: '#7a4fe0', dourado: '#d4a53c', dourada: '#d4a53c', prata: '#c3c6cc', bege: '#d9c3a0', marrom: '#6e4428', natural: '#e7e3d6', transparente: '#e7e3d6' };
+const ORIGEM_FILA = { voz: '🎙 você', chat: '💬 você', app: '✎ você', agente: '✦ agente', pedido: '📦 pedido', marketing: '📈 marketing', shopee: '🛍 Shopee', data: '📅 data' };
+/** Painel do agente de Produção: fila do dia (nuvem) + a sua fila + a fábrica em 3D + datas que vêm aí. */
+function htmlAgenteProducao(a) {
+  const r = relatorioAgente('producao') || {}, abertos = filaImpressao.filter(f => f.status !== 'feito'), feitos = filaImpressao.filter(f => f.status === 'feito').slice(-5).reverse();
+  const dia = (r.filaDia || []).length ? ccBloco(`Fila do dia · ${esc(isoParaBR(r.dia || '').slice(0, 5))}`, `<ol class="cc-filadia">${r.filaDia.map(f => `<li><span><b>${esc(f.titulo)}${f.qtd ? ` · ${esc(String(f.qtd))} un.` : ''}</b><small>${esc([f.maquina, f.horas ? f.horas + ' h' : '', f.motivo].filter(Boolean).join(' · '))}</small></span>${f.origem ? `<em>${esc(ORIGEM_FILA[f.origem] || f.origem)}</em>` : ''}</li>`).join('')}</ol>`) : ccBloco('Fila do dia', '<p class="cc-txt">A primeira fila do dia sai na próxima rodada (7h) — ou toque em <b>▶ Rodar agora</b>.</p>');
+  const datas = (r.datas || []).length ? ccBloco('Datas que vêm aí', `<ul class="cc-lista">${r.datas.map(d => `<li><span><b>${esc(d.tema)}</b><small>${esc(isoParaBR(d.data || ''))}${d.comecarEm ? ` · começar a imprimir até ${esc(isoParaBR(d.comecarEm))}` : ''}</small></span></li>`).join('')}</ul>`) : '';
+  const linha = f => `<li class="${f.status}"><i style="background:${COR_FILA[semAcentoCer(f.cor)] || '#8e8e93'}"></i><span><b>${esc(f.titulo)} · ${f.qtd} un.</b><small>${esc([f.material, f.cor, ORIGEM_FILA[f.origem] || ''].filter(Boolean).join(' · '))}</small></span>
+    ${f.status === 'feito' ? '<em>✓</em>' : `<button type="button" class="cc-mini${f.status === 'imprimindo' ? '' : ' sec'}" onclick="mudarFila(${f.id}, '${f.status === 'imprimindo' ? 'feito' : 'imprimindo'}')">${f.status === 'imprimindo' ? '✓ Pronto' : '▶ Imprimir'}</button>`}<button type="button" class="cc-mini sec" onclick="removerFila(${f.id})" aria-label="Tirar da fila">✕</button></li>`;
+  return cabecalhoAgente(a)
+    + `<section class="cc-bloco cc-fab-bloco"><h4>Fábrica · ao vivo</h4><div id="cc-fab" class="cc-fab"><div class="cc-seca-carregando"><span class="spin"></span> Ligando as impressoras…</div></div><p class="cc-nota">As impressoras mostram o que está em "imprimindo" (ou o 1º da fila do dia). O andamento é ilustrativo até ligarmos o histórico da Bambu.</p></section>`
+    + htmlRelatorioAgente('producao') + dia
+    + ccBloco(`Sua fila · ${plural(abertos.length, 'item', 'itens')}`, `<ul class="cc-fila">${abertos.map(linha).join('') || '<li><span><small>Vazia. Fale “quero imprimir …” para o J.A.R.V.I.S. ou anote aqui embaixo.</small></span></li>'}${feitos.map(linha).join('')}</ul>
+      <form class="cc-form cc-fila-form" onsubmit="event.preventDefault(); const t = document.getElementById('cc-fila-txt'); const d = detectarFila('imprimir ' + t.value) || { titulo: t.value, qtd: 1 }; if (d.titulo) { adicionarFila(d, 'app'); t.value = ''; }"><input id="cc-fila-txt" placeholder="Ex.: 20 chaveiros Nossa Senhora em PLA dourado" maxlength="120" required><button type="submit" class="cc-btn">＋ Pôr na fila</button></form>`)
+    + datas + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('producao')">Abrir Produção na Primos</button>` + botaoConversarAgente(a);
+}
+const MAQUINAS_FAB = ['A1 Combo #1', 'A1 Combo #2', 'Kobra X'];
+function dadosFabrica() {
+  const r = relatorioAgente('producao') || {}, corDe = c => COR_FILA[semAcentoCer(c || '')] || (/^#/.test(c || '') ? c : '#8e8e93');
+  const imprimindo = filaImpressao.filter(f => f.status === 'imprimindo'), dia = (r.filaDia || []).slice();
+  const maquinas = MAQUINAS_FAB.map((nome, i) => {
+    let job = imprimindo[i] ? { titulo: imprimindo[i].titulo, cor: corDe(imprimindo[i].cor) } : null;
+    if (!job) { const k = dia.findIndex(f => semAcentoCer(f.maquina || '').includes(i === 2 ? 'kobra' : '#' + (i + 1)) || (!f.maquina && i === 0)); if (k >= 0) { const f = dia.splice(k, 1)[0]; job = { titulo: f.titulo, cor: corDe(f.cor) }; } }
+    return { nome, job };
+  });
+  const fila = filaImpressao.filter(f => f.status === 'fila').map(f => ({ titulo: f.titulo, cor: corDe(f.cor), qtd: f.qtd })).concat(dia.map(f => ({ titulo: f.titulo, cor: corDe(f.cor), qtd: f.qtd })));
+  return { maquinas, fila };
+}
+function montarFabrica3D() {
+  const host = $j('cc-fab'); if (!host) return; const dados = dadosFabrica();
+  const pronto = () => { const c = host.querySelector('.cc-seca-carregando'); if (c) c.remove(); };
+  if (!window.Fabrica3D) { if (!cc.fabCarregando) { cc.fabCarregando = true; import('./fabrica3d.js').then(() => { cc.fabCarregando = false; if (cc.agente === 'producao') montarFabrica3D(); }).catch(() => { cc.fabCarregando = false; const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }); } return; }
+  try { if (cc.fab3d) { cc.fab3d.anexar(host); cc.fab3d.atualizar(dados); } else cc.fab3d = window.Fabrica3D.montar(host, dados, tocarFabrica3D); pronto(); }
+  catch (err) { const c = host.querySelector('.cc-seca-carregando'); if (c) c.innerText = 'O 3D não abriu neste aparelho.'; }
+}
+function tocarFabrica3D(info, x, y) {
+  let t = $j('cc-fab-dica'); if (!t) { t = document.createElement('div'); t.id = 'cc-fab-dica'; t.className = 'cc-seca-dica'; const h = $j('cc-fab'); if (!h) return; h.appendChild(t); }
+  if (!info) { t.hidden = true; return; }
+  t.innerHTML = `<span><b>${esc(info.titulo)}</b><small>${esc(info.sub || '')}</small></span>`; t.hidden = false;
+  t.style.left = Math.max(8, Math.min(x - 90, (t.parentElement.clientWidth || 300) - 200)) + 'px'; t.style.top = Math.max(8, y - 64) + 'px';
+  clearTimeout(cc.dicaFab); cc.dicaFab = setTimeout(() => { t.hidden = true; }, 3200);
+}
 function acaoCanvas(acao, id) {
   if (acao === 'abrir') return abrirAgenteCentral(id);
   if (typeof controlarAgente === 'function') return controlarAgente(acao, id);
@@ -7361,6 +7449,11 @@ function cabecalhoAgente(a, extra) {
 function ccNums(lista) { return `<div class="cc-nums">${lista.map(([v, r, cor]) => `<div><strong${cor ? ` style="color:${cor}"` : ''}>${v}</strong><small>${r}</small></div>`).join('')}</div>`; }
 function ccBloco(titulo, corpo) { return `<section class="cc-bloco"><h4>${titulo}</h4>${corpo}</section>`; }
 function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente('${esc(a.id)}')">Perguntar a este agente</button>`; }
+const VOZ_AGENTES = {
+  producao: { voz: 'Orus', persona: 'Homem, voz firme de chefe de fábrica. Criativo, mas totalmente centrado: você gerencia a produção inteira (fila, máquinas, prazos, filamento, qualidade). Fala com segurança, organiza as ideias do Rafael numa fila clara e sempre diz o próximo passo da produção. Quando ele falar algo que quer imprimir, anote na fila com a ferramenta.' },
+  marketing: { voz: 'Aoede', persona: 'Mulher, extrovertida, animada e falante, com humor — obcecada por viralizar a Primos 3D no TikTok e no Instagram. Dá ideias de vídeo concretas (gancho, formato, áudio, horário), cita o que está bombando e avisa quando algo deve ir para a fila de impressão. Animada, mas sempre com dados.' }
+};
+function falarComAgente(id) { const a = todosAgentes().find(x => x.id === id), v = VOZ_AGENTES[id]; if (!a || !v) return conversarComAgente(id); iniciarConversaVoz(`Central › agente ${a.nome}`, 'primos', { voz: v.voz, persona: v.persona, nomeAgente: a.nome }); }
 function conversarComAgente(id) {
   const a = todosAgentes().find(x => x.id === id); if (!a) return;
   abrirChatJarvis({ contexto: `Central de Comando › ${setorCentral(a.setor).nome} › agente ${a.nome} (especialista em: ${(a.skills || []).join(', ')}${a.missao ? '; missão: ' + a.missao : ''}). Responda como esse especialista.`, area: a.setor === 'outros' ? null : a.setor });
@@ -7374,7 +7467,7 @@ function htmlPainelAgente(id) {
     : pausado ? `<p class="cc-exec">⏸ Pausado: fora da rodada das 7h. <button type="button" class="cc-mini" onclick="controlarAgente('retomar', '${id}')">Retomar</button></p>` : '';
   const resp = r && r.resposta ? ccBloco('Resposta ao seu comando', `<div class="cc-relatorio cc-resp"><p class="cc-nota">Você pediu: “${esc(r.comando || '')}”</p><p class="cc-txt">${textoAgente(r.resposta)}</p></div>`) : '';
   const cmd = `<form class="cc-cmd" onsubmit="enviarComandoAgente(event, '${id}')"><input id="cc-cmd" placeholder="Comando para o agente (ex.: refaça o payback com 30 vendas/mês)" maxlength="400" autocomplete="off" enterkeyhint="send"><button type="submit" aria-label="Enviar comando">↑</button></form>
-    <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Rodar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="conversarComAgente('${id}')">💬 Conversar</button></div>`;
+    <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Rodar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="${VOZ_AGENTES[id] ? `falarComAgente('${id}')` : `conversarComAgente('${id}')`}">${VOZ_AGENTES[id] ? '🎙 Falar' : '💬 Conversar'}</button></div>`;
   const ag = todosAgentes().find(x => x.id === id), sk = ((ag && ag.skills) || []).filter(k => SKILLS_DESC[k]);
   const skills = sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '';
   const i = html.indexOf('</header>') + 9;
@@ -7392,6 +7485,7 @@ function htmlPainelAgenteBase(id) {
   if (a.id === 'contabil') return htmlAgenteContabil(a);
   if (a.id === 'marketing') return htmlAgenteMarketing(a);
   if (a.id === 'estoque') return htmlAgenteEstoque(a);
+  if (a.id === 'producao') return htmlAgenteProducao(a);
   if (a.aba) return cabecalhoAgente(a) + htmlRelatorioAgente(a.id) + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('${a.aba}')">Abrir ${esc(a.nome)} na Primos</button>` + botaoConversarAgente(a);
   if (a.id === 'mercado') return cabecalhoAgente(a) + `<div class="cc-embed">${typeof htmlMercado === 'function' ? htmlMercado(true) : ''}</div>` + botaoConversarAgente(a);
   if (a.id === 'treino') {
@@ -7796,8 +7890,8 @@ function migrarEntregasDePedidos() {
 }
 
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -10010,7 +10104,7 @@ if (_vndProd) _vndProd.addEventListener('change', previaVenda);
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'agentes', 'estoqueprimos', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'agentes', 'estoqueprimos', 'filaimpressao', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -10142,7 +10236,7 @@ function redesenharTudo() {
   entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || [];
   orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
   claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || [];
-  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; setTimeout(renderCentral, 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
+  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; setTimeout(renderCentral, 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
   media = JSON.parse(localStorage.getItem('lifeos_media')) || []; playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || [];
   trips = JSON.parse(localStorage.getItem('lifeos_trips')) || []; contacts = JSON.parse(localStorage.getItem('lifeos_contacts')) || [];
   devnotes = JSON.parse(localStorage.getItem('lifeos_devnotes')) || {};
