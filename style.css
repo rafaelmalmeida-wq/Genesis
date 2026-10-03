@@ -2727,3 +2727,8 @@ body.jv-em-voz #cerebro .jv-central-btn { opacity: 0; pointer-events: none; }
 .cc-painel form.cc-cmd button { margin: 0 !important; width: 38px !important; height: 38px; padding: 0 !important; background: #f2f2f7 !important; color: #000 !important; }
 @media (max-width: 800px) { .cc-painel { z-index: 10 !important; } }
 .cc-painel { color: #f2f2f7; }
+.cc-skills { list-style: none; margin: 0; padding: 0; counter-reset: sk; }
+.cc-skills li { position: relative; padding: 10px 0 10px 34px; border-bottom: 0.5px solid rgba(255,255,255,0.06); counter-increment: sk; }
+.cc-skills li::before { content: counter(sk); position: absolute; left: 0; top: 10px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 0.72rem; font-weight: 700; color: #000; background: #f2f2f7; }
+.cc-skills b { display: block; font-size: 0.86rem; font-weight: 600; }
+.cc-skills span { display: block; margin-top: 2px; font-size: 0.78rem; line-height: 1.45; color: #aeaeb2; }

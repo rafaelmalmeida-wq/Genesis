@@ -6972,16 +6972,38 @@ const SETORES_CENTRAL = [
   { id: 'sst', nome: 'Segurança', cor: '#ff453a', ico: '✚' },
   { id: 'outros', nome: 'Outros', cor: '#8e8e93', ico: '●' }
 ];
-const AGENTES_BASE = [
+const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafael 02/10/2026): só os agentes dela + o Desenvolvedor
   { id: 'contabil', setor: 'primos', nome: 'Financeiro', funcao: 'Custos, preços, caixa, retorno e MEI', skills: ['Custeio de impressão 3D', 'Precificação e margem', 'Compras e estoque', 'Fluxo de caixa e resultados', 'Rentabilidade e planejamento'] },
   { id: 'marketing', setor: 'primos', nome: 'Marketing', funcao: 'TikTok, Instagram e público', skills: ['TikTok', 'Instagram', 'Público-alvo', 'Tendências', 'Datas comerciais'] },
-  { id: 'estoque', setor: 'primos', nome: 'Estoque', funcao: 'Filamentos, insumos e reposição', skills: ['Cadastro e padronização', 'Entradas e saídas', 'Filamentos e insumos', 'Planejamento de reposição', 'Inventário e disponibilidade'] },
-  { id: 'producao', setor: 'primos', nome: 'Impressão e Produção', funcao: 'Fila, máquinas e consumo por peça', skills: ['Fila de produção', 'Tempo de máquina', 'Consumo de filamento', 'Falhas e perdas'], aba: 'producao' },
-  { id: 'vendas', setor: 'primos', nome: 'Captação e Vendas', funcao: 'Canais, clientes e prospecção', skills: ['Canais de venda', 'B2B e brindes', 'Shopee', 'Prospecção'], aba: 'vendas' },
-  { id: 'consignacao', setor: 'primos', nome: 'Consignação', funcao: 'Expositores, acertos e reposição', skills: ['Estoque nos expositores', 'Acerto de comissão', 'Giro por modelo', 'Licenças'], aba: 'chaveiros' },
-  { id: 'mercado', setor: 'mercado', nome: 'Analista de mercado', funcao: 'Bitcoin, dólar e ações', skills: ['Bitcoin', 'Câmbio', 'Ações BR/EUA'] },
-  { id: 'treino', setor: 'academia', nome: 'Treinador', funcao: 'Treinos da semana e constância', skills: ['Plano semanal', 'Constância', 'Hidratação'] }
+  { id: 'estoque', setor: 'primos', nome: 'Estoque', funcao: 'Itens, filamentos, entradas/saídas e reposição', skills: ['Cadastro e padronização de itens', 'Controle de entrada e saída', 'Gestão de filamentos e insumos', 'Planejamento de reposição', 'Inventário e disponibilidade'] },
+  { id: 'producao', setor: 'primos', nome: 'Impressão e Produção', funcao: 'Viabilidade, fatiamento, fila e qualidade', skills: ['Análise de viabilidade de impressão', 'Preparação e fatiamento', 'Programação da produção', 'Controle de qualidade e falhas', 'Apontamento de produção e manutenção'], aba: 'producao' },
+  { id: 'vendas', setor: 'primos', nome: 'Captação e Vendas', funcao: 'Prospecção, propostas e funil', skills: ['Prospecção e segmentação comercial', 'Qualificação de oportunidades', 'Abordagem e acompanhamento comercial', 'Proposta e negociação', 'Gestão de funil e fechamento'], aba: 'vendas' },
+  { id: 'consignacao', setor: 'primos', nome: 'Consignação', funcao: 'Parceiros, remessas, acertos e mix', skills: ['Gestão de parceiros e pontos', 'Controle de remessas, vendas e devoluções', 'Conferência de acerto e comissões', 'Gestão de catálogo e personalização', 'Desempenho e reposição por ponto'], aba: 'chaveiros' },
+  { id: 'dev', setor: 'primos', nome: 'Desenvolvedor', funcao: 'Skills a definir com o Rafael', skills: [], semNuvem: true }
 ];
+/** O que cada skill faz (pedido do Rafael 02/10/2026) — aparece no painel do agente e vai no "manual" dele na nuvem (rodar.mjs). */
+const SKILLS_DESC = {
+  'Cadastro e padronização de itens': 'Organizar filamentos, componentes, embalagens e produtos acabados por código, categoria, característica e localização.',
+  'Controle de entrada e saída': 'Registrar compras, consumos, devoluções, perdas e movimentações, mantendo histórico e saldo atualizados.',
+  'Gestão de filamentos e insumos': 'Controlar peso disponível por bobina, material, cor e lote, além das condições de armazenamento.',
+  'Planejamento de reposição': 'Calcular a necessidade de compra considerando estoque mínimo, prazo do fornecedor e demanda de produção.',
+  'Inventário e disponibilidade': 'Conferir o estoque físico, identificar divergências e separar itens disponíveis, reservados em produção e enviados em consignação.',
+  'Análise de viabilidade de impressão': 'Avaliar modelos, dimensões, tolerâncias e uso da peça para definir material, orientação e processo.',
+  'Preparação e fatiamento': 'Definir parâmetros de camada, preenchimento, paredes, suportes e aderência conforme a máquina e o material.',
+  'Programação da produção': 'Organizar filas, lotes, máquinas e prazos conforme prioridade, capacidade e insumos disponíveis.',
+  'Controle de qualidade e falhas': 'Estabelecer critérios de inspeção, registrar defeitos, investigar causas e recomendar ajustes ou reimpressões.',
+  'Apontamento de produção e manutenção': 'Registrar tempo, material, perdas, peças aprovadas e paradas; planejar manutenção e mandar dados reais ao Financeiro e ao Estoque.',
+  'Prospecção e segmentação comercial': 'Identificar perfis de clientes e oportunidades para personalizados, brindes e outras linhas da Primos 3D.',
+  'Qualificação de oportunidades': 'Levantar necessidade, quantidade, orçamento, prazo e requisitos de personalização de cada potencial cliente.',
+  'Abordagem e acompanhamento comercial': 'Preparar mensagens e organizar retornos conforme a etapa da negociação e o interesse do cliente.',
+  'Proposta e negociação': 'Montar orçamentos com preços validados pelo Financeiro e prazos confirmados pela Produção, respeitando limites de desconto.',
+  'Gestão de funil e fechamento': 'Acompanhar contatos, propostas, conversões e motivos de perda; encaminhar pedidos fechados com todas as especificações.',
+  'Gestão de parceiros e pontos': 'Organizar estabelecimentos, contatos, condições comerciais e datas de acerto.',
+  'Controle de remessas, vendas e devoluções': 'Acompanhar o que foi entregue, vendido, devolvido ou perdido em cada parceiro, conciliado com o estoque.',
+  'Conferência de acerto e comissões': 'Calcular valores a receber e comissões pelas vendas informadas, levando ao Financeiro sem duplicar receitas.',
+  'Gestão de catálogo e personalização': 'Organizar modelos de chaveiro e outros produtos, variações, componentes, opções e aprovação do cliente antes da produção.',
+  'Desempenho e reposição por ponto': 'Avaliar giro, produtos parados e reposição, propondo o mix por ponto de venda pela venda e pela rentabilidade.'
+};
 const MATERIAIS_ESTOQUE = ['PLA', 'PETG', 'TPU', 'ABS', 'ASA', 'Outro'];
 const cc = { setor: 'primos', agente: null, novo: false };
 function todosAgentes() { return [...AGENTES_BASE, ...agentesJv.map(a => ({ ...a, proprio: true }))]; }
@@ -7067,6 +7089,8 @@ function desenharFiosCentral() {
 }
 window.addEventListener('resize', () => { if ($j('jv-central') && !$j('jv-central').hidden) aplicarCamCanvas(); });
 
+/** A Central é da Primos 3D: só os agentes dela (os criados pelo Rafael em outros setores não entram no canvas). */
+function agentesCentral() { return todosAgentes().filter(a => a.setor === 'primos'); }
 // --- CANVAS INFINITO (fase 6, inspirado no React Flow / Flowise / Slashspace + a foto do mármore do Rafael) ---
 // Fundo branco com pontinhos; o J.A.R.V.I.S. no centro e os agentes em blocos de MÁRMORE PRETO, ligados por fios que
 // mostram a troca de informação (com o número real que passa). Arrastar o fundo = mover; roda/pinça = zoom; arrastar o
@@ -7076,21 +7100,22 @@ const CV_PRIMOS = ['contabil', 'marketing', 'estoque', 'producao', 'vendas', 'co
 const celCanvas = () => window.innerWidth < 700;
 const chavePosCanvas = () => celCanvas() ? 'ccPosCel' : 'ccPos'; // celular e PC guardam arranjos diferentes
 function posPadraoCanvas() {
-  const p = { jarvis: { x: 0, y: 0 } }, ag = todosAgentes(), R1 = 300;
+  const p = { jarvis: { x: 0, y: 0 } }, ag = agentesCentral(), R1 = 300;
   if (celCanvas()) { // celular em pé: 2 colunas, o J.A.R.V.I.S. no meio
     [['contabil', -138, -310], ['marketing', 138, -310], ['estoque', -138, 300], ['producao', 138, 300], ['vendas', -138, 560], ['consignacao', 138, 560]].forEach(([id, x, y]) => { p[id] = { x, y }; });
     ag.filter(a => !CV_PRIMOS.includes(a.id)).forEach((a, i) => { p[a.id] = { x: (i % 2 ? 138 : -138), y: 820 + Math.floor(i / 2) * 260 }; });
     return p;
   }
   CV_PRIMOS.forEach((id, i) => { const a = -Math.PI / 2 + i / CV_PRIMOS.length * Math.PI * 2; p[id] = { x: Math.round(Math.cos(a) * R1 * 1.25), y: Math.round(Math.sin(a) * R1) }; });
-  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id)); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
+  p.dev = { x: 0, y: 600 }; // o Desenvolvedor fica embaixo, fora do círculo da operação
+  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
   return p;
 }
 function posCanvas(id) { const s = (prefs[chavePosCanvas()] || {})[id]; return s || posPadraoCanvas()[id] || { x: 0, y: 0 }; }
 /** Os fios: quem passa o quê para quem (com o número real, quando há). */
 function fiosCanvas() {
   const N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, e = calcularEstoque(), pc = primosCentral || {}, p7 = (((pc.marketing || {}).tiktok || {}).periodo7d || {});
-  const F = todosAgentes().map(a => ({ de: a.id, para: 'jarvis', rot: relatorioAgente(a.id) ? 'relatório ' + isoParaBR(relatorioAgente(a.id).dia || '').slice(0, 5) : estadoAgente(a).metrica, forte: !!relatorioAgente(a.id) }));
+  const F = agentesCentral().map(a => ({ de: a.id, para: 'jarvis', rot: relatorioAgente(a.id) ? 'relatório ' + isoParaBR(relatorioAgente(a.id).dia || '').slice(0, 5) : estadoAgente(a).metrica, forte: !!relatorioAgente(a.id) }));
   F.push({ de: 'estoque', para: 'contabil', rot: N.dinheiroEmFilamento ? reais(N.dinheiroEmFilamento) + ' em filamento' : 'valor do estoque', lateral: true });
   F.push({ de: 'producao', para: 'contabil', rot: N.lucroMedioPorPeca ? 'sobra ' + reais(N.lucroMedioPorPeca) + '/peça' : 'custo por peça', lateral: true });
   F.push({ de: 'estoque', para: 'producao', rot: e.total ? fmtKg(e.total) + ' disponível' : 'filamento', lateral: true });
@@ -7121,7 +7146,7 @@ function renderCanvasCentral() {
       <svg id="cv-mini" class="cv-mini" aria-hidden="true"></svg><p class="cv-dica">arraste o fundo para mover · roda ou pinça para zoom · arraste um bloco para reposicionar</p>`;
     gestosCanvas(q);
   }
-  const ag = todosAgentes(), rj = relatoriosAgentes && relatoriosAgentes.jarvis, hoje = rj ? (rj.prioridades || []).filter(p => p.urgencia === 'hoje') : [];
+  const ag = agentesCentral(), rj = relatoriosAgentes && relatoriosAgentes.jarvis, hoje = rj ? (rj.prioridades || []).filter(p => p.urgencia === 'hoje') : [];
   const jp = posCanvas('jarvis'), ex = cc.execucao || {};
   let h = `<div class="cv-no cv-jarvis${cc.agente === 'jarvis' ? ' sel' : ''}" data-id="jarvis" style="left:${jp.x}px; top:${jp.y}px">
     <div class="cv-alca"><img src="icon-180.png" alt=""><div><b>J.A.R.V.I.S.</b><small>mastermind · ${plural(ag.length, 'agente', 'agentes')}</small></div><span class="cv-estado" style="--e:${ex.rodando ? '#0a84ff' : '#30d158'}">${ex.rodando ? 'Coordenando' : 'Online'}</span></div>
@@ -7133,7 +7158,7 @@ function renderCanvasCentral() {
       <div class="cv-alca"><i class="cv-sel-setor"></i><div><b>${esc(a.nome)}</b><small>${esc(s.nome)}</small></div><span class="cv-estado" style="--e:${E[1]}">${E[0]}</span></div>
       <p class="cv-tarefa"><em>${rodando ? 'Executando' : 'Tarefa atual'}</em>${textoAgente(tarefaCanvas(a))}</p>
       <div class="cv-rodape"><strong>${esc(estadoAgente(a).metrica)}</strong>
-        <span class="cv-ctrls"><button type="button" data-acao="rodar" data-ag="${esc(a.id)}" title="Rodar agora" ${rodando || pausado ? 'disabled' : ''}>▶</button><button type="button" data-acao="${pausado ? 'retomar' : 'pausar'}" data-ag="${esc(a.id)}" title="${pausado ? 'Retomar' : 'Pausar'}">${pausado ? '⏵' : '⏸'}</button><button type="button" data-acao="cancelar" data-ag="${esc(a.id)}" title="Cancelar a tarefa" ${rodando ? '' : 'disabled'}>✕</button></span></div></div>`;
+        <span class="cv-ctrls"${a.semNuvem ? ' hidden' : ''}><button type="button" data-acao="rodar" data-ag="${esc(a.id)}" title="Rodar agora" ${rodando || pausado ? 'disabled' : ''}>▶</button><button type="button" data-acao="${pausado ? 'retomar' : 'pausar'}" data-ag="${esc(a.id)}" title="${pausado ? 'Retomar' : 'Pausar'}">${pausado ? '⏵' : '⏸'}</button><button type="button" data-acao="cancelar" data-ag="${esc(a.id)}" title="Cancelar a tarefa" ${rodando ? '' : 'disabled'}>✕</button></span></div></div>`;
   });
   $j('cv-nos').innerHTML = h;
   if (!CV.cam) { const c = celCanvas() ? null : prefs.ccCam; if (c && c.k) CV.cam = { ...c }; else enquadrarCanvas(false); }
@@ -7146,7 +7171,7 @@ function aplicarCamCanvas() {
   q.classList.toggle('longe', CV.cam.k < 0.42); desenharMiniCanvas();
 }
 function salvarCamCanvas() { clearTimeout(CV.tSalvar); CV.tSalvar = setTimeout(() => { prefs.ccCam = { x: Math.round(CV.cam.x), y: Math.round(CV.cam.y), k: Math.round(CV.cam.k * 1000) / 1000 }; salvarPrefsJarvis(); }, 400); }
-function limitesCanvas(soPrimos) { const ids = soPrimos ? ['jarvis', ...CV_PRIMOS] : ['jarvis', ...todosAgentes().map(a => a.id)], ps = ids.map(posCanvas); return { x0: Math.min(...ps.map(p => p.x)) - 200, x1: Math.max(...ps.map(p => p.x)) + 200, y0: Math.min(...ps.map(p => p.y)) - 140, y1: Math.max(...ps.map(p => p.y)) + 160 }; }
+function limitesCanvas(soPrimos) { const ids = soPrimos ? ['jarvis', ...CV_PRIMOS] : ['jarvis', ...agentesCentral().map(a => a.id)], ps = ids.map(posCanvas); return { x0: Math.min(...ps.map(p => p.x)) - 200, x1: Math.max(...ps.map(p => p.x)) + 200, y0: Math.min(...ps.map(p => p.y)) - 140, y1: Math.max(...ps.map(p => p.y)) + 160 }; }
 function enquadrarCanvas(anima) {
   const q = $j('cc-quadro'); if (!q) return; const w = q.clientWidth || innerWidth, h = q.clientHeight || innerHeight, b = limitesCanvas(celCanvas()); // celular: enquadra a Primos (Mercado e Treino ficam ao lado, é só arrastar)
   const k = Math.max(0.18, Math.min(1.1, Math.min(w / (b.x1 - b.x0), h / (b.y1 - b.y0)) * 0.92));
@@ -7206,7 +7231,7 @@ async function gravarControleCofre(mudar, msg) {
 }
 async function controlarAgente(acao, id, instrucao) {
   if (!claudeConfigurado()) { toast('Para comandar os agentes, conecte o computador em Ajustes do J.A.R.V.I.S. → 2.', 5000); return; }
-  const nome = id === 'todos' ? 'todos os agentes' : ((todosAgentes().find(a => a.id === id) || {}).nome || id);
+  const nome = id === 'todos' ? 'todos os agentes' : ((agentesCentral().find(a => a.id === id) || {}).nome || id);
   try {
     if (acao === 'rodar') {
       const p = { id: 'p' + novoId(), agente: id, instrucao: String(instrucao || '').slice(0, 400), quando: new Date().toISOString() };
@@ -7261,7 +7286,7 @@ function desenharFiosCanvas() {
     const A = caixa(f.de), B = caixa(f.para); if (!A || !B) return;
     const a = borda(A, B), b = borda(B, A), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, curva = f.lateral ? 0.18 : 0.08, nx = -(b.y - a.y) * curva, ny = (b.x - a.x) * curva;
     const d = `M${a.x.toFixed(1)},${a.y.toFixed(1)} Q${(mx + nx).toFixed(1)},${(my + ny).toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
-    const ativo = cc.agente && (cc.agente === f.de || cc.agente === f.para), rodando = estadoCanvas({ id: f.de, ...(todosAgentes().find(x => x.id === f.de) || {}) }) === 'rodando';
+    const ativo = cc.agente && (cc.agente === f.de || cc.agente === f.para), rodando = estadoCanvas({ id: f.de, ...(agentesCentral().find(x => x.id === f.de) || {}) }) === 'rodando';
     h += `<path id="cvf${i}" class="cv-fio${f.lateral ? ' lateral' : ''}${ativo ? ' ativo' : ''}${rodando ? ' rodando' : ''}" d="${d}"/>`;
     h += `<circle class="cv-pulso${f.lateral ? ' lateral' : ''}" r="${rodando ? 5 : 3.2}"><animateMotion dur="${rodando ? 1.4 : f.lateral ? 4.6 : 3.4}s" begin="${(i * 0.37) % 3}s" repeatCount="indefinite" rotate="auto"><mpath href="#cvf${i}"/></animateMotion></circle>`;
     rot += `<span class="cv-rot${f.lateral ? ' lateral' : ''}${ativo ? ' ativo' : ''}" style="left:${(mx + nx / 2).toFixed(0)}px; top:${(my + ny / 2).toFixed(0)}px">${esc(f.rot)}</span>`;
@@ -7273,7 +7298,7 @@ function desenharMiniCanvas() {
   const mini = $j('cv-mini'), q = $j('cc-quadro'); if (!mini || !q || !CV.cam) return;
   const b = limitesCanvas(), W = 150, H = 96, k = Math.min(W / (b.x1 - b.x0), H / (b.y1 - b.y0)), ox = (W - (b.x1 - b.x0) * k) / 2, oy = (H - (b.y1 - b.y0) * k) / 2;
   const P = (x, y) => [ox + (x - b.x0) * k, oy + (y - b.y0) * k];
-  const blocos = ['jarvis', ...todosAgentes().map(a => a.id)].map(id => { const p = posCanvas(id), [x, y] = P(p.x, p.y); return `<rect x="${(x - (id === 'jarvis' ? 9 : 7)).toFixed(1)}" y="${(y - 4).toFixed(1)}" width="${id === 'jarvis' ? 18 : 14}" height="8" rx="2" class="${id === 'jarvis' ? 'j' : ''}"/>`; }).join('');
+  const blocos = ['jarvis', ...agentesCentral().map(a => a.id)].map(id => { const p = posCanvas(id), [x, y] = P(p.x, p.y); return `<rect x="${(x - (id === 'jarvis' ? 9 : 7)).toFixed(1)}" y="${(y - 4).toFixed(1)}" width="${id === 'jarvis' ? 18 : 14}" height="8" rx="2" class="${id === 'jarvis' ? 'j' : ''}"/>`; }).join('');
   const [vx, vy] = P(-CV.cam.x / CV.cam.k, -CV.cam.y / CV.cam.k), vw = q.clientWidth / CV.cam.k * k, vh = q.clientHeight / CV.cam.k * k;
   mini.setAttribute('viewBox', `0 0 ${W} ${H}`); mini.innerHTML = blocos + `<rect class="vista" x="${vx.toFixed(1)}" y="${vy.toFixed(1)}" width="${vw.toFixed(1)}" height="${vh.toFixed(1)}" rx="3"/>`;
 }
@@ -7349,8 +7374,10 @@ function htmlPainelAgente(id) {
   const resp = r && r.resposta ? ccBloco('Resposta ao seu comando', `<div class="cc-relatorio cc-resp"><p class="cc-nota">Você pediu: “${esc(r.comando || '')}”</p><p class="cc-txt">${textoAgente(r.resposta)}</p></div>`) : '';
   const cmd = `<form class="cc-cmd" onsubmit="enviarComandoAgente(event, '${id}')"><input id="cc-cmd" placeholder="Comando para o agente (ex.: refaça o payback com 30 vendas/mês)" maxlength="400" autocomplete="off" enterkeyhint="send"><button type="submit" aria-label="Enviar comando">↑</button></form>
     <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Rodar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="conversarComAgente('${id}')">💬 Conversar</button></div>`;
+  const ag = todosAgentes().find(x => x.id === id), sk = ((ag && ag.skills) || []).filter(k => SKILLS_DESC[k]);
+  const skills = sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '';
   const i = html.indexOf('</header>') + 9;
-  return html.slice(0, i) + est + cmd + resp + html.slice(i);
+  return html.slice(0, i) + est + cmd + resp + html.slice(i) + skills;
 }
 function htmlPainelAgenteBase(id) {
   if (id === 'jarvis') {
@@ -7371,9 +7398,10 @@ function htmlPainelAgenteBase(id) {
     return cabecalhoAgente(a) + ccNums([[sem.length, 'treinos em 7 dias'], [workouts.length, 'treinos registrados']])
       + ccBloco('Próximo passo', `<p class="cc-txt">O plano semanal e a dieta entram aqui assim que você me disser como quer montar. Por enquanto, registre os treinos na aba Saúde.</p><button type="button" class="cc-btn sec" onclick="fecharCentral(); changeTab('health')">Abrir Saúde</button>`) + botaoConversarAgente(a);
   }
+  if (a.id === 'dev') return cabecalhoAgente(a) + ccBloco('Aguardando as skills', '<p class="cc-txt">O agente Desenvolvedor já tem o lugar dele na Central. Assim que você me disser as skills, eu monto o manual dele, os painéis e a rodada automática na nuvem.</p>') + botaoConversarAgente(a);
   return cabecalhoAgente(a) + ccBloco('Missão', `<p class="cc-txt">${esc(a.missao || 'Sem missão definida.')}</p>`)
     + ccBloco('Situação', `<p class="cc-txt">Este agente já existe e conversa pelo chat com as skills acima. Os painéis próprios dele (números e rotinas) eu monto quando você pedir.</p>`)
-    + botaoConversarAgente(a) + `<button type="button" class="cc-btn perigo" onclick="removerAgente('${esc(a.id)}')">Remover agente</button>`;
+    + botaoConversarAgente(a) + (a.proprio ? `<button type="button" class="cc-btn perigo" onclick="removerAgente('${esc(a.id)}')">Remover agente</button>` : '');
 }
 
 // --- J.A.R.V.I.S. MASTERMIND: o filtro do dia (relatoriosAgentes.jarvis, feito na nuvem depois dos agentes) ---
