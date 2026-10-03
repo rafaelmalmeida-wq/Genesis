@@ -4727,14 +4727,14 @@ const NOME_NIVEL = ['pouca informação', 'informação parcial', 'bem informado
 
 // símbolos das áreas (traço, cor do texto) — nas bolinhas do topo e, em relevo, dentro das pérolas do 3D.
 // Primos 3D: o "P" da marca redesenhado em vetor (camadas de filamento + bico + o risco da extrusão).
-const ICONES_AREA = {
-  primos: '<path d="M16 49V8H37a14.5 14.5 0 0 1 0 29H26V49Z"/><path d="M26 16H36.5a6.5 6.5 0 0 1 0 13H26Z"/><path d="M21 44V12.5H37a10 10 0 0 1 0 20H26" stroke-width="1.7" opacity=".6"/><path d="M17.5 49L19.3 53.2H22.7L24.5 49M21 53.2V55.6"/><path d="M21 55.6C17 57.8 10 57.4 10 59.6C10 61.8 30 61.6 44 59.4" stroke-width="2.4"/>',
-  eng: '<path d="M6 46H58M10 46L18 28L26 46L34 28L42 46L50 28L58 46M18 28H50M14 52H50"/>',
-  sst: '<path d="M10 42H54M14 42C14 27 22 18 32 18S50 27 50 42M28 18V29M36 18V29M8 46.5H56"/><path d="M32 30v8M28 34h8"/>',
-  mercado: '<path d="M23 16H38C46 16 46 30 38 31H23M23 31H40C49 31 49 48 40 48H23M26 16V48M29 10V16M37 10V16M29 48V54M37 48V54"/>',
-  academia: '<path d="M12 25V39M18 20V44M46 20V44M52 25V39M18 32H46M7 32H12M52 32H57"/>',
-  dia: '<circle cx="32" cy="32" r="20"/><path d="M32 20V32L41 38"/>',
-  familia: '<path d="M12 30L32 13L52 30M18 25V51H46V25"/><path d="M32 45C25 40 23 36 26 33C28 31 31 32 32 34C33 32 36 31 38 33C41 36 39 40 32 45Z"/>'
+const ICONES_AREA = { // fase 6: traço único, limpo (estilo SF Symbols) — usados no 3D (rasterizados a 512 px) e nos menus
+  primos: '<path d="M26 7H38V14L32 20L26 14Z"/><path d="M32 20V26"/><path d="M13 37L32 28L51 37L32 46Z"/><path d="M13 37V48L32 57L51 48V37"/><path d="M32 46V57"/><path d="M13 42.5L32 51.5L51 42.5" opacity=".55"/>',
+  eng: '<path d="M8 55H56"/><path d="M14 55V24L28 16V55"/><path d="M28 55V30H50V55"/><path d="M19 27V29M19 35V37M19 43V45M35 37H43M35 45H43"/><path d="M40 8L56 24" opacity=".6"/><path d="M44 12L46 10M48 16L50 14M52 20L54 18" opacity=".6"/>',
+  sst: '<path d="M32 7L52 14V30C52 43 43 52 32 57C21 52 12 43 12 30V14Z"/><path d="M23 32L30 39L42 26"/>',
+  mercado: '<path d="M9 52H55" opacity=".5"/><path d="M11 45L24 32L33 40L52 20"/><path d="M41 20H52V31"/><path d="M17 52V47M27 52V42M37 52V45M47 52V36" opacity=".45"/>',
+  academia: '<path d="M10 32H54"/><path d="M15 24V40M21 19V45M43 19V45M49 24V40"/><path d="M6 32H10M54 32H58"/>',
+  dia: '<rect x="11" y="13" width="42" height="40" rx="7"/><path d="M11 23H53"/><path d="M22 8V17M42 8V17"/><path d="M24 38L30 44L41 33"/>',
+  familia: '<path d="M10 31L32 12L54 31"/><path d="M16 26V53H48V26"/><path d="M32 46C25.5 41.5 23.5 37.5 26.2 34.6C28.2 32.6 31 33.4 32 35.4C33 33.4 35.8 32.6 37.8 34.6C40.5 37.5 38.5 41.5 32 46Z"/>'
 };
 const IMG_AREA = {}; // (a Primos usava um recorte da logo em PNG; desde a fase 4 é vetor, nítido em qualquer tamanho)
 function iconeAreaSVG(id, cor) { return `<svg viewBox="0 0 64 64" fill="none" stroke="${cor || 'currentColor'}" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONES_AREA[id] || ICONES_AREA.dia}</svg>`; }
@@ -4820,10 +4820,32 @@ function renderTopoJarvis() {
 // .claude/jarvis/destaques.json (o Claude mantém) pelo cofre; somem sozinhos depois da data "ate".
 // PC: cartões embaixo da saudação · celular: uma fileira de botões; tocar abre a página do destaque.
 function destaquesAtivos() { const hoje = hojeISO(); return [].concat((primosCentral && primosCentral.destaques) || []).flat().filter(d => d && d.titulo && (!d.ate || d.ate >= hoje)); }
+/** "O J.A.R.V.I.S. te avisa" (fase 6): o que ele te diria ao abrir o app — prioridades do filtro dos agentes, datas que
+ *  importam (destaques), alertas, o dia, o mercado e o treino. No máximo 4, do mais importante para o menos. Só lê dados. */
+function avisosJarvis() {
+  const hoje = hojeISO(), L = [], nomeArea = id => (AREAS_CEREBRO.find(a => a.id === id) || {}).nome || '';
+  const ra = relatoriosAgentes;
+  if (ra && ra.jarvis && ra.jarvis.dia >= addDiasISO(hoje, -1)) (ra.jarvis.prioridades || []).filter(p => p.urgencia === 'hoje').slice(0, 1).forEach(p =>
+    L.push({ area: 'primos', rot: 'Primos 3D · prioridade de hoje', txt: p.texto, acao: "abrirCentral('primos'); abrirAgenteCentral('jarvis')" }));
+  destaquesAtivos().forEach((d, i) => { const dm = String(d.titulo + ' ' + (d.resumo || '')).match(/\b(\d{1,2})\/(\d{1,2})\b/); // a data DO EVENTO (ex.: 12/10) vale mais que o prazo do destaque
+    const alvo = dm ? isoDe(new Date(Number(hoje.slice(0, 4)), Number(dm[2]) - 1, Number(dm[1]))) : d.ate; const dias = alvo && alvo >= hoje ? diasEntre(hoje, alvo) : d.ate ? diasEntre(hoje, d.ate) : null;
+    L.push({ area: d.area || 'primos', rot: `${nomeArea(d.area) || 'Destaque'}${dias !== null ? ` · ${dias <= 0 ? 'é hoje' : dias === 1 ? 'falta 1 dia' : `faltam ${dias} dias`}` : ''}`, txt: d.titulo, sub: d.resumo, acao: `abrirDestaque(${i})` }); });
+  const fin = ra && ra.agentes && ra.agentes.contabil; if (fin && fin.alerta) L.push({ area: 'primos', rot: 'Financeiro · alerta', txt: fin.alerta, acao: "abrirCentral('primos'); abrirAgenteCentral('contabil')" });
+  const atras = tasks.filter(t => !t.done && t.due && t.due < hoje).length, deHoje = tasks.filter(t => !t.done && t.due === hoje).length, ev = events.filter(e => e.date === hoje && !e.done).length;
+  if (atras || deHoje || ev) L.push({ area: 'dia', rot: 'Dia a dia', txt: [ev ? plural(ev, 'compromisso hoje', 'compromissos hoje') : '', deHoje ? plural(deHoje, 'tarefa para hoje', 'tarefas para hoje') : '', atras ? plural(atras, 'tarefa atrasada', 'tarefas atrasadas') : ''].filter(Boolean).join(' · '), acao: "changeTab('tasks')" });
+  const h = humorMercado(); if (h) L.push({ area: 'mercado', rot: 'Mercado', txt: h.tipo === 'alta' ? 'O mercado abriu em alta. Os touros estão no comando.' : h.tipo === 'baixa' ? 'O mercado está em baixa hoje. Calma: um dia não é tendência.' : 'Mercado de lado hoje, sem direção clara.', acao: "abrirMenuArea('mercado')" });
+  const treinos = workouts.filter(w => { const d = w.date || w.data; return d && diasEntre(d, hoje) <= 6; }).length;
+  L.push({ area: 'academia', rot: 'Academia', txt: treinos >= 3 ? `${plural(treinos, 'treino', 'treinos')} nos últimos 7 dias. Constância é o que dá resultado.` : treinos ? `Só ${plural(treinos, 'treino', 'treinos')} nesta semana. Bora fechar com mais um?` : 'Nenhum treino registrado nesta semana. Que tal hoje?', acao: "changeTab('health')" });
+  return L.slice(0, 4);
+}
+function addDiasISO(iso, n) { const [y, m, d] = iso.split('-').map(Number); return isoDe(new Date(y, m - 1, d + n)); }
+document.addEventListener('click', () => { if (window.JarvisBrain && JarvisBrain.pedirMovimento) JarvisBrain.pedirMovimento(); }, { once: true }); // iPhone: liga o giroscópio (paralaxe) no 1º toque
 function renderDestaquesJarvis() {
-  const el = $j('jv-destaques'); if (!el) return; const ds = destaquesAtivos();
-  el.hidden = !ds.length; if (!ds.length) { el.innerHTML = ''; return; }
-  el.innerHTML = `<small class="jv-dest-rot">✦ Destaques do J.A.R.V.I.S.</small><div class="jv-dest-lista">${ds.map((d, i) => `<button type="button" class="jv-dest" onclick="abrirDestaque(${i})"><strong>${esc(d.titulo)}</strong><span>${esc(d.resumo || '')}</span><em aria-hidden="true">›</em></button>`).join('')}</div>`;
+  const el = $j('jv-destaques'); if (!el) return; const av = avisosJarvis();
+  el.hidden = !av.length; if (window.JarvisBrain && JarvisBrain.margem) JarvisBrain.margem(av.length && window.innerWidth > 900 ? Math.min(220, window.innerWidth * 0.12) : 0);
+  if (!av.length) { el.innerHTML = ''; return; }
+  const cor = id => (AREAS_CEREBRO.find(a => a.id === id) || {}).cor || '#ffffff';
+  el.innerHTML = `<small class="jv-dest-rot"><span class="jv-dest-pulso"></span>O J.A.R.V.I.S. te avisa</small><div class="jv-dest-lista">${av.map((a, i) => `<button type="button" class="jv-dest jv-aviso" style="--area:${a.area === 'mercado' ? '#ffd60a' : cor(a.area)}; animation-delay:${i * 90}ms" onclick="${a.acao}"><small>${esc(a.rot)}</small><strong>${esc(a.txt)}</strong>${a.sub ? `<span>${esc(a.sub)}</span>` : ''}<em aria-hidden="true">›</em></button>`).join('')}</div>`;
 }
 function abrirDestaque(i) {
   const d = destaquesAtivos()[i], el = $j('jv-destaque'); if (!d || !el) return;
@@ -5069,7 +5091,8 @@ function renderMenuArea() {
   const nv = nivelArea(a.id), y = ($j('jv-menu-corpo') || {}).scrollTop || 0, entrando = jv.menuEntrando; jv.menuEntrando = false;
   const abas = [['resumo', 'J.A.R.V.I.S.'], ...setores.map(s => [s.id, s.nome])];
   const alvoNota = jv.abaMenu === 'resumo' ? 'a-' + a.id : jv.abaMenu;
-  el.innerHTML = `<div class="jvp-janela jvm-janela${entrando ? ' entrando' : ''}" style="--area:${a.cor}">
+  const humor = a.id === 'mercado' ? humorMercado() : null;
+  el.innerHTML = `<div class="jvp-janela jvm-janela${entrando ? ' entrando' : ''}${humor ? ' jvm-' + humor.tipo : ''}${a.id === 'mercado' ? ' jvm-mercado' : ''}" style="--area:${a.cor}">
     <header class="jvp-topo jvm-topo"><span class="jvm-ico">${iconeAreaSVG(a.id, '#ffffff')}</span><div class="jvp-marca"><strong>${esc(a.nome)}</strong><small>Menu do J.A.R.V.I.S.</small></div>
       <span class="jvp-nivel${areaAtualizando(a.id) ? ' atualizando' : ''}" style="--status:${COR_NIVEL[nv.n]}" title="J.A.R.V.I.S.: ${NOME_NIVEL[nv.n]}"></span><button type="button" class="jv-x" onclick="fecharMenuArea()" aria-label="Fechar">✕</button></header>
     <div class="jvp-acoes">
@@ -5085,7 +5108,7 @@ function renderMenuArea() {
 }
 /** Aba J.A.R.V.I.S. do menu: a análise da área + os setores (Mercado e Família reaproveitam os painéis completos). */
 function htmlResumoMenu(a) {
-  if (a.id === 'mercado') return htmlMercado(true);
+  if (a.id === 'mercado') return htmlHumorMercado() + htmlMercado(true);
   if (a.id === 'familia') return htmlFamilia(true);
   const an = analiseAreaJarvis(a.id), setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === a.id);
   return falaHTML(an.fala) + linhaNivel(a.id) + indicadoresHTML(an.ind)
@@ -5802,7 +5825,7 @@ async function sincronizarCofre(forcar) {
       renderPrimosPagina();
       toast(primeira ? '🟢 J.A.R.V.I.S. conectado à Primos 3D Central.' : `🟢 J.A.R.V.I.S. atualizou a Primos 3D (Central de ${isoParaBR(d.geradoEm.slice(0, 10)).slice(0, 5)} às ${d.geradoEm.slice(11, 16)}).`, 5000);
     } else if (forcar) toast('A Primos 3D já está com os dados mais novos.', 3500);
-    try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } renderCentral(); } } catch (e) { } // ainda sem relatório: tudo bem
+    try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } renderCentral(); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
   } catch (e) { if (forcar) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
   jv.sincronizando = false; renderAreasJarvis(); renderPrimosPagina(); renderAjustesJarvis(); setTimeout(renderAreasJarvis, 91000);
 }
@@ -5856,8 +5879,28 @@ async function atualizarMercado(forcar) {
   mercadoBuscando = false;
   if (jv.painel === 'mercado') { const el = $j('jv-painel'); const y = el.scrollTop; el.innerHTML = htmlArea('mercado'); el.scrollTop = y; }
   if (jv.heroi === 'mercado') renderHeroiJarvis();
-  if (jv.menu === 'mercado' && jv.abaMenu === 'resumo') { const c = $j('jv-menu-corpo'); if (c) { const y = c.scrollTop; c.innerHTML = htmlMercado(true); c.scrollTop = y; } }
+  if (jv.menu === 'mercado') renderMenuArea(); // refaz a página inteira: o humor (verde/vermelho, touro/urso) pode ter mudado
   renderAreasJarvis();
+}
+/** Humor do mercado hoje (só aparece DENTRO do Mercado): média ponderada das variações — Ibovespa pesa 2, Bitcoin 1, ações 1. */
+function humorMercado() {
+  const m = cacheMercado(); if (!m) return null;
+  const vs = []; const add = (v, p) => { if (v !== null && v !== undefined && isFinite(v)) vs.push([v, p]); };
+  if (m.ibov) add(m.ibov.var, 2); if (m.btc) add(m.btc.var, 1);
+  const ac = (m.acoes || []).concat(m.eua || []).map(a => a.var).filter(v => isFinite(v)); if (ac.length) add(ac.reduce((s, v) => s + v, 0) / ac.length, 1);
+  if (!vs.length) return null;
+  const media = vs.reduce((s, [v, p]) => s + v * p, 0) / vs.reduce((s, [, p]) => s + p, 0);
+  return { media, tipo: media > 0.25 ? 'alta' : media < -0.25 ? 'baixa' : 'neutro' };
+}
+const SVG_TOURO = '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 14C11 23 18 27 25 27"/><path d="M56 14C53 23 46 27 39 27"/><path d="M22 27C22 23.5 26 21 32 21S42 23.5 42 27L40.5 43C39.8 50 36 54 32 54S24.2 50 23.5 43Z"/><path d="M22 29L13 32M42 29L51 32"/><path d="M27 33.5h.01M37 33.5h.01" stroke-width="3.4"/><ellipse cx="32" cy="46" rx="6.5" ry="4.5"/><path d="M29.5 46h.01M34.5 46h.01" stroke-width="3"/></svg>';
+const SVG_URSO = '<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="16" cy="17" r="6.5"/><circle cx="48" cy="17" r="6.5"/><path d="M12 34C12 22.5 21 15 32 15S52 22.5 52 34C52 46 43 54 32 54S12 46 12 34Z"/><ellipse cx="32" cy="42" rx="8.5" ry="6"/><path d="M29.5 39.5H34.5"/><path d="M24.5 31h.01M39.5 31h.01" stroke-width="3.6"/></svg>';
+function htmlHumorMercado() {
+  const h = humorMercado(); if (!h) return '';
+  const m = cacheMercado(), pct = v => (v >= 0 ? '+' : '−') + Math.abs(v).toFixed(2).replace('.', ',') + '%';
+  const det = [m.ibov ? `Ibovespa ${pct(m.ibov.var)}` : '', m.btc ? `Bitcoin ${pct(m.btc.var)}` : '', m.usd ? `Dólar ${pct(m.usd.var)}` : ''].filter(Boolean).join(' · ');
+  const tit = h.tipo === 'alta' ? 'Mercado em alta hoje' : h.tipo === 'baixa' ? 'Mercado em baixa hoje' : 'Mercado de lado hoje';
+  const fala = h.tipo === 'alta' ? 'Os touros estão no comando. Dia bom para acompanhar, não para euforia.' : h.tipo === 'baixa' ? 'Os ursos estão no comando. Calma: queda de um dia é ruído, não tendência.' : 'Sem direção clara. Nada de pressa.';
+  return `<div class="jvm-humor ${h.tipo}"><div class="jvm-humor-bicho">${h.tipo === 'baixa' ? SVG_URSO : SVG_TOURO}</div><div><small>${h.tipo === 'alta' ? 'Bull market' : h.tipo === 'baixa' ? 'Bear market' : 'Mercado neutro'} · média ${pct(h.media)}</small><strong>${tit}</strong><p>${fala}</p><em>${esc(det)}</em></div></div>`;
 }
 function variacao(v) { if (v === null || v === undefined || isNaN(v)) return ''; const s = v >= 0 ? '▲' : '▼'; return `<span class="jv-var ${v >= 0 ? 'sobe' : 'desce'}">${s} ${Math.abs(v).toFixed(2).replace('.', ',')}%</span>`; }
 function linhaSVG(p) {
