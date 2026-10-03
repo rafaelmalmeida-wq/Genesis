@@ -6979,6 +6979,7 @@ const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafa
   { id: 'producao', setor: 'primos', nome: 'Impressão e Produção', funcao: 'Viabilidade, fatiamento, fila e qualidade', skills: ['Análise de viabilidade de impressão', 'Preparação e fatiamento', 'Programação da produção', 'Controle de qualidade e falhas', 'Apontamento de produção e manutenção'], aba: 'producao' },
   { id: 'vendas', setor: 'primos', nome: 'Captação e Vendas', funcao: 'Prospecção, propostas e funil', skills: ['Prospecção e segmentação comercial', 'Qualificação de oportunidades', 'Abordagem e acompanhamento comercial', 'Proposta e negociação', 'Gestão de funil e fechamento'], aba: 'vendas' },
   { id: 'consignacao', setor: 'primos', nome: 'Consignação', funcao: 'Parceiros, remessas, acertos e mix', skills: ['Gestão de parceiros e pontos', 'Controle de remessas, vendas e devoluções', 'Conferência de acerto e comissões', 'Gestão de catálogo e personalização', 'Desempenho e reposição por ponto'], aba: 'chaveiros' },
+  { id: 'shopee', setor: 'primos', nome: 'Shopee', funcao: 'Loja, anúncios e pedidos da Shopee (skills a definir)', skills: [], semNuvem: true },
   { id: 'dev', setor: 'primos', nome: 'Desenvolvedor', funcao: 'Skills a definir com o Rafael', skills: [], semNuvem: true }
 ];
 /** O que cada skill faz (pedido do Rafael 02/10/2026) — aparece no painel do agente e vai no "manual" dele na nuvem (rodar.mjs). */
@@ -7107,8 +7108,8 @@ function posPadraoCanvas() {
     return p;
   }
   CV_PRIMOS.forEach((id, i) => { const a = -Math.PI / 2 + i / CV_PRIMOS.length * Math.PI * 2; p[id] = { x: Math.round(Math.cos(a) * R1 * 1.25), y: Math.round(Math.sin(a) * R1) }; });
-  p.dev = { x: 0, y: 600 }; // o Desenvolvedor fica embaixo, fora do círculo da operação
-  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
+  p.shopee = { x: -300, y: 600 }; p.dev = { x: 300, y: 600 }; // Shopee e Desenvolvedor embaixo, fora do círculo da operação
+  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
   return p;
 }
 function posCanvas(id) { const s = (prefs[chavePosCanvas()] || {})[id]; return s || posPadraoCanvas()[id] || { x: 0, y: 0 }; }
@@ -7398,7 +7399,7 @@ function htmlPainelAgenteBase(id) {
     return cabecalhoAgente(a) + ccNums([[sem.length, 'treinos em 7 dias'], [workouts.length, 'treinos registrados']])
       + ccBloco('Próximo passo', `<p class="cc-txt">O plano semanal e a dieta entram aqui assim que você me disser como quer montar. Por enquanto, registre os treinos na aba Saúde.</p><button type="button" class="cc-btn sec" onclick="fecharCentral(); changeTab('health')">Abrir Saúde</button>`) + botaoConversarAgente(a);
   }
-  if (a.id === 'dev') return cabecalhoAgente(a) + ccBloco('Aguardando as skills', '<p class="cc-txt">O agente Desenvolvedor já tem o lugar dele na Central. Assim que você me disser as skills, eu monto o manual dele, os painéis e a rodada automática na nuvem.</p>') + botaoConversarAgente(a);
+  if (a.id === 'dev' || a.id === 'shopee') return cabecalhoAgente(a) + ccBloco('Aguardando as skills', '<p class="cc-txt">O agente ' + esc(a.nome) + ' já tem o lugar dele na Central. Assim que você me disser as skills, eu monto o manual dele, os painéis e a rodada automática na nuvem.</p>') + botaoConversarAgente(a);
   return cabecalhoAgente(a) + ccBloco('Missão', `<p class="cc-txt">${esc(a.missao || 'Sem missão definida.')}</p>`)
     + ccBloco('Situação', `<p class="cc-txt">Este agente já existe e conversa pelo chat com as skills acima. Os painéis próprios dele (números e rotinas) eu monto quando você pedir.</p>`)
     + botaoConversarAgente(a) + (a.proprio ? `<button type="button" class="cc-btn perigo" onclick="removerAgente('${esc(a.id)}')">Remover agente</button>` : '');
