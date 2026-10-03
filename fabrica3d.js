@@ -54,30 +54,65 @@ class Fabrica {
     this.ang = 0; this.t0 = performance.now(); this.gestos(r.domElement); this.anexar(host);
     this.visivel = () => { if (!document.hidden) this.tocar(); }; document.addEventListener('visibilitychange', this.visivel);
   }
-  /** Uma impressora: A1 (mesa que anda em Y, pórtico em cima, AMS Lite ao lado) ou Kobra X (caixa aberta, cabeçote em X/Y). */
+  /** Uma impressora, no formato real (fase 7, pesquisa: as duas são "bed slingers" de pórtico — a mesa anda em Y, o pórtico
+   *  de duas colunas sobe em Z e o cabeçote corre em X). A1 Combo: corpo claro, mesa com PEI texturizado, cabeçote branco
+   *  com o cabo em arco e a AMS Lite ao lado (poste + 4 bobinas inclinadas + tubos de PTFE). Kobra X: corpo grafite, as
+   *  4 bobinas num suporte em cima (o sistema ACE Gen 2 fica no próprio cabeçote) e a câmera no topo. Medidas ≈ 1 unidade = 1 cm. */
   impressora(tipo, x) {
-    const g = new THREE.Group(), m = this.mat; g.position.set(x, 0, 0);
+    const g = new THREE.Group(), a1 = tipo === 'a1'; g.position.set(x, 0, 0);
+    const corpo = new THREE.MeshPhysicalMaterial({ color: a1 ? '#e7e8ea' : '#2b2d31', roughness: a1 ? 0.42 : 0.5, metalness: 0.05, clearcoat: 0.5, clearcoatRoughness: 0.35 });
+    const escuro = new THREE.MeshPhysicalMaterial({ color: '#1a1b1e', roughness: 0.4, metalness: 0.2, clearcoat: 0.4 });
+    const pei = new THREE.MeshStandardMaterial({ color: '#7d6a4c', roughness: 0.65, metalness: 0.35 }), alu = this.mat.alu;
+    const tubo = new THREE.MeshStandardMaterial({ color: '#f2f2f0', roughness: 0.35, transparent: true, opacity: 0.85 });
     const add = (geo, mat, px, py, pz, pai = g) => { const o = new THREE.Mesh(geo, mat); o.position.set(px, py, pz); pai.add(o); return o; };
-    add(new THREE.BoxGeometry(34, 4, 36), m.preto, 0, 2, 0); // base
-    const mesa = new THREE.Group(); mesa.position.set(0, 5.5, 0); g.add(mesa);
-    add(new THREE.BoxGeometry(24, 1, 24), m.mesa, 0, 0, 0, mesa);
-    if (tipo === 'a1') {
-      add(new THREE.BoxGeometry(2.4, 34, 2.4), m.alu, -15, 19, -2); // coluna
-      add(new THREE.BoxGeometry(2.4, 34, 2.4), m.preto, -15, 19, 2.2);
-      const port = new THREE.Group(); port.position.set(0, 24, 0); g.add(port);
-      add(new THREE.BoxGeometry(32, 2, 3), m.alu, 0, 0, 0, port); // braço do pórtico
-      const cab = add(new THREE.BoxGeometry(5, 6, 6), m.preto, 0, -2, 1.5, port); add(new THREE.ConeGeometry(0.9, 2, 12), m.bico, 0, -4.8, 0, cab); cab.rotation.set(0, 0, 0);
-      // AMS Lite: 4 bobininhas em cima ao lado
-      const ams = new THREE.Group(); ams.position.set(22, 6, 0); g.add(ams); add(new THREE.BoxGeometry(8, 2, 14), m.preto, 0, 0, 0, ams);
-      [-4.5, -1.5, 1.5, 4.5].forEach((z, i) => { const b = new THREE.Mesh(new THREE.CylinderGeometry(2.6, 2.6, 2.2, 24), new THREE.MeshStandardMaterial({ color: ['#1d1d20', '#f1f1ee', '#d4a53c', '#e64d97'][i], roughness: 0.5 })); b.rotation.x = Math.PI / 2; b.position.set(0, 3.4, z); ams.add(b); });
-      return { g, mesa, port, cab, tipo };
+    const W = 30, D = 34, HB = 5.5, HT = 42;
+    // base com cantos chanfrados (duas caixas sobrepostas) + tela de toque na frente
+    add(new THREE.BoxGeometry(W, HB, D - 2), corpo, 0, HB / 2, 0); add(new THREE.BoxGeometry(W - 2, HB, D), corpo, 0, HB / 2, 0);
+    const tela = add(new THREE.BoxGeometry(7, 4.4, 0.6), escuro, a1 ? -9 : 9, HB + 1.2, D / 2 + 0.4); tela.rotation.x = -0.35;
+    add(new THREE.PlaneGeometry(6.2, 3.6), new THREE.MeshBasicMaterial({ color: a1 ? '#3a8dde' : '#2fd0c4' }), a1 ? -9 : 9, HB + 1.25, D / 2 + 0.72).rotation.x = -0.35;
+    [-6, 6].forEach(px => add(new THREE.BoxGeometry(1.2, 0.8, D - 4), alu, px, HB + 0.4, 0)); // trilhos do Y
+    // mesa (anda em Y): base metálica + placa de PEI texturizado
+    const mesa = new THREE.Group(); mesa.position.set(0, HB + 1.4, 0); g.add(mesa);
+    add(new THREE.BoxGeometry(26, 0.8, 26), escuro, 0, 0, 0, mesa); add(new THREE.BoxGeometry(25.6, 0.25, 25.6), pei, 0, 0.55, 0, mesa);
+    // as duas colunas (Z) e a travessa de cima
+    [-1, 1].forEach(s => { add(new THREE.BoxGeometry(3.2, HT, 5), corpo, s * (W / 2 - 1.6), HB + HT / 2, -D / 2 + 6); add(new THREE.BoxGeometry(0.6, HT - 6, 1.2), escuro, s * (W / 2 - 1.6) - s * 1.6, HB + HT / 2, -D / 2 + 6); });
+    add(new THREE.BoxGeometry(W, 3, 5), corpo, 0, HB + HT + 1.5, -D / 2 + 6);
+    // pórtico (X): viga que sobe com a peça + cabeçote
+    const port = new THREE.Group(); port.position.set(0, HB + 12, -D / 2 + 6); g.add(port);
+    add(new THREE.BoxGeometry(W - 6, 2.4, 2.6), escuro, 0, 0, 1.6, port);
+    const cab = new THREE.Group(); cab.position.set(0, 0, 4.8); port.add(cab);
+    add(new THREE.BoxGeometry(5.6, 6.6, 5.2), a1 ? corpo : escuro, 0, -0.6, 0, cab);
+    add(new THREE.BoxGeometry(4.8, 4.2, 0.4), a1 ? escuro : new THREE.MeshStandardMaterial({ color: '#2f9bff', roughness: 0.4, emissive: '#1a6fd1', emissiveIntensity: 0.4 }), 0, 0, 2.7, cab); // tampa frontal
+    add(new THREE.CylinderGeometry(0.5, 0.5, 0.6, 16), new THREE.MeshBasicMaterial({ color: '#ffffff' }), 1.6, 1.4, 2.95, cab).rotation.x = Math.PI / 2; // LED
+    add(new THREE.ConeGeometry(0.75, 1.8, 14), this.mat.bico, 0, -4.8, 0.4, cab).rotation.x = Math.PI;
+    // bobinas (4) + tubos de PTFE até o cabeçote
+    const coresB = ['#1d1d20', '#f1f1ee', '#d4a53c', '#2457c5'], bob = (raio, larg) => { const s = new THREE.Group(); add(new THREE.CylinderGeometry(raio, raio, larg, 32), escuro, 0, 0, 0, s); return s; };
+    const pontos = [];
+    if (a1) { // AMS Lite: poste ao lado, cubo com 4 braços e as bobinas inclinadas em X
+      const ams = new THREE.Group(); ams.position.set(W / 2 + 11, 0, -4); g.add(ams);
+      add(new THREE.CylinderGeometry(4.5, 5.5, 1.4, 32), corpo, 0, 0.7, 0, ams); add(new THREE.CylinderGeometry(0.9, 0.9, 26, 16), corpo, 0, 13.5, 0, ams);
+      add(new THREE.CylinderGeometry(2.6, 2.6, 2.2, 24), escuro, 0, 27, 0, ams);
+      [0, 1, 2, 3].forEach(k => { const a = k * Math.PI / 2 + Math.PI / 4, s = new THREE.Group(); s.position.set(Math.cos(a) * 5.8, 27 + (k % 2 ? 2.5 : -2.5), Math.sin(a) * 5.8); s.rotation.set(0, -a, Math.PI / 2 - 0.35); ams.add(s);
+        add(new THREE.CylinderGeometry(5.2, 5.2, 0.35, 32), escuro, 0, 1.4, 0, s); add(new THREE.CylinderGeometry(5.2, 5.2, 0.35, 32), escuro, 0, -1.4, 0, s);
+        add(new THREE.CylinderGeometry(4.6, 4.6, 2.5, 32), new THREE.MeshStandardMaterial({ color: coresB[k], roughness: 0.5 }), 0, 0, 0, s);
+        pontos.push(new THREE.Vector3(ams.position.x + Math.cos(a) * 2, 28.5, ams.position.z + Math.sin(a) * 2)); });
+    } else { // Kobra X: suporte em cima da travessa com as 4 bobinas lado a lado + câmera
+      add(new THREE.BoxGeometry(W - 2, 1, 7), escuro, 0, HB + HT + 3.5, -D / 2 + 6);
+      coresB.forEach((c, k) => { const s = new THREE.Group(); s.position.set(-10.5 + k * 7, HB + HT + 9, -D / 2 + 6); s.rotation.z = Math.PI / 2; g.add(s);
+        add(new THREE.CylinderGeometry(4.8, 4.8, 0.3, 32), escuro, 0, 1.3, 0, s); add(new THREE.CylinderGeometry(4.8, 4.8, 0.3, 32), escuro, 0, -1.3, 0, s);
+        add(new THREE.CylinderGeometry(4.2, 4.2, 2.3, 32), new THREE.MeshStandardMaterial({ color: c, roughness: 0.5 }), 0, 0, 0, s);
+        pontos.push(new THREE.Vector3(-10.5 + k * 7, HB + HT + 4.5, -D / 2 + 9)); });
+      add(new THREE.BoxGeometry(3, 2, 2), escuro, W / 2 - 3, HB + HT + 4, -D / 2 + 9); add(new THREE.CylinderGeometry(0.6, 0.6, 0.4, 16), new THREE.MeshBasicMaterial({ color: '#0a84ff' }), W / 2 - 3, HB + HT + 4, -D / 2 + 10.2).rotation.x = Math.PI / 2;
     }
-    // Kobra X: moldura aberta, cabeçote corre em X numa barra que corre em Y
-    [[-15, -15], [15, -15], [-15, 15], [15, 15]].forEach(([px, pz]) => add(new THREE.BoxGeometry(2, 34, 2), m.alu, px, 19, pz));
-    [-15, 15].forEach(pz => add(new THREE.BoxGeometry(32, 2, 2), m.preto, 0, 36, pz)); [-15, 15].forEach(px => add(new THREE.BoxGeometry(2, 2, 32), m.preto, px, 36, 0));
-    const port = new THREE.Group(); port.position.set(0, 30, 0); g.add(port); add(new THREE.BoxGeometry(30, 1.6, 2.4), m.alu, 0, 0, 0, port);
-    const cab = add(new THREE.BoxGeometry(5, 5, 5), m.preto, 0, -2, 0, port); add(new THREE.ConeGeometry(0.9, 2, 12), m.bico, 0, -4.3, 0, cab);
-    return { g, mesa, port, cab, tipo };
+    const tubos = new THREE.Group(); g.add(tubos);
+    return { g, mesa, port, cab, tipo, pontos, tubos, tuboMat: tubo, alturaBase: HB + 3.5 };
+  }
+  /** Os tubos de PTFE (das bobinas ao cabeçote) acompanham o cabeçote: refeitos a cada poucos quadros. */
+  tubosDe(mq) {
+    mq.tubos.children.forEach(o => { o.geometry.dispose(); }); mq.tubos.clear();
+    const p = new THREE.Vector3(); mq.cab.getWorldPosition(p); mq.g.worldToLocal(p); p.y += 3.5;
+    mq.pontos.forEach((a, k) => { const meio = a.clone().lerp(p, 0.5); meio.y = Math.max(a.y, p.y) + 7; const curva = new THREE.CatmullRomCurve3([a, meio, p.clone().add(new THREE.Vector3((k - 1.5) * 0.4, 0, 0))]);
+      mq.tubos.add(new THREE.Mesh(new THREE.TubeGeometry(curva, 24, 0.22, 6), mq.tuboMat)); });
   }
   montarEsteira() {
     const e = new THREE.Group(); e.position.set(0, 0, 34); this.mundo.add(e); this.esteira = e;
@@ -90,7 +125,7 @@ class Fabrica {
     this.dados = dados;
     if (!this.maquinas.length) {
       const tipos = (dados.maquinas || []).map(m => /kobra|anycubic/i.test(m.nome) ? 'kobra' : 'a1');
-      const n = Math.max(1, tipos.length), passo = 52;
+      const n = Math.max(1, tipos.length), passo = 62; // a A1 Combo tem a AMS Lite ao lado
       tipos.forEach((t, i) => { const mq = this.impressora(t, (i - (n - 1) / 2) * passo); this.mundo.add(mq.g); this.maquinas.push(mq); });
     }
     this.maquinas.forEach((mq, i) => {
@@ -100,7 +135,7 @@ class Fabrica {
       if (job) { const cor = job.cor || '#8e8e93'; const mat = new THREE.MeshStandardMaterial({ color: cor, roughness: 0.55, metalness: /d4a53c|c3c6cc/.test(cor) ? 0.6 : 0.02 });
         const geo = new THREE.CylinderGeometry(4.2, 5, 10, 32, 20); geo.translate(0, 5, 0); mq.peca = new THREE.Mesh(geo, mat); mq.peca.position.y = 0.5; mq.mesa.add(mq.peca); }
       mq.placa = new THREE.Sprite(new THREE.SpriteMaterial({ map: texturaTexto((d.nome || 'Impressora') + (job && job.real ? ' · ao vivo' : ''), job ? (job.real && job.prog != null ? `% · ` : job.titulo) : 'livre'), transparent: true, depthWrite: false }));
-      mq.placa.scale.set(30, 7.5, 1); mq.placa.position.set(0, 46, 0); mq.g.add(mq.placa); mq.job = job;
+      mq.placa.scale.set(30, 7.5, 1); mq.placa.position.set(0, 66, 0); mq.g.add(mq.placa); mq.job = job;
     });
     this.caixas.forEach(c => { this.esteira.remove(c); c.geometry.dispose(); c.material.dispose(); }); this.caixas = [];
     (dados.fila || []).slice(0, 12).forEach((f, i) => { const b = new THREE.Mesh(new THREE.BoxGeometry(5.5, 4.5, 5.5), new THREE.MeshStandardMaterial({ color: f.cor || '#8e8e93', roughness: 0.45, metalness: 0.05 })); b.position.set(-68 + i * 11, 6, 0); b.userData = { f, base: -68 + i * 11 }; this.esteira.add(b); this.caixas.push(b); });
@@ -124,7 +159,7 @@ class Fabrica {
   /** A rolagem da página gira a fábrica. */
   rolar(v) { this.ang = Math.max(-0.6, Math.min(0.6, v)); this.mexeu = performance.now(); this.tocar(); }
   anexar(host) { if (!host) return; this.host = host; host.appendChild(this.renderer.domElement); if (this.obs) this.obs.disconnect(); if (window.ResizeObserver) { this.obs = new ResizeObserver(() => { this.medir(); this.tocar(); }); this.obs.observe(host); } this.medir(); this.tocar(); }
-  medir() { const h = this.host; if (!h) return; const w = h.clientWidth, a = h.clientHeight; if (!w || !a) return; this.renderer.setSize(w, a, false); this.cam.aspect = w / a; this.cam.updateProjectionMatrix(); const tg = Math.tan(this.cam.fov * Math.PI / 360); this.dist = Math.max(46 / tg, 80 / (tg * this.cam.aspect)); }
+  medir() { const h = this.host; if (!h) return; const w = h.clientWidth, a = h.clientHeight; if (!w || !a) return; this.renderer.setSize(w, a, false); this.cam.aspect = w / a; this.cam.updateProjectionMatrix(); const tg = Math.tan(this.cam.fov * Math.PI / 360); this.dist = Math.max(52 / tg, 108 / (tg * this.cam.aspect)); }
   tocar() { if (!this.raf && !this.solto) this.raf = requestAnimationFrame(() => this.quadro()); }
   quadro() {
     this.raf = 0; const el = this.renderer.domElement; if (this.solto || !el.isConnected || document.hidden) return;
@@ -132,15 +167,18 @@ class Fabrica {
     this.maquinas.forEach((mq, i) => {
       const fase = t * 1.6 + i * 1.3, ativo = !!mq.job;
       if (ativo) { // o cabeçote risca a camada, a mesa (A1) vai e volta, a peça cresce e recomeça
-        mq.cab.position.x = Math.sin(fase * 2.2) * 5; if (mq.tipo === 'a1') mq.mesa.position.z = Math.cos(fase * 1.7) * 4; else mq.port.position.z = Math.cos(fase * 1.7) * 4;
-        const prog = mq.job.real && mq.job.prog != null ? mq.job.prog : (t * 0.045 + i * 0.27) % 1; // real (Bambu) ou ilustrativo if (mq.peca) { mq.peca.scale.y = 0.04 + prog * 0.96; } mq.port.position.y = (mq.tipo === 'a1' ? 15.2 : 21) + (0.5 + 10 * (0.04 + prog * 0.96)) + 6.2;
+        mq.cab.position.x = Math.sin(fase * 2.2) * 5; mq.mesa.position.z = Math.cos(fase * 1.7) * 4; // as duas são "bed slingers": a mesa vai e volta
+        const prog = mq.job.real && mq.job.prog != null ? mq.job.prog : (t * 0.045 + i * 0.27) % 1; // real (Bambu) ou ilustrativo
+        if (mq.peca) mq.peca.scale.y = 0.04 + prog * 0.96;
+        mq.port.position.y = mq.alturaBase + 10 * (0.04 + prog * 0.96) + 5.2; // o pórtico sobe com a peça
       }
+      if (!mq.tuboQ || (mq.tuboQ++ % 4 === 0)) { if (!mq.tuboQ) mq.tuboQ = 1; this.tubosDe(mq); }
     });
     this.caixas.forEach((c, i) => { const vx = ((c.userData.base + t * 3) + 75) % 150 - 75; c.position.x = vx; c.rotation.y = Math.sin(t + i) * 0.05; });
     (this.listras || []).forEach((l, i) => { l.position.x = ((-72 + i * 8.5 + t * 3) + 75) % 153 - 76.5; });
     const parado = performance.now() - (this.mexeu || 0) > 2500; if (parado) this.ang += (Math.sin(t * 0.15) * 0.25 - this.ang) * 0.01;
     this.mundo.rotation.y = this.ang;
-    const d = this.dist || 200; this.cam.position.set(0, 34 + d * 0.16, d * 0.9); this.cam.lookAt(0, 20, 10);
+    const d = this.dist || 200; this.cam.position.set(0, 40 + d * 0.18, d * 0.9); this.cam.lookAt(0, 28, 6);
     this.renderer.render(this.cena, this.cam);
     this.raf = requestAnimationFrame(() => this.quadro());
   }
