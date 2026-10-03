@@ -3124,3 +3124,11 @@ body.ag-aberta { overflow: hidden; }
 .eng-acoes { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .eng-acoes .btn { flex: 1 1 140px; }
 .eng-lista { margin: 6px 0 0; padding-left: 18px; font-size: 13.5px; line-height: 1.6; }
+/* ===== RADAR DO TIKTOK (fase 8) ===== */
+.rt-barras { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+.rt-barra { display: grid; grid-template-columns: 1fr auto auto; grid-template-areas: "nome nome nome" "trilho num cor"; gap: 2px 8px; align-items: center; font-size: 12.5px; }
+.rt-nome { grid-area: nome; opacity: .8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rt-trilho { grid-area: trilho; height: 6px; border-radius: 3px; background: rgba(127,127,127,.15); overflow: hidden; }
+.rt-trilho i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #25f4ee, #ff2d55); }
+.rt-barra b { grid-area: num; font-size: 12.5px; }
+.rt-barra small { grid-area: cor; opacity: .6; }

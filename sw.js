@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'genesis-cache-v49';
+﻿const CACHE_NAME = 'genesis-cache-v50';
 const urlsToCache = [
   './',
   './index.html',

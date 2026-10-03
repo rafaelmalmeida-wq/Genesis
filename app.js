@@ -4840,6 +4840,7 @@ function destaquesAtivos() { const hoje = hojeISO(); return [].concat((primosCen
 function avisosJarvis() {
   const hoje = hojeISO(), L = [], nomeArea = id => (AREAS_CEREBRO.find(a => a.id === id) || {}).nome || '';
   const ra = relatoriosAgentes;
+  const rt = radarTikTok(); if (rt) L.push({ area: 'primos', rot: `Radar do TikTok · ${rt.lido}`, txt: rt.txt, sub: rt.sub, acao: 'abrirRadarTikTok()' }); // fase 8: o último vídeo primeiro
   destaquesAtivos().forEach((d, i) => { const dm = String(d.titulo + ' ' + (d.resumo || '')).match(/\b(\d{1,2})\/(\d{1,2})\b/); // a data DO EVENTO (ex.: 12/10) vale mais que o prazo do destaque
     const alvo = dm ? isoDe(new Date(Number(hoje.slice(0, 4)), Number(dm[2]) - 1, Number(dm[1]))) : d.ate; const dias = alvo && alvo >= hoje ? diasEntre(hoje, alvo) : d.ate ? diasEntre(hoje, d.ate) : null;
     L.push({ area: d.area || 'primos', rot: `${nomeArea(d.area) || 'Destaque'}${dias !== null ? ` · ${dias <= 0 ? 'é hoje' : dias === 1 ? 'falta 1 dia' : `faltam ${dias} dias`}` : ''}`, txt: d.titulo, sub: d.resumo, acao: `abrirDestaque(${i})` }); });
@@ -4887,6 +4888,27 @@ function abrirDestaque(i) {
       ${(d.grupos || []).map(g => `<div class="jvd-grupo"><h5>${seloLicenca(g.status || 'verificar')} ${esc(g.nome || '')}</h5><div class="jvd-links">${(g.itens || []).map(it => `<a class="jvd-link" href="${esc(it.url || '#')}" target="_blank" rel="noopener"><div><strong>${esc(it.titulo || '')}</strong><small>${esc([it.autor, it.info].filter(Boolean).join(' · '))}</small></div><em aria-hidden="true">↗</em></a>`).join('')}</div></div>`).join('')}
       ${d.rodape ? `<p class="jv-dica">${esc(d.rodape)}</p>` : ''}
       <button type="button" class="btn jv-mais" onclick="fecharDestaque(); abrirChatJarvis({ contexto: ${JSON.stringify(d.titulo).replace(/"/g, '&quot;')}, area: ${JSON.stringify(d.area || null).replace(/"/g, '&quot;')} })">Conversar com o J.A.R.V.I.S. sobre isso ›</button></div></div>`;
+  if (el.hidden) empilharCamada('destaque', fecharDestaque);
+  el.hidden = false;
+}
+/** RADAR DO TIKTOK (fase 8): o último vídeo + a semana, do TikTok Studio (marketing.tiktok, lido pelo PC) e do perfil público (tiktokPerfil, a cada publicação do cofre). */
+function radarTikTok() {
+  const pc = primosCentral, tk = pc && pc.marketing && pc.marketing.tiktok, pf = pc && pc.tiktokPerfil; if (!tk && !pf) return null;
+  const vids = ((tk && tk.videos) || []).slice().sort((a, b) => String(b[0]).localeCompare(String(a[0]))), ult = vids[0], p7 = tk && tk.periodo7d, mil = n => Number(n || 0).toLocaleString('pt-BR');
+  const lido = pf && pf.lidoEm ? isoParaBR(pf.lidoEm.slice(0, 10)).slice(0, 5) : pc.marketing && pc.marketing.atualizadoEm ? isoParaBR(String(pc.marketing.atualizadoEm).slice(0, 10)).slice(0, 5) : '';
+  return { lido, vids, p7, pf, txt: ult ? `Último vídeo: ${ult[1]} — ${mil(ult[3])} visualizações, ${mil(ult[4])} curtidas` : `${mil(pf.seguidores)} seguidores no TikTok`,
+    sub: [p7 ? `7 dias: ${mil(p7.views)} visualizações (${p7.varViews || ''})` : '', pf ? `${mil(pf.seguidores)} seguidores · ${mil(pf.curtidas)} curtidas` : ''].filter(Boolean).join(' · ') };
+}
+function abrirRadarTikTok() {
+  const r = radarTikTok(), el = $j('jv-destaque'); if (!r || !el) return;
+  const mil = n => Number(n || 0).toLocaleString('pt-BR'), ult = r.vids.slice(0, 10), max = Math.max(1, ...ult.map(v => Number(v[3]) || 0)), dest = ((primosCentral.marketing.tiktok || {}).destaques || [])[0];
+  el.innerHTML = `<div class="jvp-janela jvm-janela entrando" style="--area:#ff2d55">
+    <header class="jvp-topo jvm-topo"><span class="jvm-ico jvd-ico">◉</span><div class="jvp-marca"><strong>Radar do TikTok</strong><small>@primos3dltda · lido em ${esc(r.lido)}</small></div><button type="button" class="jv-x" onclick="fecharDestaque()" aria-label="Fechar">✕</button></header>
+    <div class="jvp-corpo">${indicadoresHTML([r.pf ? [mil(r.pf.seguidores), 'seguidores'] : null, r.pf ? [mil(r.pf.curtidas), 'curtidas no perfil'] : null, r.p7 ? [mil(r.p7.views), 'visualizações 7 dias'] : null].filter(Boolean))}
+      <div class="jv-bloco"><h5>Últimos vídeos · visualizações</h5><div class="rt-barras">${ult.map(v => `<div class="rt-barra"><span class="rt-nome">${esc(isoParaBR(v[0]).slice(0, 5))} · ${esc(v[1])}</span><span class="rt-trilho"><i style="width:${Math.max(2, (Number(v[3]) || 0) / max * 100).toFixed(1)}%"></i></span><b>${mil(v[3])}</b><small>♥ ${mil(v[4])}</small></div>`).join('')}</div></div>
+      ${dest ? falaHTML(`<b>${esc(dest.video)}</b>: ${esc(dest.leitura)}`) : ''}
+      <p class="jv-dica">Seguidores e curtidas atualizam sozinhos. Os números por vídeo vêm do TikTok Studio quando o Claude atualiza o marketing no PC.</p>
+      <button type="button" class="btn jv-mais" onclick="fecharDestaque(); abrirChatJarvis({ contexto: 'Radar do TikTok da Primos 3D', area: 'primos' })">Conversar sobre o TikTok ›</button></div></div>`;
   if (el.hidden) empilharCamada('destaque', fecharDestaque);
   el.hidden = false;
 }
