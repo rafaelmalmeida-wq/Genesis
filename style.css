@@ -2841,3 +2841,21 @@ body.ag-aberta { overflow: hidden; }
 .cc-video b { font-size: 0.86rem; line-height: 1.3; } .cc-video span { font-size: 0.74rem; color: #aeaeb2; }
 .cc-video em { font-style: normal; font-size: 0.66rem; color: #6e6e73; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ag .cc-videos { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 18px; }
+
+/* ============================================================================
+   FASE 7 — "Os agentes pediram para te avisar": um recado por agente, do mais urgente para o menos
+   (bolinha com a cor da urgência; PC = coluna lateral embaixo dos avisos do J.A.R.V.I.S.; celular = carrossel)
+   ============================================================================ */
+.jv-ag-rot { margin-top: 14px !important; }
+.jv-ag-lista { display: flex; flex-direction: column; gap: 2px; max-height: 38vh; overflow-y: auto; scrollbar-width: none; }
+.jv-ag-lista::-webkit-scrollbar { display: none; }
+.jv-ag-aviso { display: grid; grid-template-columns: 10px 1fr; column-gap: 9px; align-items: start; width: 100%; padding: 7px 8px; border: 0; border-radius: 12px; background: transparent; color: var(--jv-txt, #fff); text-align: left; cursor: pointer; animation: jvAvisoEntra .6s cubic-bezier(.2,.8,.2,1) both; }
+.jv-ag-aviso:hover { background: rgba(255,255,255,0.05); }
+.jv-ag-aviso:active { transform: scale(0.98); }
+.jv-ag-aviso i { grid-row: 1 / 3; width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; background: var(--urg); box-shadow: 0 0 8px var(--urg); }
+.jv-ag-aviso small { font-size: 0.62rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--jv-txt3, #8e8e93); }
+.jv-ag-aviso span { font-size: 0.8rem; line-height: 1.35; color: var(--jv-txt2, #d1d1d6); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 800px) {
+  .jv-ag-lista { flex-direction: row; overflow-x: auto; max-height: none; margin: 0 -16px; padding: 0 16px 6px; gap: 8px; scroll-snap-type: x mandatory; scroll-padding-inline: 16px; }
+  .jv-ag-aviso { flex: 0 0 calc(100vw - 96px); scroll-snap-align: start; background: rgba(255,255,255,0.045); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.1); }
+}

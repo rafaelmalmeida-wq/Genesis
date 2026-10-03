@@ -4838,18 +4838,34 @@ function destaquesAtivos() { const hoje = hojeISO(); return [].concat((primosCen
 function avisosJarvis() {
   const hoje = hojeISO(), L = [], nomeArea = id => (AREAS_CEREBRO.find(a => a.id === id) || {}).nome || '';
   const ra = relatoriosAgentes;
-  if (ra && ra.jarvis && ra.jarvis.dia >= addDiasISO(hoje, -1)) (ra.jarvis.prioridades || []).filter(p => p.urgencia === 'hoje').slice(0, 1).forEach(p =>
-    L.push({ area: 'primos', rot: 'Primos 3D · prioridade de hoje', txt: p.texto, acao: "abrirCentral('primos'); abrirAgenteCentral('jarvis')" }));
   destaquesAtivos().forEach((d, i) => { const dm = String(d.titulo + ' ' + (d.resumo || '')).match(/\b(\d{1,2})\/(\d{1,2})\b/); // a data DO EVENTO (ex.: 12/10) vale mais que o prazo do destaque
     const alvo = dm ? isoDe(new Date(Number(hoje.slice(0, 4)), Number(dm[2]) - 1, Number(dm[1]))) : d.ate; const dias = alvo && alvo >= hoje ? diasEntre(hoje, alvo) : d.ate ? diasEntre(hoje, d.ate) : null;
     L.push({ area: d.area || 'primos', rot: `${nomeArea(d.area) || 'Destaque'}${dias !== null ? ` · ${dias <= 0 ? 'é hoje' : dias === 1 ? 'falta 1 dia' : `faltam ${dias} dias`}` : ''}`, txt: d.titulo, sub: d.resumo, acao: `abrirDestaque(${i})` }); });
-  const fin = ra && ra.agentes && ra.agentes.contabil; if (fin && fin.alerta) L.push({ area: 'primos', rot: 'Financeiro · alerta', txt: fin.alerta, acao: "abrirCentral('primos'); abrirAgenteCentral('contabil')" });
   const atras = tasks.filter(t => !t.done && t.due && t.due < hoje).length, deHoje = tasks.filter(t => !t.done && t.due === hoje).length, ev = events.filter(e => e.date === hoje && !e.done).length;
   if (atras || deHoje || ev) L.push({ area: 'dia', rot: 'Dia a dia', txt: [ev ? plural(ev, 'compromisso hoje', 'compromissos hoje') : '', deHoje ? plural(deHoje, 'tarefa para hoje', 'tarefas para hoje') : '', atras ? plural(atras, 'tarefa atrasada', 'tarefas atrasadas') : ''].filter(Boolean).join(' · '), acao: "changeTab('tasks')" });
   const h = humorMercado(); if (h) L.push({ area: 'mercado', rot: 'Mercado', txt: h.tipo === 'alta' ? 'O mercado abriu em alta. Os touros estão no comando.' : h.tipo === 'baixa' ? 'O mercado está em baixa hoje. Calma: um dia não é tendência.' : 'Mercado de lado hoje, sem direção clara.', acao: "abrirMenuArea('mercado')" });
   const treinos = workouts.filter(w => { const d = w.date || w.data; return d && diasEntre(d, hoje) <= 6; }).length;
   L.push({ area: 'academia', rot: 'Academia', txt: treinos >= 3 ? `${plural(treinos, 'treino', 'treinos')} nos últimos 7 dias. Constância é o que dá resultado.` : treinos ? `Só ${plural(treinos, 'treino', 'treinos')} nesta semana. Bora fechar com mais um?` : 'Nenhum treino registrado nesta semana. Que tal hoje?', acao: "changeTab('health')" });
   return L.slice(0, 4);
+}
+/** "Os agentes pediram para te avisar" (fase 7): um recado de cada agente, do mais urgente para o menos.
+ *  A ordem vem do filtro do J.A.R.V.I.S. (mastermind): prioridade de hoje (2) > da semana (1) > do mês (0,5) > só alerta do agente (0,3) > só a manchete (0). */
+const URGENCIA_AVISO = [{ min: 2, nome: 'hoje', cor: '#ff453a' }, { min: 1, nome: 'esta semana', cor: '#ff9f0a' }, { min: 0.45, nome: 'este mês', cor: '#ffd60a' }, { min: 0.3, nome: 'atenção', cor: '#8e8e93' }, { min: 0, nome: 'para saber', cor: '#48484a' }];
+function avisosAgentes() {
+  const ra = relatoriosAgentes; if (!ra || !ra.agentes) return [];
+  const limpo = s => String(s || '').replace(/<[^>]+>/g, '').trim(), prio = (ra.jarvis && ra.jarvis.prioridades) || [];
+  const pesoUrg = { hoje: 2, semana: 1, mes: 0.5 };
+  return agentesCentral().map(a => {
+    const r = ra.agentes[a.id]; if (!r) return null;
+    const p = prio.filter(x => x.agente === a.id).sort((x, y) => (pesoUrg[y.urgencia] || 0) - (pesoUrg[x.urgencia] || 0))[0];
+    const ip = p ? prio.indexOf(p) : 99, nivel = p ? (pesoUrg[p.urgencia] || 0.5) + Math.max(0, 0.09 - ip * 0.01) : r.alerta ? 0.3 : 0, txt = limpo((p && p.texto) || r.alerta || r.manchete);
+    if (!txt) return null;
+    return { id: a.id, nome: a.nome, nivel, txt, u: URGENCIA_AVISO.find(u => nivel >= u.min) };
+  }).filter(Boolean).sort((x, y) => y.nivel - x.nivel);
+}
+function htmlAvisosAgentes() {
+  const L = avisosAgentes(); if (!L.length) return '';
+  return `<small class="jv-dest-rot jv-ag-rot"><span class="jv-dest-pulso"></span>Os agentes pediram para te avisar</small><div class="jv-ag-lista">${L.map((a, i) => `<button type="button" class="jv-ag-aviso" style="--urg:${a.u.cor}; animation-delay:${(i + 3) * 80}ms" onclick="abrirCentral('primos'); abrirAgenteCentral('${a.id}')"><i aria-hidden="true"></i><small>${esc(a.nome)} · ${a.u.nome}</small><span>${esc(a.txt)}</span></button>`).join('')}</div>`;
 }
 function addDiasISO(iso, n) { const [y, m, d] = iso.split('-').map(Number); return isoDe(new Date(y, m - 1, d + n)); }
 document.addEventListener('click', () => { if (window.JarvisBrain && JarvisBrain.pedirMovimento) JarvisBrain.pedirMovimento(); }, { once: true }); // iPhone: liga o giroscópio (paralaxe) no 1º toque
@@ -4858,7 +4874,7 @@ function renderDestaquesJarvis() {
   el.hidden = !av.length; if (window.JarvisBrain && JarvisBrain.margem) JarvisBrain.margem(av.length && window.innerWidth > 900 ? Math.min(220, window.innerWidth * 0.12) : 0);
   if (!av.length) { el.innerHTML = ''; return; }
   const cor = id => (AREAS_CEREBRO.find(a => a.id === id) || {}).cor || '#ffffff';
-  el.innerHTML = `<small class="jv-dest-rot"><span class="jv-dest-pulso"></span>O J.A.R.V.I.S. te avisa</small><div class="jv-dest-lista">${av.map((a, i) => `<button type="button" class="jv-dest jv-aviso" style="--area:${a.area === 'mercado' ? '#ffd60a' : cor(a.area)}; animation-delay:${i * 90}ms" onclick="${a.acao}"><small>${esc(a.rot)}</small><strong>${esc(a.txt)}</strong>${a.sub ? `<span>${esc(a.sub)}</span>` : ''}<em aria-hidden="true">›</em></button>`).join('')}</div>`;
+  el.innerHTML = `<small class="jv-dest-rot"><span class="jv-dest-pulso"></span>O J.A.R.V.I.S. te avisa</small><div class="jv-dest-lista">${av.map((a, i) => `<button type="button" class="jv-dest jv-aviso" style="--area:${a.area === 'mercado' ? '#ffd60a' : cor(a.area)}; animation-delay:${i * 90}ms" onclick="${a.acao}"><small>${esc(a.rot)}</small><strong>${esc(a.txt)}</strong>${a.sub ? `<span>${esc(a.sub)}</span>` : ''}<em aria-hidden="true">›</em></button>`).join('')}</div>${htmlAvisosAgentes()}`;
 }
 function abrirDestaque(i) {
   const d = destaquesAtivos()[i], el = $j('jv-destaque'); if (!d || !el) return;
