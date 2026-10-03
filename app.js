@@ -5141,7 +5141,7 @@ function renderAgentesFoco(a) {
       <p class="jvf-sub">Setores · toque para abrir</p><div class="ag-barras">${(a.secoes || []).map(([nome], i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${a.cor}" onclick="abrirMenuArea('${a.id}')"><i aria-hidden="true"></i><span><b>${esc(nome)}</b></span><em aria-hidden="true">›</em></button>`).join('')}</div>`; };
   if (!el.hidden && el.dataset.area === a.id) { const b = el.querySelector('.jvf-corpo'); if (b) b.innerHTML = corpo(); return; }
   el.dataset.area = a.id;
-  el.innerHTML = `<div class="jvf-topo"><span class="jvf-area" style="--area:${a.id === 'mercado' ? '#ffd60a' : '#ffffff'}">${iconeAreaSVG(a.id)}</span><div><small>J.A.R.V.I.S. › área</small><strong>${esc(a.nome)}</strong></div></div><div class="jvf-corpo">${corpo()}</div>`;
+  el.innerHTML = `<div class="jvf-topo"><span class="jvf-area" style="--area:${a.id === 'mercado' ? '#ffd60a' : '#ffffff'}">${iconeAreaSVG(a.id)}</span><div><small>J.A.R.V.I.S. › área</small><strong>${esc(a.nome)}</strong><button type="button" class="jvf-menu" onclick="abrirMenuArea('${a.id}')">Abrir o menu <em aria-hidden="true">›</em></button></div></div><div class="jvf-corpo">${corpo()}</div>`;
   el.hidden = false; cer.classList.add('jv-foco-ag');
 }
 /** A página de menu da área (a Primos 3D abre a página própria dela). */
@@ -5234,7 +5234,7 @@ function agenteEng(id) { return AGENTES_ENG.find(a => a.id === id || a.aba === i
 function htmlBarrasAgentesEng() {
   const d = engenhariaDados || {}, q = { projetos: (d.projetos || []).length, orcamentos: ((d.orcamentos || {}).obras || []).length, estudos: ((d.estudos || {}).disciplinas || []).length, normas: (d.normas || []).length };
   const met = { projetos: q.projetos && plural(q.projetos, 'projeto na cartilha', 'projetos na cartilha'), orcamentos: q.orcamentos && plural(q.orcamentos, 'grupo de obras orçadas', 'grupos de obras orçadas'), estudos: q.estudos && plural(q.estudos, 'bloco de matérias', 'blocos de matérias'), normas: q.normas && plural(q.normas, 'norma de referência', 'normas de referência') };
-  return `<div class="ag-barras">${AGENTES_ENG.map((a, i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${q[a.aba] ? '#30d158' : '#636366'}" onclick="abrirMenuArea('eng', '${a.aba}')"><i aria-hidden="true"></i><span><b>${esc(a.nome)}</b><small>${esc(met[a.aba] || a.funcao)}</small></span><em aria-hidden="true">›</em></button>`).join('')}</div>`;
+  return `<div class="ag-barras">${AGENTES_ENG.map((a, i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${q[a.aba] ? '#30d158' : '#636366'}" onclick="abrirPaginaEng('${a.aba}')"><i aria-hidden="true"></i><span><b>${esc(a.nome)}</b><small>${esc(met[a.aba] || a.funcao)}</small></span><em aria-hidden="true">›</em></button>`).join('')}<button type="button" class="ag-barra" style="--k:${AGENTES_ENG.length}; --urg:#0a84ff" onclick="abrirPaginaEng('curriculo')"><i aria-hidden="true"></i><span><b>Currículo</b><small>Alcance, Laboratório de Solos, Dinâmica, IFMG e UFV</small></span><em aria-hidden="true">›</em></button></div>`;
 }
 function conversarComAgenteEng(id) {
   const a = agenteEng(id); if (!a) return;
@@ -5248,7 +5248,7 @@ function falarComAgenteEng(id) {
 function htmlCabecaAgenteEng(a) {
   return `<div class="jv-bloco eng-agente"><h5>Agente ${esc(a.nome)}</h5><p class="eng-funcao">${esc(a.funcao)}</p>
     <div class="jv-setores">${a.skills.map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div>
-    <div class="eng-acoes"><button type="button" class="btn" onclick="fecharMenuArea(); conversarComAgenteEng('${a.id}')">Conversar</button><button type="button" class="btn" onclick="fecharMenuArea(); falarComAgenteEng('${a.id}')">Falar por voz</button></div></div>`;
+    <div class="eng-acoes"><button type="button" class="btn" onclick="abrirPaginaEng('${a.aba}')">Abrir a página ›</button><button type="button" class="btn" onclick="fecharMenuArea(); conversarComAgenteEng('${a.id}')">Conversar</button><button type="button" class="btn" onclick="fecharMenuArea(); falarComAgenteEng('${a.id}')">Falar por voz</button></div></div>`;
 }
 function htmlAbaEng(aba) {
   const d = engenhariaDados;
@@ -5271,6 +5271,91 @@ function htmlAbaEng(aba) {
     + indicadoresHTML([[String((d.projetos || []).length), 'projetos'], [String((o.numeros || {}).pastasDeObra || 0), 'obras orçadas'], [String((d.normas || []).length), 'normas']])
     + `<div class="jv-bloco"><h5>Seus agentes · toque para abrir</h5>${htmlBarrasAgentesEng()}</div>`
     + `<div class="jv-bloco"><h5>Quem é o engenheiro</h5><div class="eng-card"><strong>${esc(p.formacao || 'Engenharia Civil')}</strong>${xp ? `<small>${esc(xp.onde)} — ${esc(xp.quando)}</small><p>${esc(xp.papel)}</p>` : ''}${(p.softwares || []).length ? `<small>${esc(p.softwares.join(' · '))}</small>` : ''}</div></div>` + nota;
+}
+// --- PÁGINAS DA ENGENHARIA (fase 8): uma página animada por agente + o Currículo. Mesmo esqueleto das páginas da Primos
+//     (#ag-pag, rolagem que comanda: animarPaginaAgente), com cc.pagina = 'eng:<aba>'. Desenhos em SVG que se traçam sozinhos.
+const PAG_ENG = {
+  projetos: { titulo: 'Projetos', sub: 'A cartilha do que você já projetou — do papel ao Revit.' },
+  orcamentos: { titulo: 'Orçamentos', sub: 'Obras públicas pelo Brasil, lidas item por item na Alcance.' },
+  estudos: { titulo: 'Estudos UFV', sub: 'Dez períodos, um TCC em BIM e um artigo publicado.' },
+  normas: { titulo: 'Normas e Cálculos', sub: 'A norma certa na hora certa — e a conta à mostra.' },
+  curriculo: { titulo: 'Currículo', sub: 'Da segurança do trabalho à engenharia: o caminho até aqui.' }
+};
+function abrirPaginaEng(aba) {
+  if (!PAG_ENG[aba]) aba = 'projetos';
+  let el = $j('ag-pag'); if (!el) { el = document.createElement('div'); el.id = 'ag-pag'; el.className = 'ag'; el.hidden = true; document.body.appendChild(el); }
+  if (!$j('jv-menu-area').hidden) fecharMenuArea();
+  cc.pagina = 'eng:' + aba; if (el.hidden) empilharCamada('pagina', fecharPaginaAgente);
+  el.hidden = false; document.body.classList.add('ag-aberta'); renderPaginaAgente();
+}
+/** O desenho de abertura de cada página (traça sozinho com .eng-traco). */
+function palcoEng(aba) {
+  const T = (d, k = 0) => `<path class="eng-traco" style="--k:${k}" d="${d}"/>`;
+  if (aba === 'projetos') return `<svg class="eng-svg" viewBox="0 0 400 300" aria-hidden="true">
+    <g class="eng-grade">${Array.from({ length: 21 }, (_, i) => `<line x1="${i * 20}" y1="0" x2="${i * 20}" y2="300"/>`).join('')}${Array.from({ length: 16 }, (_, i) => `<line x1="0" y1="${i * 20}" x2="400" y2="${i * 20}"/>`).join('')}</g>
+    ${T('M60 250 H340', 0)}${T('M80 250 V140 H320 V250', 1)}${T('M70 145 L200 60 L330 145', 2)}${T('M120 250 V190 H165 V250', 3)}${T('M215 170 H285 V215 H215 Z', 4)}${T('M250 170 V215 M215 192 H285', 5)}${T('M290 105 V70 H310 V118', 6)}
+    ${T('M60 270 H340 M60 265 V275 M340 265 V275', 7)}<text class="eng-cota" x="200" y="288">12,00 m</text></svg>`;
+  if (aba === 'orcamentos') { const v = [100, 62, 41, 29, 20, 14, 10, 7, 5, 4, 3, 2], x0 = 40, w = 26; let acc = 0, tot = v.reduce((a, b) => a + b, 0); const pts = v.map((n, i) => { acc += n; return `${x0 + i * w + w / 2},${250 - acc / tot * 200}`; });
+    return `<svg class="eng-svg" viewBox="0 0 400 300" aria-hidden="true">${v.map((n, i) => `<rect class="eng-barra" style="--k:${i}" x="${x0 + i * w + 3}" y="${250 - n * 1.9}" width="${w - 6}" height="${n * 1.9}" rx="3"/>`).join('')}
+      ${T('M40 250 H360', 0)}<polyline class="eng-traco eng-curva" style="--k:3" points="${pts.join(' ')}"/><line class="eng-80" x1="40" y1="90" x2="360" y2="90"/><text class="eng-cota" x="356" y="84" text-anchor="end">80% do custo</text><text class="eng-cota" x="200" y="282">curva ABC — os poucos itens que pesam mais</text></svg>`; }
+  if (aba === 'estudos') return `<svg class="eng-svg" viewBox="0 0 400 300" aria-hidden="true">
+    <rect class="eng-solo s1" x="20" y="200" width="360" height="30"/><rect class="eng-solo s2" x="20" y="230" width="360" height="30"/><rect class="eng-solo s3" x="20" y="260" width="360" height="30"/>
+    ${T('M60 200 V120 M340 200 V120', 0)}<path class="eng-viga" d="M50 110 H350 V125 H50 Z"/>
+    ${[90, 140, 190, 240, 290].map((x, i) => `<g class="eng-seta" style="--k:${i}"><line x1="${x}" y1="40" x2="${x}" y2="98"/><path d="M${x - 5} 92 L${x} 102 L${x + 5} 92"/></g>`).join('')}
+    <path class="eng-traco eng-deflexao" style="--k:6" d="M60 140 Q200 175 340 140"/><text class="eng-cota" x="200" y="30">carga distribuída q</text></svg>`;
+  if (aba === 'normas') { const nos = [[40, 230], [120, 230], [200, 230], [280, 230], [360, 230], [80, 160], [160, 160], [240, 160], [320, 160]];
+    const barras = [[0, 1], [1, 2], [2, 3], [3, 4], [5, 6], [6, 7], [7, 8], [0, 5], [5, 1], [1, 6], [6, 2], [2, 7], [7, 3], [3, 8], [8, 4]];
+    return `<svg class="eng-svg" viewBox="0 0 400 300" aria-hidden="true">${barras.map(([a, b], i) => T(`M${nos[a][0]} ${nos[a][1]} L${nos[b][0]} ${nos[b][1]}`, i * 0.4)).join('')}
+      ${nos.map(([x, y], i) => `<circle class="eng-no" style="--k:${i}" cx="${x}" cy="${y}" r="5"/>`).join('')}<path class="eng-apoio" d="M28 250 L40 232 L52 250 Z M348 250 L360 232 L372 250 Z"/>
+      <g class="eng-seta" style="--k:6"><line x1="200" y1="100" x2="200" y2="148"/><path d="M195 142 L200 152 L205 142"/></g><text class="eng-cota" x="200" y="92">P</text><text class="eng-cota" x="200" y="285">treliça Pratt · NBR 8800</text></svg>`; }
+  return `<svg class="eng-svg" viewBox="0 0 400 300" aria-hidden="true">${T('M40 150 H360', 0)}${[[60, '2014'], [120, '2016'], [170, '2019'], [220, '2020'], [270, '2021'], [330, '2025']].map(([x, a], i) => `<g class="eng-marco" style="--k:${i}"><circle cx="${x}" cy="150" r="7"/><text x="${x}" y="${i % 2 ? 185 : 128}">${a}</text></g>`).join('')}<text class="eng-cota" x="200" y="250">IFMG · Dinâmica · Lab. de Solos · UFV · Alcance · TCC</text></svg>`;
+}
+function numerosEng(aba) {
+  const d = engenhariaDados || {}, o = d.orcamentos || {}, n = o.numeros || {}, cv = d.curriculo || {};
+  if (aba === 'projetos') return [[(d.projetos || []).length, 'projetos na cartilha'], [(d.projetos || []).filter(p => /revit/i.test(p.software || '')).length, 'em Revit'], [(d.bim || []).length, 'trabalhos em BIM']];
+  if (aba === 'orcamentos') return [[n.pastasDeObra || 0, 'obras analisadas'], [n.planilhas || 0, 'planilhas'], [n.documentosPdf || 0, 'documentos lidos']];
+  if (aba === 'estudos') return [[10, 'períodos na UFV'], [((d.estudos || {}).disciplinas || []).length, 'blocos de matérias'], [1, 'artigo publicado']];
+  if (aba === 'normas') return [[(d.normas || []).length, 'normas de referência'], [4, 'áreas: estruturas, hidro, elétrica, SST']];
+  return [[(cv.experiencia || []).length, 'experiências'], [(cv.formacao || []).length, 'formações'], [(cv.competencias || []).length, 'competências']];
+}
+function cartaoEng(titulo, linhas, corpo, k) { return `<article class="eng-cartao" style="--k:${k || 0}"><h3>${titulo}</h3>${(linhas || []).filter(Boolean).map(l => `<small>${l}</small>`).join('')}${corpo ? `<p>${corpo}</p>` : ''}</article>`; }
+function corpoPaginaEng(aba) {
+  const d = engenhariaDados; if (!d) return `<section class="ag-sec ag-corpo">${falaHTML('A cartilha ainda não chegou neste aparelho. Confira a conexão em <b>Ajustes do J.A.R.V.I.S. → Computador</b>.')}</section>`;
+  const p = d.perfil || {}, o = d.orcamentos || {}, e = d.estudos || {}, cv = d.curriculo || {}, S = (h, sub, corpo) => `<section class="ag-sec ag-corpo"><h2 class="eng-h2">${h}</h2>${sub ? `<p class="ag-sub">${sub}</p>` : ''}<div class="eng-grade-cartoes">${corpo}</div></section>`;
+  if (aba === 'projetos') {
+    const prof = (d.projetos || []).filter(x => !/^UFV/.test(x.cliente || '')), acad = (d.projetos || []).filter(x => /^UFV/.test(x.cliente || ''));
+    return S('Projetos executados', 'Trabalhos reais para clientes.', prof.map((x, i) => cartaoEng(esc(x.titulo), [esc([x.tipo, x.ano].filter(Boolean).join(' · ')), esc([x.cliente, x.software].filter(Boolean).join(' · '))], esc(x.escopo || ''), i)).join(''))
+      + S('Projetos da graduação', 'Feitos nas disciplinas da UFV.', acad.map((x, i) => cartaoEng(esc(x.titulo), [esc([x.tipo, x.ano].filter(Boolean).join(' · ')), esc(String(x.cliente || '').replace(/^UFV — /, ''))], esc(x.escopo || ''), i)).join(''))
+      + S('BIM', 'Onde o modelo virou ferramenta de decisão.', (d.bim || []).map((x, i) => cartaoEng(esc(x.titulo), [esc(x.ano)], esc(x.resumo), i)).join(''));
+  }
+  if (aba === 'orcamentos') return `<section class="ag-sec ag-corpo">${falaHTML(esc(o.resumo || ''))}</section>`
+    + S('Onde você orçou', 'Órgãos e obras das licitações analisadas.', (o.obras || []).map((x, i) => cartaoEng(esc(x.orgao), [esc(x.anos || '')], `<b>${esc(x.obra)}</b>${x.locais ? '<br>' + esc(x.locais) : ''}`, i)).join(''))
+    + S('O método', 'Como um orçamento de licitação é lido.', [['Faixa A', 'Curva ABC: os itens que somam ~80% do custo recebem cotação e conferência item por item.'], ['Fixas', 'Itens de preço fixo e encargos que não entram na disputa de desconto.'], ['Dossiê', 'Equipamentos especiais (VRF, automação, elevadores) com fornecedores e referências.'], ['Questionamento', 'Erros e distorções do edital viram pedido de esclarecimento antes da proposta.']].map(([t, c], i) => cartaoEng(esc(t), [], esc(c), i)).join(''));
+  if (aba === 'estudos') return (p.tcc ? `<section class="ag-sec ag-corpo eng-destaque"><small class="eng-selo">TCC · ${esc(String(p.tcc.ano || ''))}</small><h2 class="eng-h2">${esc(p.tcc.titulo)}</h2><p class="ag-sub">${esc(p.tcc.resumo || '')}</p><div class="eng-passos">${['Modelo BIM da creche', 'Riscos identificados no modelo', 'Canteiro e mapa de risco', 'EPCs projetados', 'Relatórios de SST (NR-18)'].map((t, i) => `<div style="--k:${i}"><b>${i + 1}</b><span>${t}</span></div>`).join('')}</div></section>` : '')
+    + (p.artigo ? `<section class="ag-sec ag-corpo eng-destaque"><small class="eng-selo">Artigo · ${esc(p.artigo.evento || '')}</small><h2 class="eng-h2">${esc(p.artigo.titulo)}</h2><p class="ag-sub">${esc(p.artigo.resumo || '')}</p></section>` : '')
+    + S('BIM na graduação', '', (d.bim || []).slice(0, 2).map((x, i) => cartaoEng(esc(x.titulo), [esc(x.ano)], esc(x.resumo), i)).join(''))
+    + S('Disciplinas', 'O que a UFV deixou na sua caixa de ferramentas.', (e.disciplinas || []).map((x, i) => `<div class="eng-chip" style="--k:${i}">${esc(x)}</div>`).join(''));
+  if (aba === 'normas') return S('Normas de referência', 'As que mais aparecem nos seus projetos.', (d.normas || []).map((x, i) => cartaoEng(esc(x.codigo), [], esc(x.tema), i)).join(''))
+    + `<section class="ag-sec ag-corpo">${falaHTML('As calculadoras (viga, laje, pilar, água fria e esgoto) entram no próximo passo. Até lá, pergunte ao agente: ele mostra a conta e o item da norma.')}</section>`;
+  return `<section class="ag-sec ag-corpo">${falaHTML(esc(cv.resumo || ''))}</section>`
+    + `<section class="ag-sec ag-corpo"><h2 class="eng-h2">Experiência</h2><ol class="eng-linha">${(cv.experiencia || []).map((x, i) => `<li style="--k:${i}"><small>${esc(x.periodo)}</small><b>${esc(x.cargo)}</b><span>${esc(x.onde)}</span><ul>${(x.feitos || []).map(f => `<li>${esc(f)}</li>`).join('')}</ul></li>`).join('')}</ol></section>`
+    + S('Formação', '', (cv.formacao || []).map((x, i) => cartaoEng(esc(x.titulo), [esc(x.periodo)], esc(x.onde), i)).join(''))
+    + S('Competências', esc(cv.idiomas || ''), (cv.competencias || []).map((x, i) => `<div class="eng-chip" style="--k:${i}">${esc(x)}</div>`).join(''))
+    + S('Certificados', '', (cv.certificados || []).map((x, i) => `<div class="eng-chip" style="--k:${i}">${esc(x)}</div>`).join(''));
+}
+function renderPaginaEng(aba) {
+  const el = $j('ag-pag'); if (!el) return; const P = PAG_ENG[aba] || PAG_ENG.projetos, ag = agenteEng(aba), nums = numerosEng(aba);
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Engenharia Civil${ag ? ' · agente' : ''}</small><strong>${esc(P.titulo)}</strong></div>
+      <button type="button" class="ag-falar" onclick="${ag ? `falarComAgenteEng('${ag.id}')` : `abrirChatJarvis({ contexto: 'Engenharia Civil › currículo', area: 'eng' })`}">${ag ? '🎙 Falar' : '💬 Conversar'}</button></header>
+    <i class="ag-progresso" id="ag-progresso" style="--cor:#0a84ff"></i>
+    <div class="ag-rolo eng-pag" id="ag-rolo" style="--cor:#0a84ff">
+      <section class="ag-heroi"><div class="ag-heroi-txt"><small>Engenharia Civil</small><h1>${esc(P.titulo)}</h1><p>${esc(P.sub)}</p></div><div class="ag-palco eng-palco">${palcoEng(aba)}</div><div class="ag-desca">role para ver tudo<i></i></div></section>
+      <section class="ag-sec ag-nums">${nums.map(([v, r], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</section>
+      ${corpoPaginaEng(aba)}
+      <section class="ag-sec ag-corpo"><nav class="eng-outras">${Object.keys(PAG_ENG).filter(k => k !== aba).map(k => `<button type="button" onclick="abrirPaginaEng('${k}')">${esc(PAG_ENG[k].titulo)} ›</button>`).join('')}</nav></section>
+      <footer class="ag-fim">J.A.R.V.I.S. · Engenharia Civil</footer>
+    </div>`;
+  animarPaginaAgente();
 }
 /** Resumo da cartilha para o Gemini (já vem sem nomes de clientes particulares). */
 function dadosEngenhariaIA() {
@@ -8014,6 +8099,7 @@ function palcoPagina(id) {
 }
 function renderPaginaAgente() {
   const el = $j('ag-pag'), id = cc.pagina; if (!el || el.hidden || !id) return;
+  if (String(id).startsWith('eng:')) return renderPaginaEng(id.slice(4)); // Engenharia Civil (fase 8)
   if (id === 'calc') return renderCalculadoraCompleta();
   if (id === 'jarvis') return renderPaginaJarvis();
   if (id === 'contabil') return renderPaginaFinanceiro();

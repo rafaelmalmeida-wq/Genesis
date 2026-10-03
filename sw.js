@@ -1,4 +1,4 @@
-const CACHE_NAME = 'genesis-cache-v52';
+﻿const CACHE_NAME = 'genesis-cache-v52';
 const urlsToCache = [
   './',
   './index.html',
@@ -20,7 +20,7 @@ const urlsToCache = [
   './favicon-64.png'
 ];
 
-// Instala o guardiÃƒÂ£o offline e salva os arquivos do seu app
+// Instala o guardiÃƒÆ’Ã‚Â£o offline e salva os arquivos do seu app
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
@@ -28,7 +28,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// Ao ativar, apaga caches de versÃƒÂµes antigas e assume o controle na hora
+// Ao ativar, apaga caches de versÃƒÆ’Ã‚Âµes antigas e assume o controle na hora
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
@@ -39,19 +39,19 @@ self.addEventListener('activate', event => {
   );
 });
 
-// EstratÃƒÂ©gia "internet primeiro, cache como reserva":
-// com internet vocÃƒÂª sempre recebe a versÃƒÂ£o mais nova do app;
-// sem internet, ele abre a ÃƒÂºltima versÃƒÂ£o salva.
+// EstratÃƒÆ’Ã‚Â©gia "internet primeiro, cache como reserva":
+// com internet vocÃƒÆ’Ã‚Âª sempre recebe a versÃƒÆ’Ã‚Â£o mais nova do app;
+// sem internet, ele abre a ÃƒÆ’Ã‚Âºltima versÃƒÆ’Ã‚Â£o salva.
 self.addEventListener('fetch', event => {
   const req = event.request;
 
-  // deixa passar direto o que nÃƒÂ£o ÃƒÂ© leitura de arquivo do prÃƒÂ³prio app
-  // (ÃƒÂ© aqui que a sincronizaÃƒÂ§ÃƒÂ£o com o Google passa sem interferÃƒÂªncia)
+  // deixa passar direto o que nÃƒÆ’Ã‚Â£o ÃƒÆ’Ã‚Â© leitura de arquivo do prÃƒÆ’Ã‚Â³prio app
+  // (ÃƒÆ’Ã‚Â© aqui que a sincronizaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o com o Google passa sem interferÃƒÆ’Ã‚Âªncia)
   if (req.method !== 'GET') return;
   if (!req.url.startsWith(self.location.origin)) return;
 
-  // "no-cache": sempre pergunta ao site se hÃƒÂ¡ versÃƒÂ£o nova (o GitHub Pages deixa o navegador guardar os
-  // arquivos por 10 min; sem isso uma atualizaÃƒÂ§ÃƒÂ£o demorava atÃƒÂ© 10 min para aparecer). Se nÃƒÂ£o mudou, volta rÃƒÂ¡pido.
+  // "no-cache": sempre pergunta ao site se hÃƒÆ’Ã‚Â¡ versÃƒÆ’Ã‚Â£o nova (o GitHub Pages deixa o navegador guardar os
+  // arquivos por 10 min; sem isso uma atualizaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o demorava atÃƒÆ’Ã‚Â© 10 min para aparecer). Se nÃƒÆ’Ã‚Â£o mudou, volta rÃƒÆ’Ã‚Â¡pido.
   const pedido = req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : new Request(req, { cache: 'no-cache' });
   event.respondWith(
     fetch(pedido)
