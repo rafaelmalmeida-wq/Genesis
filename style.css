@@ -3306,3 +3306,11 @@ body.ag-aberta { overflow: hidden; }
   .estc-modo { width: 100%; } .estc-modo button { flex: 1; }
 }#ag-pag .estc .estc-in, [data-tema] #ag-pag .estc .estc-in { background: rgba(255,255,255,0.09) !important; color: #fff !important; border: 0 !important; box-shadow: none !important; }
 #ag-pag .estc .estc-in::placeholder { color: rgba(255,255,255,0.35); }
+/* ===== DIÁRIO do J.A.R.V.I.S. do dia (fase 8) ===== */
+.jvd-linha { list-style: none; margin: 14px 0 0; padding: 0 0 0 20px; border-left: 2px solid rgba(255,255,255,.18); display: grid; gap: 14px; }
+.jvd-linha > li { position: relative; }
+.jvd-linha > li::before { content: ""; position: absolute; left: -26px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--dc, #8e8e93); box-shadow: 0 0 0 3px #000, 0 0 10px var(--dc, #8e8e93); }
+.jvd-linha small { color: #8e8e93; font-size: .74rem; letter-spacing: .04em; } .jvd-linha small em { font-style: normal; margin-left: 6px; color: var(--dc); }
+.jvd-linha p { margin: 4px 0 0; color: #e5e5ea; line-height: 1.45; font-size: .92rem; } .jvd-linha .jvd-cam { color: #fff; font-weight: 600; }
+.jvd-env { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.jvd-env li { display: grid; gap: 2px; padding: 10px 14px; border-radius: 14px; background: rgba(255,255,255,.06); } .jvd-env small { color: #8e8e93; font-size: .72rem; } .jvd-env span { color: #c7c7cc; font-size: .86rem; }

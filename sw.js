@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = 'genesis-cache-v55';
+const CACHE_NAME = 'genesis-cache-v56';
 const urlsToCache = [
   './',
   './index.html',
@@ -20,7 +20,7 @@ const urlsToCache = [
   './favicon-64.png'
 ];
 
-// Instala o guardiÃƒÆ’Ã‚Â£o offline e salva os arquivos do seu app
+// Instala o guardião offline e salva os arquivos do seu app
 self.addEventListener('install', event => {
   self.skipWaiting();
   event.waitUntil(
@@ -28,7 +28,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// Ao ativar, apaga caches de versÃƒÆ’Ã‚Âµes antigas e assume o controle na hora
+// Ao ativar, apaga caches de versões antigas e assume o controle na hora
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
@@ -39,19 +39,19 @@ self.addEventListener('activate', event => {
   );
 });
 
-// EstratÃƒÆ’Ã‚Â©gia "internet primeiro, cache como reserva":
-// com internet vocÃƒÆ’Ã‚Âª sempre recebe a versÃƒÆ’Ã‚Â£o mais nova do app;
-// sem internet, ele abre a ÃƒÆ’Ã‚Âºltima versÃƒÆ’Ã‚Â£o salva.
+// Estratégia "internet primeiro, cache como reserva":
+// com internet você sempre recebe a versão mais nova do app;
+// sem internet, ele abre a última versão salva.
 self.addEventListener('fetch', event => {
   const req = event.request;
 
-  // deixa passar direto o que nÃƒÆ’Ã‚Â£o ÃƒÆ’Ã‚Â© leitura de arquivo do prÃƒÆ’Ã‚Â³prio app
-  // (ÃƒÆ’Ã‚Â© aqui que a sincronizaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o com o Google passa sem interferÃƒÆ’Ã‚Âªncia)
+  // deixa passar direto o que não é leitura de arquivo do próprio app
+  // (é aqui que a sincronização com o Google passa sem interferência)
   if (req.method !== 'GET') return;
   if (!req.url.startsWith(self.location.origin)) return;
 
-  // "no-cache": sempre pergunta ao site se hÃƒÆ’Ã‚Â¡ versÃƒÆ’Ã‚Â£o nova (o GitHub Pages deixa o navegador guardar os
-  // arquivos por 10 min; sem isso uma atualizaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o demorava atÃƒÆ’Ã‚Â© 10 min para aparecer). Se nÃƒÆ’Ã‚Â£o mudou, volta rÃƒÆ’Ã‚Â¡pido.
+  // "no-cache": sempre pergunta ao site se há versão nova (o GitHub Pages deixa o navegador guardar os
+  // arquivos por 10 min; sem isso uma atualização demorava até 10 min para aparecer). Se não mudou, volta rápido.
   const pedido = req.mode === 'navigate' ? new Request(req.url, { cache: 'no-cache', credentials: 'same-origin' }) : new Request(req, { cache: 'no-cache' });
   event.respondWith(
     fetch(pedido)
@@ -62,4 +62,32 @@ self.addEventListener('fetch', event => {
       })
       .catch(() => caches.match(req))
   );
+});
+
+// NOTIFICAÇÕES do J.A.R.V.I.S. (fase 8): chegam cifradas da nuvem do cofre (agentes/dia.mjs) e aparecem na tela.
+// Toda mensagem PRECISA virar notificação (o iPhone corta a permissão de quem recebe e não mostra).
+self.addEventListener('push', event => {
+  let m = {};
+  try { m = event.data ? event.data.json() : {}; } catch (e) { m = { corpo: event.data ? event.data.text() : '' }; }
+  const titulo = m.titulo || 'J.A.R.V.I.S.';
+  event.waitUntil(self.registration.showNotification(titulo, {
+    body: m.corpo || '',
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    tag: m.tag || undefined,
+    renotify: !!m.tag,
+    data: { url: m.url || './?abrir=diario' }
+  }));
+});
+
+// Tocar na notificação: abre (ou traz para frente) o app já na tela certa
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const alvo = new URL((event.notification.data && event.notification.data.url) || './', self.registration.scope).href;
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(janelas => {
+    for (const j of janelas) {
+      if (j.url.startsWith(self.registration.scope) && 'focus' in j) { j.postMessage({ tipo: 'abrir', url: alvo }); return j.focus(); }
+    }
+    return self.clients.openWindow(alvo);
+  }));
 });

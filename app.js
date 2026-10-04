@@ -4194,6 +4194,89 @@ async function gh(caminho, opcoes = {}) {
   return r.status === 204 ? null : r.json();
 }
 
+// ============================================================================
+// NOTIFICAÇÕES + J.A.R.V.I.S. DO DIA (fase 8, decisão do Rafael 03/10/2026): a nuvem do cofre (agentes/dia.mjs, de hora em hora
+// das 8h às 21h) conversa com um agente por vez, anota no DIÁRIO (dados/diario.json) e manda notificação (Web Push cifrado) para
+// os aparelhos inscritos em dados/push.json — no máximo 8 por dia. O app: inscreve o aparelho, publica o RITMO (horas em que ele
+// abre o app + agenda dos próximos dias, em dados/ritmo.json, para o J.A.R.V.I.S. escolher o melhor momento) e mostra o diário.
+// ============================================================================
+const VAPID_PUBLICA = 'BJYjgpJ90W8NqwFonIS8N2_2EKyYdoF4hene5528fXjUTLd5hTcYG83u4SFXng7g5rC7SirDUDG1NSJ6mavDhnc'; // pública por natureza (a privada fica no segredo do cofre)
+let diarioJarvis = (() => { try { return JSON.parse(localStorage.getItem('lifeos_diario')); } catch (e) { return null; } })(); // CACHE local do cofre
+function appInstalado() { return !!(window.navigator.standalone || (window.matchMedia && matchMedia('(display-mode: standalone)').matches)); }
+function suportaPush() { return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window; }
+function b64uParaBytes(s) { const b = atob((s + '='.repeat((4 - s.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+const txtCofre = j => decodeURIComponent(escape(atob(String(j.content || '').replace(/\n/g, ''))));
+const b64Cofre = t => btoa(unescape(encodeURIComponent(t)));
+async function gravarCofreJson(caminho, mexer, msg) { // lê, deixa a função mudar e grava (tenta de novo se outro aparelho gravou no meio)
+  for (let k = 0; k < 3; k++) {
+    let atual = null, sha = null; try { const j = await gh(`/contents/${caminho}?ref=main&t=${Date.now()}`); sha = j.sha; atual = JSON.parse(txtCofre(j)); } catch (e) { }
+    const novo = mexer(atual); try { await gh(`/contents/${caminho}`, { method: 'PUT', body: JSON.stringify({ message: msg, content: b64Cofre(JSON.stringify(novo, null, 1)), ...(sha ? { sha } : {}) }) }); return true; } catch (e) { if (k === 2) throw e; }
+  }
+}
+async function ativarNotificacoes() {
+  const st = $j('jva-notif-st'), msg = t => { if (st) st.textContent = t; };
+  if (!claudeConfigurado()) { msg('Primeiro conecte o computador (passo 2): as notificações passam pelo seu cofre privado.'); return; }
+  if (!suportaPush()) { msg(appInstalado() ? '🔴 Este aparelho não aceita notificações de app (no iPhone precisa do iOS 16.4 ou mais novo).' : '📲 No iPhone, as notificações só funcionam com o J.A.R.V.I.S. instalado: no Safari, Compartilhar → Adicionar à Tela de Início, e abra por lá.'); return; }
+  try {
+    const perm = await Notification.requestPermission(); // precisa vir direto do toque (regra do iPhone)
+    if (perm !== 'granted') { msg('🔴 Permissão negada. No iPhone: Ajustes → Notificações → J.A.R.V.I.S. → Permitir notificações. Depois toque aqui de novo.'); return; }
+    msg('Conectando…');
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription(); if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uParaBytes(VAPID_PUBLICA) });
+    const s = sub.toJSON(), nome = /iphone|ipad/i.test(navigator.userAgent) ? 'iPhone' : /android/i.test(navigator.userAgent) ? 'Android' : 'Computador';
+    await gravarCofreJson('dados/push.json', d => { d = d && Array.isArray(d.aparelhos) ? d : { tipo: 'jarvis-push', aparelhos: [] }; d.aparelhos = d.aparelhos.filter(a => a.sub && a.sub.endpoint !== s.endpoint); d.aparelhos.push({ id: novoId(), nome, quando: new Date().toISOString(), sub: { endpoint: s.endpoint, keys: s.keys } }); return d; }, `Notificações: ${nome} ativado`);
+    jvConfig.notif = { ativo: true, desde: new Date().toISOString(), endpoint: s.endpoint }; salvarJvConfig();
+    publicarRitmo(true);
+    await pedirRodadaDia('teste');
+    msg('🟢 Ativado! Mandei uma notificação de teste: ela chega em 1 a 3 minutos (é a nuvem que manda).');
+  } catch (e) { msg('🔴 Não deu: ' + e.message); }
+  renderAjustesJarvis();
+}
+async function desativarNotificacoes() {
+  const st = $j('jva-notif-st');
+  try { const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription(), ep = sub ? sub.endpoint : (jvConfig.notif || {}).endpoint; if (sub) await sub.unsubscribe();
+    if (ep && claudeConfigurado()) await gravarCofreJson('dados/push.json', d => { d = d && Array.isArray(d.aparelhos) ? d : { tipo: 'jarvis-push', aparelhos: [] }; d.aparelhos = d.aparelhos.filter(a => a.sub && a.sub.endpoint !== ep); return d; }, 'Notificações: aparelho desligado');
+  } catch (e) { if (st) st.textContent = '🔴 ' + e.message; }
+  jvConfig.notif = { ativo: false }; salvarJvConfig(); renderAjustesJarvis(); toast('Notificações desligadas neste aparelho.');
+}
+/** Pede à nuvem: 'teste' (só uma notificação) ou 'rodada' (o J.A.R.V.I.S. conversa agora; agente opcional). */
+async function pedirRodadaDia(modo, agente) {
+  if (!claudeConfigurado()) return false;
+  try { await gravarCofreJson('agentes/dia-pedido.json', () => ({ modo, agente: agente || null, quando: new Date().toISOString(), de: appInstalado() ? 'app' : 'site' }), `J.A.R.V.I.S. do dia: ${modo}`); return true; } catch (e) { toast('Não consegui falar com o cofre: ' + e.message); return false; }
+}
+// RITMO: as horas em que ele abre o app (só neste aparelho; vira uma contagem por hora) + agenda dos próximos 3 dias e tarefas de hoje.
+function registrarAbertura() {
+  try { const L = JSON.parse(localStorage.getItem('lifeos_aberturas') || '[]'), agora = Date.now(); if (L.length && agora - L[L.length - 1] < 20 * 60000) return; L.push(agora); localStorage.setItem('lifeos_aberturas', JSON.stringify(L.filter(t => agora - t < 30 * 864e5).slice(-400))); } catch (e) { }
+}
+function publicarRitmo(forcar) {
+  if (!claudeConfigurado() || !(jvConfig.notif && jvConfig.notif.ativo)) return;
+  try { const ult = Number(localStorage.getItem('lifeos_ritmo_env') || 0); if (!forcar && Date.now() - ult < 2 * 3600e3) return; localStorage.setItem('lifeos_ritmo_env', String(Date.now())); } catch (e) { }
+  let ab = []; try { ab = JSON.parse(localStorage.getItem('lifeos_aberturas') || '[]'); } catch (e) { }
+  const horas = Array(24).fill(0); ab.forEach(t => { horas[new Date(t).getHours()]++; });
+  const hoje = hojeISO(), ate = somarDiasCer(hoje, 3);
+  const agenda = events.filter(e => !e.done && e.date >= hoje && e.date <= ate).map(e => ({ data: e.date, ini: e.time || '', fim: e.endTime || '', titulo: String(e.title || '').slice(0, 60) }))
+    .concat(shifts.filter(s => s.date >= hoje && s.date <= ate).map(s => ({ data: s.date, ini: s.time || '', fim: s.endTime || '', titulo: String(s.desc || 'Trabalho').slice(0, 60) })));
+  const tarefasHoje = tasks.filter(t => !t.done && t.due && t.due <= hoje).map(t => String(t.text || '').slice(0, 60)).slice(0, 20);
+  gravarCofreJson('dados/ritmo.json', () => ({ tipo: 'jarvis-ritmo', quando: new Date().toISOString(), horas, agenda, tarefasHoje }), 'App: ritmo do dia').catch(() => { });
+}
+/** O DIÁRIO do dia: com quem o J.A.R.V.I.S. conversou, o que ouviu, o caminho indicado e o que virou notificação. */
+function htmlDiarioJarvis() {
+  const d = diarioJarvis && diarioJarvis.dias && diarioJarvis.dias[hojeISO()]; if (!d || !(d.conversas || []).length && !(d.enviados || []).length) return '';
+  const DEC = { agora: ['avisei na hora', '#ff453a'], resumo: ['vai no resumo', '#ff9f0a'], nada: ['só anotei', '#8e8e93'] };
+  return `<section class="ag-sec ag-corpo jvpg-diario" id="jvpg-diario"><h2 class="jvpg-tit">Hoje com os agentes</h2><p class="ag-sub">${plural((d.conversas || []).length, 'conversa', 'conversas')} · ${plural((d.enviados || []).length, 'notificação', 'notificações')}${(d.melhorHora || []).length ? ` · seu melhor momento: ${d.melhorHora.map(h => h + 'h').join(' e ')}` : ''}</p>
+    <ol class="jvd-linha">${(d.conversas || []).slice().reverse().map((c, k) => { const dc = DEC[c.decisao] || DEC.nada; return `<li style="--k:${k}; --dc:${dc[1]}"><small>${esc(c.hora)} · ${esc(c.nome || c.agente)} <em>${dc[0]}</em></small><p>${esc(c.resposta || '')}</p>${c.caminho ? `<p class="jvd-cam">→ ${esc(c.caminho)}</p>` : ''}</li>`; }).join('')}</ol>
+    ${(d.enviados || []).length ? `<h3 class="jvpg-sub">Notificações de hoje</h3><ul class="jvd-env">${d.enviados.slice().reverse().map(e => `<li><small>${esc(e.hora)}</small><b>${esc(e.titulo)}</b><span>${esc(e.corpo || '')}</span></li>`).join('')}</ul>` : ''}</section>`;
+}
+/** Tocar na notificação abre a tela certa (?abrir=diario | agenda), na abertura e com o app já aberto (mensagem do service worker). */
+function abrirPorLink(url) {
+  let a = ''; try { a = new URL(url || location.href).searchParams.get('abrir') || ''; } catch (e) { }
+  if (!a) return;
+  if (a === 'diario') { if (typeof sincronizarCofre === 'function') sincronizarCofre(true); abrirPaginaJarvis(); setTimeout(() => { const s = $j('jvpg-diario'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 900); }
+  else if (a === 'agenda') changeTab('home');
+  try { history.replaceState(null, '', location.pathname); } catch (e) { }
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', ev => { if (ev.data && ev.data.tipo === 'abrir') abrirPorLink(ev.data.url); });
+
 async function enviarPedidoClaude() {
   if (vozGravando) { pararGravacao(); await new Promise(ok => setTimeout(ok, 600)); } // espera a última frase chegar
   const txt = document.getElementById('voice-text').value.trim(); if (!txt) { toast('Fale ou digite o que quer mudar.'); return; }
@@ -6069,6 +6152,7 @@ async function sincronizarCofre(forcar) {
     } else if (forcar) toast('A Primos 3D já está com os dados mais novos.', 3500);
     try { const k = await (await cofreBruto('dados/conteudo.json')).json(); if (k && k.tipo === 'jarvis-conteudo' && (!conteudoMkt || k.atualizadoEm !== conteudoMkt.atualizadoEm)) { conteudoMkt = k; try { localStorage.setItem('lifeos_conteudo', JSON.stringify(k)); } catch (e) { } if (cc.agente === 'marketing') renderCentral(); } } catch (e) { }
     try { const b = await (await cofreBruto('dados/impressoes.json')).json(); if (b && b.tipo === 'jarvis-impressoes' && (!impressoesBambu || b.lidoEm !== impressoesBambu.lidoEm)) { impressoesBambu = b; try { localStorage.setItem('lifeos_impressoes', JSON.stringify(b)); } catch (e) { } if (cc.agente === 'producao') montarFabrica3D(); } } catch (e) { }
+    try { const dj = await (await cofreBruto('dados/diario.json')).json(); if (dj && dj.tipo === 'jarvis-diario' && JSON.stringify(dj) !== JSON.stringify(diarioJarvis)) { diarioJarvis = dj; try { localStorage.setItem('lifeos_diario', JSON.stringify(dj)); } catch (e) { } if (cc.pagina === 'jarvis' && !$j('ag-pag').hidden) renderPaginaJarvis(); } } catch (e) { } // diário do J.A.R.V.I.S. do dia (fase 8)
     try { const dv = await (await cofreBruto('dados/dev.json')).json(); if (dv && dv.tipo === 'jarvis-dev') { const mudou = JSON.stringify(dv) !== JSON.stringify(devDados); devDados = dv; try { localStorage.setItem('lifeos_dev', JSON.stringify(dv)); } catch (e) { } if (mudou && cc.agente === 'dev') { renderCentral(); renderPaginaAgente(); } } } catch (e) { } // projetos do Desenvolvedor (fase 8)
     try { const g = await (await cofreBruto('dados/giros.json')).json(); if (g && g.tipo === 'jarvis-giros' && (!girosDados || g.atualizadoEm !== girosDados.atualizadoEm)) { girosDados = g; try { localStorage.setItem('lifeos_giros', JSON.stringify(g)); } catch (e) { } if (cc.agente === 'producao') { renderCentral(); renderPaginaAgente(); } } } catch (e) { } // miniaturas 3D da fila
     try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
@@ -7760,6 +7844,7 @@ function renderPaginaJarvis() {
       <section class="ag-sec ag-nums">${nums.map(([v, r], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</section>
       <section class="ag-sec ag-corpo"><h2 class="jvpg-tit">Seus agentes</h2><p class="ag-sub">O último recado de cada um, do mais urgente para o menos. Toque para abrir a página do agente.</p>${htmlBarrasAgentes()}</section>
       ${hoje.length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">O que importa hoje</h2><div class="jvpg-prios">${hoje.map(cartao).join('')}</div></section>` : ''}
+      ${htmlDiarioJarvis()}
       <section class="ag-sec ag-corpo jvpg-sec-orb"><h2 class="jvpg-tit">Como estou organizando os agentes</h2><p class="ag-sub">Cada fio é um agente me mandando o relatório. A bolinha mostra a urgência do recado dele. Toque para abrir a página do agente.</p>${orbita}
         ${aa.length ? `<ul class="jvpg-recados">${aa.map(a => `<li style="--urg:${a.u.cor}" onclick="abrirPaginaAgente('${esc(a.id)}')"><i></i><b>${esc(a.nome)}</b><span>${esc(a.txt)}</span></li>`).join('')}</ul>` : ''}</section>
       ${resto.length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">Para esta semana e este mês</h2><div class="jvpg-prios">${resto.map(cartao).join('')}</div></section>` : ''}
@@ -8770,6 +8855,14 @@ function renderAjustesJarvis() {
     <p class="jva-txt">Bitcoin, dólar e 4 ações já funcionam sem nada. Para Ibovespa, mais ações do Brasil e as americanas (BDRs), crie a chave grátis em <a href="https://brapi.dev" target="_blank" rel="noopener">brapi.dev</a> (Entrar → Dashboard → copiar o token).</p>
     <div class="jva-campo"><input id="jv-brapi" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="chave da brapi" value="${esc(jvConfig.brapi || '')}"><button type="button" class="jva-bt2" onclick="colarEm('jv-brapi')">Colar</button></div>
     <div class="jva-botoes"><button type="button" class="jva-bt2" onclick="salvarBrapiJarvis()">Salvar chave do Mercado</button></div><p id="jva-brapi-st" class="jva-st"></p></section>`;
+  // notificações + J.A.R.V.I.S. do dia (fase 8)
+  const nt = jvConfig.notif && jvConfig.notif.ativo, perm = suportaPush() ? Notification.permission : '';
+  h += `<section class="jva-sec" id="jva-notif"><h4>7 · Notificações e o J.A.R.V.I.S. do dia <span class="jva-tag">grátis</span></h4>
+    <p class="jva-txt">De hora em hora, das <b>8h às 21h</b>, eu converso com um agente de cada vez na nuvem do seu cofre: quem tem novidade, quem está pedindo atenção ou quem está há mais tempo sem conversa. Anoto tudo no <b>diário do dia</b> (página do J.A.R.V.I.S.) e te aviso no celular — <b>no máximo 8 por dia</b>: urgências na hora, o resto num resumo no seu melhor momento (aprendo pelas horas em que você abre o app e desvio dos compromissos da agenda), oportunidades e lembretes da agenda.</p>
+    <ol class="jva-passos"><li>No iPhone, use o J.A.R.V.I.S. <b>pelo ícone da tela de início</b> (não pelo Safari).</li><li>Toque em <b>Ativar notificações</b> e permita. Chega uma notificação de teste em 1 a 3 minutos.</li></ol>
+    <div class="jva-botoes">${nt ? `<button type="button" class="jva-bt" onclick="pedirRodadaDia('teste').then(ok => ok && toast('Pedi um teste: chega em 1 a 3 minutos.'))">Mandar um teste</button><button type="button" class="jva-bt2" onclick="pedirRodadaDia('rodada').then(ok => ok && toast('Pedi uma rodada agora: ele conversa com um agente e te avisa se valer.'))">Conversar com um agente agora</button><button type="button" class="jva-bt2" onclick="desativarNotificacoes()">Desligar</button>` : `<button type="button" class="jva-bt" onclick="ativarNotificacoes()">Ativar notificações</button>`}</div>
+    <p id="jva-notif-st" class="jva-st">${nt ? (perm === 'denied' ? '🔴 O aparelho bloqueou: Ajustes → Notificações → J.A.R.V.I.S. → Permitir.' : '🟢 Ativas neste aparelho.') : !suportaPush() && !appInstalado() ? '📲 Abra o J.A.R.V.I.S. pelo ícone da tela de início para ativar.' : ''}</p>
+    <p class="jva-mini">A notificação vai cifrada de ponta a ponta (nem o GitHub nem a Apple leem). Para a escolha do melhor momento, o app guarda no seu cofre privado só a contagem de horas em que você abre o app e os compromissos dos próximos 3 dias. Os agentes continuam só lendo: nada de compras, pagamentos, posts ou mensagens.</p></section>`;
   // plano B
   h += `<section class="jva-sec"><h4>Plano B · importar a Central à mão</h4><p class="jva-mini">Sem conexão com o computador, dá para importar o arquivo <b>primos-jarvis.json</b> (Primos 3D Central → 09 JARVIS). Fica só neste aparelho.</p>
     <div class="jva-botoes"><button type="button" class="jva-bt2" onclick="$j('jv-import').click()">Importar primos-jarvis.json</button></div></section>`;
@@ -11372,3 +11465,6 @@ if (!profile.name && !localStorage.getItem('lifeos_perfil_avisado')) { localStor
 carregarClaudeConfigNaTela(); atualizarIndicadorClaude(); atualizarClaude(true);
 renderCerebro(); // página inicial: o cérebro
 carregarSyncConfigNaTela(); setSyncStatus(syncConfigurado() ? (syncPendente ? "pendente" : "ok") : "naoconfig"); sincronizar();
+// fase 8: o ritmo do Rafael (para o J.A.R.V.I.S. do dia escolher o melhor momento) e abrir pela notificação
+registrarAbertura(); setTimeout(() => publicarRitmo(), 8000); setTimeout(() => abrirPorLink(location.href), 2600);
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { registrarAbertura(); publicarRitmo(); } });
