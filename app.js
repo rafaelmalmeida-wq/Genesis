@@ -4120,6 +4120,7 @@ function ouvirVoz() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const caixa = document.getElementById('voice-text');
   let r;
+  sessaoAudioGravar();
   try { r = new SR(); } catch (err) { vozQuerGravar = false; vozGravando = false; atualizarBotaoGravar(); setVozStatus('Use o 🎤 do teclado para ditar.'); caixa.focus(); return; }
   vozReconhecedor = r;
   r.lang = 'pt-BR'; r.interimResults = true; r.continuous = true;
@@ -6966,6 +6967,7 @@ function iniciarMicJarvis(campo, aoParar) {
 }
 function ouvirJarvis() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition; const campo = jv.campo; let r;
+  sessaoAudioGravar();
   try { r = new SR(); } catch (err) { jv.ouvindo = false; fimMicJarvis(); return; }
   jv.rec = r; r.lang = 'pt-BR'; r.interimResults = true; r.continuous = true;
   const base = campo.value.trim() ? campo.value.trim() + ' ' : '';
@@ -7046,6 +7048,7 @@ function iniciarConversaVoz(contexto, area, op = {}) {
 }
 /** Abre microfone, alto-falante e a conexão. O áudio nasce dentro do toque (regra do iPhone). */
 function iniciarSessaoVoz() {
+  sessaoAudioGravar(); // fase 10: depois do som da abertura o iPhone podia estar em 'ambient' (sem microfone)
   try { vz.ctx = new (window.AudioContext || window.webkitAudioContext)(); if (vz.ctx.state === 'suspended') vz.ctx.resume(); }
   catch (e) { falhaVoz({ amigavel: 'Este aparelho não liberou o áudio.', classico: true }); return; }
   Object.assign(vz, { ativo: true, pronto: false, jaConectou: false, mudo: false, falando: false, descartar: false, eu: '', ele: '', nivelSetup: 0, tentativas: 0, reconexoes: 0, mapa: mapaAnonimo(), erro: false, imagensEnviadas: false, imagensSilencio: false });
@@ -7304,7 +7307,7 @@ function falhaVoz(e) {
 // viva e, ao voltar, tocava a resposta antiga que estava na fila.
 document.addEventListener('visibilitychange', () => { if (document.hidden && vz.ativo) encerrarConversaVoz(); });
 function encerrarConversaVoz(daVolta) {
-  pararSessaoVoz();
+  pararSessaoVoz(); sessaoAudioNormal();
   const el = $j('jv-conversa'); if (!el || el.hidden) return;
   el.hidden = true; document.body.classList.remove('jv-em-voz');
   if (daVolta !== true) desempilharCamada('voz');
@@ -10002,11 +10005,15 @@ window.addEventListener('popstate', () => { if (popIgnorar > 0) { popIgnorar--; 
 // tipo Take Five: ride, baixo e acordes curtos de piano) com batucada de samba-drive por cima (surdo, tamborim, pandeiro),
 // e o corte seco na pulsação da luz. iPhone: sessão "ambient" = respeita o modo silencioso. O navegador só deixa tocar som
 // depois de um toque: se ainda não puder, toca no primeiro toque durante a abertura (ou não toca).
+/** iPhone (Audio Session API): 'ambient' só toca (e respeita o silencioso) e NÃO deixa gravar. Fora do som da abertura, volta ao normal. */
+function sessaoAudioNormal() { try { if (navigator.audioSession && !vz.ativo) navigator.audioSession.type = 'auto'; } catch (e) { } }
+function sessaoAudioGravar() { try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch (e) { } }
 function somAbertura() {
   if (prefs.jvSemSomAbertura) return;
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-  try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch (e) { }
-  let ctx; try { ctx = new AC(); } catch (e) { return; }
+  try { if (navigator.audioSession && !vz.ativo) navigator.audioSession.type = 'ambient'; } catch (e) { }
+  let ctx; try { ctx = new AC(); } catch (e) { sessaoAudioNormal(); return; }
+  const fechar = () => { try { if (ctx.state !== 'closed') ctx.close(); } catch (e) { } sessaoAudioNormal(); };
   const tocar = () => {
     const t0 = ctx.currentTime + 0.03, FIM = 1.95, B = 0.3, S = B / 4; // 200 bpm, semicolcheia
     const mestre = ctx.createGain(), comp = ctx.createDynamicsCompressor(); mestre.gain.value = 0.55; comp.threshold.value = -18; comp.ratio.value = 4;
@@ -10033,16 +10040,16 @@ function somAbertura() {
     for (let i = 0; i < 20; i++) chiado(G + i * S, 0.035, i % 4 === 2 ? 0.05 : 0.02, 'bandpass', 6800, 2.5);
     // 4) o acento final e o CORTE SECO (na pulsação da luz)
     const A = t0 + 1.78; osc('sine', 62, A, 0.003, 0.6, 0.4, mestre, 40); acorde(A, [220, 277.18, 329.63, 415.3], 0.05); chiado(A, 0.25, 0.08, 'highpass', 5000);
-    setTimeout(() => { try { ctx.close(); } catch (e) { } try { if (navigator.audioSession) navigator.audioSession.type = 'auto'; } catch (e) { } }, (FIM + 0.4) * 1000);
+    setTimeout(fechar, (FIM + 0.4) * 1000);
   };
   const tentar = () => ctx.resume().then(() => ctx.state === 'running');
   tentar().then(ok => {
     if (ok) return tocar();
-    const limite = Date.now() + 2000, toque = () => { tirar(); if (Date.now() < limite) tentar().then(o => { if (o) tocar(); else ctx.close(); }); else ctx.close(); }; // sem toque: não insiste
+    const limite = Date.now() + 2000, toque = () => { tirar(); if (Date.now() < limite) tentar().then(o => { if (o) tocar(); else fechar(); }); else fechar(); }; // sem toque: não insiste
     const tirar = () => ['pointerdown', 'keydown', 'touchend'].forEach(ev => document.removeEventListener(ev, toque, true));
     ['pointerdown', 'keydown', 'touchend'].forEach(ev => document.addEventListener(ev, toque, true));
-    setTimeout(() => { tirar(); if (ctx.state !== 'running') try { ctx.close(); } catch (e) { } }, 2300);
-  }).catch(() => { });
+    setTimeout(() => { tirar(); if (ctx.state !== 'running') fechar(); }, 2300);
+  }).catch(fechar);
 }function iniciarAbertura() {
   const el = $j('jv-abertura'); if (!el) return;
   if (prefs.jvSemAbertura) { el.remove(); document.documentElement.classList.remove('jv-abrindo'); atualizarCasaJarvis(abaAtual()); return; }
