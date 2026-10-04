@@ -6174,30 +6174,39 @@ let relatoriosAgentes = (() => { try { return JSON.parse(localStorage.getItem('l
 let conteudoMkt = (() => { try { return JSON.parse(localStorage.getItem('lifeos_conteudo')); } catch (e) { return null; } })(); // vídeos do estúdio do Marketing (cofre: dados/conteudo.json) — CACHE local
 let impressoesBambu = (() => { try { return JSON.parse(localStorage.getItem('lifeos_impressoes')); } catch (e) { return null; } })(); // histórico da Bambu (cofre: dados/impressoes.json) — CACHE local // Central: relatórios dos agentes (GitHub Actions do cofre, 1×/dia) — CACHE local, como a Primos
 function guardarPrimosLocal() { try { localStorage.setItem('lifeos_primoscentral', JSON.stringify(primosCentral)); } catch (e) { } } // cache do que veio do cofre (não passa pela planilha)
-async function sincronizarCofre(forcar) {
-  if (!claudeConfigurado() || jv.sincronizando) return;
-  if (!forcar && Date.now() - jv.ultimaSincCofre < 4 * 60000) return;
+/** fase 10 (pedido do Codex): devolve { estado: ok|erro|offline|naoconfig|cedo, mudou: [fontes] } e reaproveita a busca em andamento. */
+async function sincronizarCofre(forcar, silencioso) {
+  if (!claudeConfigurado()) return { estado: 'naoconfig' };
+  if (jv.sincronizando) return jv.cofrePromessa || { estado: 'andamento' };
+  if (!forcar && Date.now() - jv.ultimaSincCofre < 4 * 60000) return { estado: 'cedo' };
+  if (!navigator.onLine) return { estado: 'offline' };
+  jv.cofrePromessa = sincronizarCofreAgora(forcar, silencioso); return jv.cofrePromessa;
+}
+async function sincronizarCofreAgora(forcar, silencioso) {
+  const res = { estado: 'ok', mudou: [], quando: Date.now() };
   jv.sincronizando = true; jv.ultimaSincCofre = Date.now();
   if (forcar) { jv.atualizado.primos = Date.now(); renderAreasJarvis(); }
   try {
     const d = await (await cofreBruto('dados/primos.json')).json();
     if (d && d.tipo === 'jarvis-primos' && (!primosCentral || d.geradoEm !== primosCentral.geradoEm)) {
-      const primeira = !primosCentral; primosCentral = d; guardarPrimosLocal(); jv.atualizado.primos = Date.now(); jv.catalogo = null;
+      const primeira = !primosCentral; primosCentral = d; guardarPrimosLocal(); res.mudou.push('primos'); jv.atualizado.primos = Date.now(); jv.catalogo = null;
       if (jv.modo === '3d') { jv.assinatura = ''; renderJarvis(); }
       atualizarTelasSincronizadas('primos');
-      toast(primeira ? '🟢 J.A.R.V.I.S. conectado à Primos 3D Central.' : `🟢 J.A.R.V.I.S. atualizou a Primos 3D (Central de ${isoParaBR(d.geradoEm.slice(0, 10)).slice(0, 5)} às ${d.geradoEm.slice(11, 16)}).`, 5000);
-    } else if (forcar) toast('A Primos 3D já está com os dados mais novos.', 3500);
-    try { const k = await (await cofreBruto('dados/conteudo.json')).json(); if (k && k.tipo === 'jarvis-conteudo' && (!conteudoMkt || k.atualizadoEm !== conteudoMkt.atualizadoEm)) { conteudoMkt = k; try { localStorage.setItem('lifeos_conteudo', JSON.stringify(k)); } catch (e) { } if (cc.agente === 'marketing') atualizarTelasSincronizadas('central'); } } catch (e) { }
-    try { const b = await (await cofreBruto('dados/impressoes.json')).json(); if (b && b.tipo === 'jarvis-impressoes' && (!impressoesBambu || b.lidoEm !== impressoesBambu.lidoEm)) { impressoesBambu = b; try { localStorage.setItem('lifeos_impressoes', JSON.stringify(b)); } catch (e) { } if (cc.agente === 'producao') montarFabrica3D(); } } catch (e) { }
-    try { const dj = await (await cofreBruto('dados/diario.json')).json(); if (dj && dj.tipo === 'jarvis-diario' && JSON.stringify(dj) !== JSON.stringify(diarioJarvis)) { diarioJarvis = dj; try { localStorage.setItem('lifeos_diario', JSON.stringify(dj)); } catch (e) { } if (cc.pagina === 'jarvis' && !$j('ag-pag').hidden) renderPaginaJarvis(); } } catch (e) { } // diário do J.A.R.V.I.S. do dia (fase 8)
-    try { const dv = await (await cofreBruto('dados/dev.json')).json(); if (dv && dv.tipo === 'jarvis-dev') { const mudou = JSON.stringify(dv) !== JSON.stringify(devDados); devDados = dv; try { localStorage.setItem('lifeos_dev', JSON.stringify(dv)); } catch (e) { } if (mudou && cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // projetos do Desenvolvedor (fase 8)
-    try { const pd = await (await cofreBruto('dados/pedidos-dev.json')).json(); if (pd && pd.tipo === 'jarvis-pedidos-dev' && JSON.stringify(pd) !== JSON.stringify(pedidosDev)) { pedidosDev = pd; try { localStorage.setItem('lifeos_pedidosdev', JSON.stringify(pd)); } catch (e) { } if (cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 10: pedidos ao Desenvolvedor
-    try { const g = await (await cofreBruto('dados/giros.json')).json(); if (g && g.tipo === 'jarvis-giros' && (!girosDados || g.atualizadoEm !== girosDados.atualizadoEm)) { girosDados = g; try { localStorage.setItem('lifeos_giros', JSON.stringify(g)); } catch (e) { } if (cc.agente === 'producao') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // miniaturas 3D da fila
-    try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
-    try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } atualizarTelasSincronizadas('central'); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
+      if (!silencioso) toast(primeira ? '🟢 J.A.R.V.I.S. conectado à Primos 3D Central.' : `🟢 J.A.R.V.I.S. atualizou a Primos 3D (Central de ${isoParaBR(d.geradoEm.slice(0, 10)).slice(0, 5)} às ${d.geradoEm.slice(11, 16)}).`, 5000);
+    } else if (forcar && !silencioso) toast('A Primos 3D já está com os dados mais novos.', 3500);
+    try { const k = await (await cofreBruto('dados/conteudo.json')).json(); if (k && k.tipo === 'jarvis-conteudo' && (!conteudoMkt || k.atualizadoEm !== conteudoMkt.atualizadoEm)) { conteudoMkt = k; res.mudou.push('conteudo'); try { localStorage.setItem('lifeos_conteudo', JSON.stringify(k)); } catch (e) { } if (cc.agente === 'marketing') atualizarTelasSincronizadas('central'); } } catch (e) { }
+    try { const b = await (await cofreBruto('dados/impressoes.json')).json(); if (b && b.tipo === 'jarvis-impressoes' && (!impressoesBambu || b.lidoEm !== impressoesBambu.lidoEm)) { impressoesBambu = b; res.mudou.push('impressoes'); try { localStorage.setItem('lifeos_impressoes', JSON.stringify(b)); } catch (e) { } if (cc.agente === 'producao') montarFabrica3D(); } } catch (e) { }
+    try { const dj = await (await cofreBruto('dados/diario.json')).json(); if (dj && dj.tipo === 'jarvis-diario' && JSON.stringify(dj) !== JSON.stringify(diarioJarvis)) { diarioJarvis = dj; res.mudou.push('diario'); try { localStorage.setItem('lifeos_diario', JSON.stringify(dj)); } catch (e) { } if (cc.pagina === 'jarvis' && !$j('ag-pag').hidden) renderPaginaJarvis(); } } catch (e) { } // diário do J.A.R.V.I.S. do dia (fase 8)
+    try { const dv = await (await cofreBruto('dados/dev.json')).json(); if (dv && dv.tipo === 'jarvis-dev') { const mudou = JSON.stringify(dv) !== JSON.stringify(devDados); devDados = dv; if (mudou) res.mudou.push('dev'); try { localStorage.setItem('lifeos_dev', JSON.stringify(dv)); } catch (e) { } if (mudou && cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // projetos do Desenvolvedor (fase 8)
+    try { const pd = await (await cofreBruto('dados/pedidos-dev.json')).json(); if (pd && pd.tipo === 'jarvis-pedidos-dev' && JSON.stringify(pd) !== JSON.stringify(pedidosDev)) { pedidosDev = pd; res.mudou.push('pedidosdev'); try { localStorage.setItem('lifeos_pedidosdev', JSON.stringify(pd)); } catch (e) { } if (cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 10: pedidos ao Desenvolvedor
+    try { const g = await (await cofreBruto('dados/giros.json')).json(); if (g && g.tipo === 'jarvis-giros' && (!girosDados || g.atualizadoEm !== girosDados.atualizadoEm)) { girosDados = g; res.mudou.push('giros'); try { localStorage.setItem('lifeos_giros', JSON.stringify(g)); } catch (e) { } if (cc.agente === 'producao') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // miniaturas 3D da fila
+    try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; res.mudou.push('engenharia'); guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
+    try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; res.mudou.push('relatorios'); try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } atualizarTelasSincronizadas('central'); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
+    try { const eb = await (await cofreBruto('dados/ebook.json')).json(); if (eb && eb.tipo === 'jarvis-ebook' && JSON.stringify(eb) !== JSON.stringify(ebookDados)) { ebookDados = eb; res.mudou.push('ebook'); try { localStorage.setItem('lifeos_ebook', JSON.stringify(eb)); } catch (e) { } if (cc.agente === 'digital' || cc.pagina === 'digital') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 10: Produto Digital (e-book)
     autoRodadasNuvem(); // fase 9: se o relógio do GitHub falhou, o app pede (plano C)
-  } catch (e) { if (forcar) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
-  jv.sincronizando = false; renderAreasJarvis(); atualizarTelasSincronizadas('primos'); renderAjustesJarvis(); setTimeout(renderAreasJarvis, 91000);
+  } catch (e) { res.estado = navigator.onLine ? 'erro' : 'offline'; res.erro = e.message; if (forcar && !silencioso) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
+  jv.sincronizando = false; jv.cofrePromessa = null; renderAreasJarvis(); atualizarTelasSincronizadas('primos'); renderAjustesJarvis(); setTimeout(renderAreasJarvis, 91000);
+  return res;
 }
 /** fase 9 (04/10/2026) — PLANO C para os agentes trabalharem todo dia: o relógio do GitHub às vezes não dispara e o PC pode estar
  *  desligado. Ao abrir o app (qualquer aparelho conectado ao cofre): (1) depois das 6h45, se algum agente da Primos não trabalhou
@@ -7306,7 +7315,7 @@ function encerrarConversaVoz(daVolta) {
 // cofre (`dados/recados.json`, anonimizado) — os agentes da nuvem leem na próxima rodada. Compra de filamento também
 // entra no estoque na hora (e o lançamento na planilha vai ao PC com cartão de confirmação).
 // ============================================================================
-const MAPA_FILTRO = 'contabil = dinheiro, gasto, preço, caixa, metas, sócio, aporte, MEI · estoque = filamento, insumos, compras de material · producao = imprimir, máquinas, falhas, tempo de impressão · marketing = vídeos, fotos, TikTok, Instagram, ideias de post · vendas = clientes, orçamentos, pedidos, vendas · consignacao = expositores e chaveiros · shopee = loja da Shopee, anúncios · dev = mudanças no app';
+const MAPA_FILTRO = 'contabil = dinheiro, gasto, preço, caixa, metas, sócio, aporte, MEI · estoque = filamento, insumos, compras de material · producao = imprimir, máquinas, falhas, tempo de impressão · marketing = vídeos, fotos, TikTok, Instagram, ideias de post · vendas = clientes, orçamentos, pedidos, vendas · consignacao = expositores e chaveiros · shopee = loja da Shopee, anúncios · dev = mudanças no app · digital = e-book, mentoria, curso, produto digital, documentar o que o J.A.R.V.I.S. faz';
 function registrarRecado(agentes, texto, tipo, origem) {
   const ids = [].concat(agentes || []).map(String).filter(id => agentesCentral().some(a => a.id === id));
   if (!ids.length || !String(texto || '').trim()) return null;
@@ -7497,10 +7506,16 @@ const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafa
   { id: 'vendas', setor: 'primos', nome: 'Captação e Vendas', funcao: 'Prospecção, propostas e funil', skills: ['Prospecção e segmentação comercial', 'Qualificação de oportunidades', 'Abordagem e acompanhamento comercial', 'Proposta e negociação', 'Gestão de funil e fechamento'], aba: 'vendas' },
   { id: 'consignacao', setor: 'primos', nome: 'Consignação', funcao: 'Parceiros, remessas, acertos e mix', skills: ['Gestão de parceiros e pontos', 'Controle de remessas, vendas e devoluções', 'Conferência de acerto e comissões', 'Gestão de catálogo e personalização', 'Desempenho e reposição por ponto'], aba: 'chaveiros' },
   { id: 'shopee', setor: 'primos', nome: 'Shopee', funcao: 'Mercado, anúncios, catálogo, preço e desempenho da loja', skills: ['Inteligência de mercado 3D', 'Anúncios que vendem', 'Catálogo e publicação', 'Preço e rentabilidade por anúncio', 'Desempenho e Shopee Ads'] },
-  { id: 'dev', setor: 'primos', nome: 'Desenvolvedor', funcao: 'Cria os produtos: placas, carimbos, chaveiros com logo, kits empresariais, luminárias e a camisa — em Blender/Fusion e 3MF', skills: ['Modelagem paramétrica FDM', 'Placas, nomes e carimbos', 'Chaveiros e brindes com logo', 'Luminárias e funcionais', 'Projeto 3MF no Bambu Studio'] }
+  { id: 'dev', setor: 'primos', nome: 'Desenvolvedor', funcao: 'Cria os produtos: placas, carimbos, chaveiros com logo, kits empresariais, luminárias e a camisa — em Blender/Fusion e 3MF', skills: ['Modelagem paramétrica FDM', 'Placas, nomes e carimbos', 'Chaveiros e brindes com logo', 'Luminárias e funcionais', 'Projeto 3MF no Bambu Studio'] },
+  { id: 'digital', setor: 'primos', nome: 'Produto Digital', funcao: 'E-book e mentoria: documenta tudo o que o J.A.R.V.I.S. e os agentes produzem e transforma em produto digital', skills: ['Documentação viva', 'E-book', 'Mentoria', 'Lançamento digital', 'Prova e resultados'], semNuvem: true } // fase 10 (pedido do Rafael 04/10/2026): por enquanto o Claude escreve no PC
 ];
 /** O que cada skill faz (pedido do Rafael 02/10/2026) — aparece no painel do agente e vai no "manual" dele na nuvem (rodar.mjs). */
 const SKILLS_DESC = {
+  'Documentação viva': 'Registra o que cada agente e o J.A.R.V.I.S. produzem (decisões, números, aprendizados) e separa o que vira capítulo, aula ou exemplo.',
+  'E-book': 'Escreve e revisa o e-book capítulo por capítulo: como o J.A.R.V.I.S. foi construído e o que a Primos 3D aprendeu de impressão 3D, com exemplos reais e sem dado de cliente.',
+  'Mentoria': 'Transforma o e-book em módulos de mentoria/curso: roteiro de aulas, exercícios, checklists e materiais de apoio.',
+  'Lançamento digital': 'Planeja como vender: página, preço de teste, plataforma (Hotmart, Kiwify ou loja própria), conteúdo de aquecimento no TikTok — você aprova cada passo.',
+  'Prova e resultados': 'Junta os resultados reais (antes/depois, números da Primos, prints autorizados) que provam o método, sempre com a sua autorização.',
   'Metas e plano de ação': 'Lê as metas que você e o sócio definiram (empresa, Rafael, sócio), mostra onde vocês estão, quanto falta, o ritmo por semana e a ação da semana para chegar lá.',
   'Inteligência de mercado 3D': 'Concorrentes, preços, personalização, avaliações e reclamações em placas, chaveiros e luminárias; ranking de oportunidades, sem confundir curtidas ou downloads com vendas.',
   'Anúncios que vendem': 'Título, descrição, ficha técnica, perguntas frequentes e instruções de personalização; plano de capa e vídeo sem inventar nada do produto.',
@@ -7633,12 +7648,13 @@ function posPadraoCanvas() {
   const p = { jarvis: { x: 0, y: 0 } }, ag = agentesCentral(), R1 = 300;
   if (celCanvas()) { // celular em pé: 2 colunas, o J.A.R.V.I.S. no meio
     [['contabil', -138, -310], ['marketing', 138, -310], ['estoque', -138, 300], ['producao', 138, 300], ['vendas', -138, 560], ['consignacao', 138, 560]].forEach(([id, x, y]) => { p[id] = { x, y }; });
-    ag.filter(a => !CV_PRIMOS.includes(a.id)).forEach((a, i) => { p[a.id] = { x: (i % 2 ? 138 : -138), y: 820 + Math.floor(i / 2) * 260 }; });
+    p.shopee = { x: -138, y: 820 }; p.dev = { x: 138, y: 820 }; // fase 10: no celular eles não tinham lugar (ficavam no meio)
+    ag.filter(a => !CV_PRIMOS.includes(a.id)).forEach((a, i) => { p[a.id] = { x: (i % 2 ? 138 : -138), y: 1080 + Math.floor(i / 2) * 260 }; });
     return p;
   }
   CV_PRIMOS.forEach((id, i) => { const a = -Math.PI / 2 + i / CV_PRIMOS.length * Math.PI * 2; p[id] = { x: Math.round(Math.cos(a) * R1 * 1.25), y: Math.round(Math.sin(a) * R1) }; });
-  p.shopee = { x: -300, y: 600 }; p.dev = { x: 300, y: 600 }; // Shopee e Desenvolvedor embaixo, fora do círculo da operação
-  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
+  p.shopee = { x: -300, y: 600 }; p.dev = { x: 300, y: 600 }; p.digital = { x: 0, y: 820 }; // Shopee, Desenvolvedor e Produto Digital embaixo, fora do círculo da operação
+  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee' && a.id !== 'digital'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
   return p;
 }
 function posCanvas(id) { const s = (prefs[chavePosCanvas()] || {})[id]; return s || posPadraoCanvas()[id] || { x: 0, y: 0 }; }
@@ -7652,6 +7668,9 @@ function fiosCanvas() {
   F.push({ de: 'marketing', para: 'vendas', rot: p7.views ? (p7.views / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil views/7d' : 'público', lateral: true });
   F.push({ de: 'consignacao', para: 'vendas', rot: 'acertos dos expositores', lateral: true });
   F.push({ de: 'consignacao', para: 'contabil', rot: 'comissões', lateral: true });
+  F.push({ de: 'dev', para: 'digital', rot: 'projetos viram capítulos', lateral: true }); // fase 10: o Produto Digital documenta tudo
+  F.push({ de: 'marketing', para: 'digital', rot: 'conteúdo e público', lateral: true });
+  F.push({ de: 'producao', para: 'digital', rot: 'saber de impressão', lateral: true });
   return F;
 }
 const ESTADOS_CV = { rodando: ['Rodando', '#0a84ff'], pausado: ['Pausado', '#8e8e93'], atencao: ['Atenção', '#ff9f0a'], ok: ['Ativo', '#30d158'], sem: ['Sem dados', '#8e8e93'], fila: ['Na fila', '#bf5af2'] };
@@ -7861,7 +7880,7 @@ function htmlAgenteProducao(a) {
   const cartao = f => { const cor = COR_FILA[semAcentoCer(f.cor || '')] || '#8e8e93', m = miniaturaFila(f.titulo);
     return `<article class="fd-card${f.minha ? ' minha' : ''}" style="--cor:${cor}"><div class="fd-mini">${m ? `<img data-cofre="${esc(m.src)}" alt="" loading="lazy">` : `<span class="fd-sem" style="background:${cor}"></span>`}</div><b>${esc(f.titulo)}</b><small>${esc([f.qtd ? f.qtd + ' un.' : '', f.maquina, f.horas ? f.horas + ' h' : ''].filter(Boolean).join(' · '))}</small>${f.motivo ? `<small class="fd-motivo">${esc(f.motivo)}</small>` : ''}${f.origem ? `<em>${esc(ORIGEM_FILA[f.origem] || f.origem)}</em>` : ''}</article>`; };
   const dia = itensDia.length ? ccBloco(`Fila do dia · ${plural(itensDia.length, 'peça', 'peças')}${r.dia ? ' · plano de ' + esc(isoParaBR(r.dia).slice(0, 5)) : ''}`, `<div class="fd-esteira"><div class="fd-trilho">${itensDia.map(cartao).join('')}</div></div><p class="cc-nota">O agente refaz o plano todo dia de manhã e sempre que você põe algo na fila (“quero imprimir…”, “imprime pra mim…”, “bota na fila…”).</p>`)
-    : ccBloco('Fila do dia', '<p class="cc-txt">A fila do dia sai na rodada da manhã. Para adiantar, fale “quero imprimir …” ou toque em <b>▶ Rodar agora</b>.</p>');
+    : ccBloco('Fila do dia', '<p class="cc-txt">A fila do dia sai na rodada da manhã. Para adiantar, fale “quero imprimir …” ou toque em <b>▶ Reanalisar agora</b>.</p>');
   const datas = (r.datas || []).length ? ccBloco('Datas que vêm aí', `<ul class="cc-lista">${r.datas.map(d => `<li><span><b>${esc(d.tema)}</b><small>${esc(isoParaBR(d.data || ''))}${d.comecarEm ? ` · começar a imprimir até ${esc(isoParaBR(d.comecarEm))}` : ''}</small></span></li>`).join('')}</ul>`) : '';
   const linha = f => `<li class="${f.status}">${miniFilaHTML(f.titulo, COR_FILA[semAcentoCer(f.cor)] || '#8e8e93')}<span><b>${esc(f.titulo)} · ${f.qtd} un.</b><small>${esc([f.material, f.cor, ORIGEM_FILA[f.origem] || ''].filter(Boolean).join(' · '))}</small></span>
     ${f.status === 'feito' ? '<em>✓</em>' : `<button type="button" class="cc-mini${f.status === 'imprimindo' ? '' : ' sec'}" onclick="mudarFila(${f.id}, '${f.status === 'imprimindo' ? 'feito' : 'imprimindo'}')">${f.status === 'imprimindo' ? '✓ Pronto' : '▶ Imprimir'}</button>`}<button type="button" class="cc-mini sec" onclick="removerFila(${f.id})" aria-label="Tirar da fila">✕</button></li>`;
@@ -7918,7 +7937,7 @@ function abrirPaginaAgente(id) {
   if (id === 'jarvis') return abrirPaginaJarvis();
   const a = todosAgentes().find(x => x.id === id); if (!a) return;
   let el = $j('ag-pag'); if (!el) { el = document.createElement('div'); el.id = 'ag-pag'; el.className = 'ag'; el.hidden = true; document.body.appendChild(el); }
-  fecharPainelCentral(); cc.pagina = id; // o painel lateral fecha (os ids dos formulários não podem existir duas vezes)
+  fecharPainelCentral(); cc.pagina = id; cc.vistoBase = lerVistos()[id] || null; cc.puxarStatus = ''; // fase 10: o que já tinha sido visto (para o bloco 'O que mudou') // o painel lateral fecha (os ids dos formulários não podem existir duas vezes)
   if (el.hidden) empilharCamada('pagina', fecharPaginaAgente);
   el.hidden = false; document.body.classList.add('ag-aberta'); renderPaginaAgente();
 }
@@ -7938,7 +7957,7 @@ function fecharPaginaAgente(daVolta) {
 function abrirPaginaJarvis() {
   let el = $j('ag-pag'); if (!el) { el = document.createElement('div'); el.id = 'ag-pag'; el.className = 'ag'; el.hidden = true; document.body.appendChild(el); }
   if (typeof fecharPainelCentral === 'function' && $j('jv-central') && !$j('jv-central').hidden) fecharPainelCentral();
-  cc.pagina = 'jarvis'; if (el.hidden) empilharCamada('pagina', fecharPaginaAgente);
+  cc.pagina = 'jarvis'; cc.vistoBase = lerVistos().jarvis || null; cc.puxarStatus = ''; if (el.hidden) empilharCamada('pagina', fecharPaginaAgente);
   el.hidden = false; document.body.classList.add('ag-aberta'); renderPaginaJarvis();
 }
 function renderPaginaJarvis() {
@@ -8083,6 +8102,7 @@ function renderPaginaMarketing() {
       <section class="ag-sec ag-nums">${nums.map(([v, rr], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(rr)}</small></div>`).join('')}</section>
       ${vids.length ? finBloco('Vídeos prontos', `<p class="ag-sub">Toque para assistir. O som em alta você escolhe no TikTok na hora de postar.</p><div class="mkt-reel">${vids.slice(0, 12).map((x, i) => `<button type="button" class="mkt-card" style="--k:${i}" onclick="abrirVideoMkt(${i})"><img data-cofre="${esc(x.capa)}" alt=""><span class="mkt-play" aria-hidden="true">▶</span><b>${esc(x.gancho || x.produto)}</b><small>${esc(x.produto || '')}</small></button>`).join('')}</div>`) : finBloco('Vídeos prontos', '<p class="cc-txt">O estúdio monta 3 vídeos por noite com as fotos e vídeos das pastas da Shopee. Os primeiros aparecem aqui.</p>')}
       ${rot.length ? finBloco('Roteiros de hoje', `<div class="mkt-rots">${rot.map((x, k) => `<article class="mkt-rot" style="--k:${k}"><small>${esc(x.produto)}</small><b>“${esc(x.gancho)}”</b>${x.audio ? `<span>🎵 ${esc(x.audio)}</span>` : ''}${x.estilo ? `<em>${esc(x.estilo)}</em>` : ''}</article>`).join('')}</div>`) : ''}
+      ${finBloco('Dicas de filmagem', htmlDicasFilmagem(r))}
       ${prod.length ? finBloco('O Marketing pediu para imprimir', `<ul class="cc-lista">${prod.map(x => `<li><span><b>${esc(x.titulo)}</b><small>${esc(x.motivo || '')}</small></span></li>`).join('')}</ul>`) : ''}
       <section class="ag-sec ag-corpo mkt-mais"><h2 class="jvpg-tit">Mais detalhes</h2>
         ${detalheMkt('Números do TikTok', `<div class="mkt-tk"><div><b>${esc(String(tk.seguidores ?? '—'))}</b><small>seguidores</small></div><div><b>${p7.views ? (p7.views / 1000).toFixed(1).replace('.', ',') + ' mil' : '—'}</b><small>views em 7 dias</small></div><div><b>${esc(String(tk.curtidas ?? '—'))}</b><small>curtidas</small></div><div><b>${esc(String(tk.videos ?? '—'))}</b><small>vídeos</small></div></div>${mk.atualizadoEm ? `<p class="cc-nota">Lido em ${esc(isoParaBR(mk.atualizadoEm))}.</p>` : ''}`)}
@@ -8128,7 +8148,7 @@ function linkFin(txt, acao) { return `<button type="button" class="fin-link" onc
 const IR_CONTABIL = "fecharPaginaAgente(); fecharCentral(); abrirPrimos('contabil')", IR_ANALISE = "fecharPaginaAgente(); fecharCentral(); abrirPrimos('analise')";
 function renderPaginaFinanceiro() {
   const el = $j('ag-pag'); if (!el) return; const pc = primosCentral, a = todosAgentes().find(x => x.id === 'contabil');
-  if (!pc || !pc.caixa) { el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>Financeiro</strong></div></header><div class="ag-rolo" id="ag-rolo"><section class="ag-sec"><p class="cc-txt">Sem dados da Central ainda. Conecte o computador (Ajustes do J.A.R.V.I.S. → 2).</p></section></div>`; return; }
+  if (!pc || !pc.caixa) { el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>Financeiro</strong></div></header><div class="ag-rolo" id="ag-rolo"><section class="ag-sec"><p class="cc-txt">Sem dados da Central ainda. Conecte o computador (Ajustes do J.A.R.V.I.S. → 2).</p></section></div>`; posRenderPagina(); return; }
   const cx = pc.caixa, vl = vendasLiquidasPrimos(pc), N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, r = relatorioAgente('contabil') || {};
   const inv = cx.totalGasto || 0, pct = inv ? vl.total / inv : 0;
   // de onde veio: aportes do sócio/Rafael + vendas por canal
@@ -8326,6 +8346,7 @@ function numerosPagina(id) {
   const pc = primosCentral || {}, N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, R = v => reais(v);
   if (id === 'contabil') { const vl = pc.caixa ? vendasLiquidasPrimos(pc) : { total: 0 }; return [[R(vl.total), 'recebido'], [R((pc.caixa || {}).totalGasto), 'investido'], [R((pc.caixa || {}).saldo), 'caixa'], [R(N.valuationPatrimonial), 'valor da empresa']]; }
   if (id === 'marketing') { const tk = pc.tiktokPerfil || {}, p7 = (((pc.marketing || {}).tiktok || {}).periodo7d || {}); return [[tk.seguidores ?? '—', 'seguidores'], [p7.views ? (p7.views / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil' : '—', 'views em 7 dias'], [tk.curtidas ?? '—', 'curtidas'], [tk.videos ?? '—', 'vídeos']]; }
+  if (id === 'digital') { const cs = (ebookDados && ebookDados.capitulos) || [], pal = cs.reduce((t, c) => t + (Number(c.palavras) || 0), 0); return [[cs.length, 'capítulos planejados'], [cs.filter(c => c.status !== 'ideia').length, 'já escritos'], [pal.toLocaleString('pt-BR'), 'palavras'], [pctFr(cs.length ? cs.filter(c => c.status === 'pronto').length / cs.length : 0), 'pronto para vender']]; }
   if (id === 'estoque') { const e = calcularEstoque(); return [[fmtKg(e.total), 'de filamento'], [e.cores.filter(c => c.kg > 0.01).length, 'cores'], [e.caminho.length, 'compras a caminho'], [e.cores.filter(c => c.kg < 0.3).length, 'cores para repor']]; }
   if (id === 'producao') { const L = (impressoesBambu && impressoesBambu.impressoes) || [], g = L.reduce((s, t) => s + (Number(t.gramas) || 0), 0); return [[filaImpressao.filter(f => f.status !== 'feito').length, 'itens na fila'], [L.length, 'impressões (Bambu)'], [g ? (g / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' kg' : '—', 'impressos'], [3, 'máquinas']]; }
   if (id === 'vendas' || id === 'shopee') { const v = pc.vendas || [], fat = v.reduce((s, x) => s + (x.bruto || 0), 0); return [[v.length, 'vendas'], [R(fat), 'faturado'], [v.length ? R(fat / v.length) : '—', 'ticket médio'], [orders.filter(o => pedidoAberto(o)).length, 'pedidos abertos']]; }
@@ -8340,6 +8361,7 @@ function palcoPagina(id) {
       ${[[reais(N.valuationPatrimonial), 'valor'], [N.paybackMesesNoRitmoAtual ? Math.round(N.paybackMesesNoRitmoAtual) + ' meses' : '—', 'payback'], [reais((pc.caixa || {}).saldo), 'caixa'], [N.pontoEquilibrioPecasMes ? N.pontoEquilibrioPecasMes + ' peças/mês' : '—', 'equilíbrio']].map(([v, r], k) => `<span class="ag-orbita" style="--k:${k}"><b>${v}</b><small>${r}</small></span>`).join('')}</div>`; }
   if (id === 'marketing') { const fotos = (pc.shopee || []).filter(s => s.foto).slice(0, 9);
     return `<div class="ag-mural">${(fotos.length ? fotos : Array.from({ length: 9 }, () => null)).map((s, k) => `<figure style="--k:${k}">${s ? `<img data-cofre="${esc(s.foto)}" alt=""><figcaption>${esc(s.produto)}</figcaption>` : '<span></span>'}</figure>`).join('')}</div>`; }
+  if (id === 'digital') return palcoLivro();
   if (id === 'estoque' || id === 'producao') return `<div id="ag-3d" class="ag-3d"><div class="cc-seca-carregando"><span class="spin"></span> Montando…</div></div>`;
   if (id === 'vendas' || id === 'shopee') { const v = (pc.vendas || []).length, ab = orders.filter(o => pedidoAberto(o)).length, orc = orders.filter(o => o.status === 'orcamento').length;
     return `<svg class="ag-funil" viewBox="0 0 400 300" aria-hidden="true">${[['Contatos e prospecção', '#0a84ff', 0], ['Orçamentos', '#5e5ce6', orc], ['Pedidos abertos', '#bf5af2', ab], ['Vendas fechadas', '#30d158', v]].map(([t, c, n], k) => `<g style="--k:${k}"><path d="M${40 + k * 32},${30 + k * 64} L${360 - k * 32},${30 + k * 64} L${360 - (k + 1) * 32},${86 + k * 64} L${40 + (k + 1) * 32},${86 + k * 64} Z" fill="${c}" opacity=".85"/><text x="200" y="${62 + k * 64}" text-anchor="middle">${t}${k ? ' · ' + n : ''}</text></g>`).join('')}</svg>`; }
@@ -8376,8 +8398,149 @@ function renderPaginaAgente() {
   carregarMidiasCofre(el);
   animarPaginaAgente();
 }
+// =====================================================================================================================
+// PUXAR PARA ATUALIZAR + "O QUE MUDOU DESDE SUA ÚLTIMA VISITA" (fase 10, pedido do Rafael via Codex, 04/10/2026).
+// • Gesto: no topo da área que rola (página do agente, painel da Central, lista da área), 1 dedo, para baixo; resistência,
+//   "Puxe / Solte / Atualizando…" e o resultado. No PC, botão "↻ Atualizar" no topo da página. Busca planilha + cofre de uma
+//   vez (promessas compartilhadas: puxar 5× não faz 5 buscas), redesenha preservando o que está sendo digitado.
+// • Novidades: comparadas com o que JÁ FOI VISTO neste aparelho (lifeos_vistos), por id/versão do dado — consultar de novo
+//   não vira novidade. Até 3 itens: pendência real > novidade > oportunidade (do relatório do agente, com a origem).
+// =====================================================================================================================
+const idData = id => { const n = Number(id); return n > 1.5e12 && n < 4e12 ? new Date(n).toISOString().slice(0, 16) : ''; };
+function quandoTxt(q) { if (!q) return ''; const s = String(q); const d = s.slice(0, 10), h = s.length > 10 ? s.slice(11, 16) : ''; return `${isoParaBR(d).slice(0, 5)}${h ? ' ' + h : ''}`; }
+function lerVistos() { try { return JSON.parse(localStorage.getItem('lifeos_vistos')) || {}; } catch (e) { return {}; } }
+function marcarVistos(agente, ids) {
+  const v = lerVistos(), base = (v[agente] && v[agente].ids) || [];
+  v[agente] = { ids: [...new Set([...base, ...ids])].slice(-500), quando: Date.now() };
+  try { localStorage.setItem('lifeos_vistos', JSON.stringify(v)); } catch (e) { } // conveniência deste aparelho
+}
+/** O que cada agente tem de concreto agora (com id estável, data da FONTE e origem). Nada inventado: só dados do app/cofre. */
+function itensAgente(id) {
+  const out = [], r = relatorioAgente(id), lim = new Date(Date.now() - 20 * 86400000).toISOString().slice(0, 10);
+  const add = (o) => { if (o && o.texto) out.push(o); };
+  if (r && r.dia) {
+    add({ id: `rel:${id}:${r.dia}`, tipo: 'novidade', texto: 'Relatório novo: ' + String(r.manchete || '').replace(/<[^>]+>/g, '').slice(0, 160), quando: r.dia, origem: 'relatório do agente (nuvem)' });
+    if (r.alerta) add({ id: `alerta:${id}:${r.dia}`, tipo: 'pendencia', prio: 1, texto: String(r.alerta).replace(/<[^>]+>/g, '').slice(0, 160), quando: r.dia, origem: 'relatório do agente (nuvem)' });
+    const op = (r.acoes || r.oportunidades || [])[0]; if (op) add({ id: `op:${id}:${r.dia}`, tipo: 'oportunidade', texto: String(op.texto || op.titulo || op).replace(/<[^>]+>/g, '').slice(0, 160), quando: r.dia, origem: 'sugestão do agente (nuvem)' });
+  }
+  if (id === 'estoque' || id === 'producao' || id === 'contabil') {
+    const porQuando = {};
+    estoquePrimos.filter(m => (m.data || '') >= lim).forEach(m => { const k = m.tipo === 'ajuste' ? 'cont:' + (m.quando || m.data) : 'est:' + m.id; (porQuando[k] = porQuando[k] || []).push(m); });
+    Object.entries(porQuando).forEach(([k, ms]) => { const m = ms[0], q = m.quando || idData(m.id) || m.data;
+      const t = m.tipo === 'ajuste' ? `Contagem de ${plural(ms.length, 'cor', 'cores')} registrada` : m.tipo === 'compra' ? `Compra: ${fmtKg(Number(m.kg) || 0)} de ${m.cor}${m.status === 'caminho' ? ' (a caminho)' : ''}` : m.tipo === 'consumo' ? `Consumo: ${Math.round((Number(m.kg) || 0) * 1000)} g de ${m.cor}` : m.tipo === 'acabou' ? `Acabou: ${m.cor}` : '';
+      if (id === 'estoque' || m.tipo === 'compra') add({ id: k, tipo: 'novidade', texto: t, quando: q, origem: m.origem === 'voz' ? 'voz' : 'app / planilha' }); });
+  }
+  if (id === 'estoque') { try { calcularEstoque().cores.filter(c => c.kg < 0.3 && c.kg > -0.5).slice(0, 2).forEach(c => add({ id: `baixo:${c.material}:${c.cor}`, tipo: 'pendencia', prio: 2, texto: `${c.cor} (${c.material}) com ${fmtKg(Math.max(0, c.kg))} — hora de repor`, quando: hojeISO(), origem: 'estoque calculado' })); } catch (e) { } }
+  if (id === 'producao') {
+    filaImpressao.slice(-15).forEach(it => add({ id: `fila:${it.id}:${it.status}`, tipo: 'novidade', texto: `${it.titulo} · ${it.qtd} un. · ${it.status === 'feito' ? 'impresso' : it.status === 'imprimindo' ? 'imprimindo' : 'na fila'}`, quando: it.criado || idData(it.id), origem: it.origem || 'app' }));
+    const hoje = hojeISO(), em3 = somarDiasCer(hoje, 3);
+    orders.filter(o => pedidoAberto(o) && o.status !== 'orcamento' && o.due && o.due <= em3).slice(0, 2).forEach(o => add({ id: `prazo:${o.id}:${o.due}`, tipo: 'pendencia', prio: o.due < hoje ? 1 : 2, texto: `${o.due < hoje ? 'Atrasado' : 'Prazo ' + rotuloData(o.due)}: ${o.title}`, quando: o.due, origem: 'pedidos da Primos', acao: ['Abrir pedidos', "fecharPaginaAgente(); abrirPrimos('vendas')"] }));
+  }
+  if (id === 'contabil') {
+    transactions.filter(t => t.category === 'Primos 3D' || /primos/i.test(t.category || '')).slice(-15).forEach(t => add({ id: `fin:${t.id}:${t.pending ? 'p' : 'ok'}`, tipo: 'novidade', texto: `${t.type === 'expense' ? 'Despesa' : 'Receita'}${t.pending ? ' pendente' : ''}: ${t.desc || ''} · ${reais(Number(t.amount) || 0)}`, quando: t.paidAt || t.date || idData(t.id), origem: 'finanças do app' }));
+    const em7 = somarDiasCer(hojeISO(), 7);
+    transactions.filter(t => t.pending && t.type === 'expense' && t.date && t.date <= em7).slice(0, 2).forEach(t => add({ id: `apagar:${t.id}:${t.date}`, tipo: 'pendencia', prio: 1, texto: `A pagar ${rotuloData(t.date)}: ${t.desc || ''} · ${reais(Number(t.amount) || 0)}`, quando: t.date, origem: 'finanças do app' }));
+  }
+  if (id === 'vendas' || id === 'consignacao' || id === 'shopee') {
+    orders.slice(-15).forEach(o => add({ id: `ped:${o.id}:${o.status}`, tipo: 'novidade', texto: `Pedido ${statusPedido(o.status).nome.toLowerCase()}: ${o.title}`, quando: idData(o.id), origem: 'pedidos da Primos', acao: ['Abrir pedidos', "fecharPaginaAgente(); abrirPrimos('vendas')"] }));
+    if (id === 'shopee') shopeeAprov.slice(-10).forEach(x => add({ id: `shp:${x.id || x.chave}:${x.status || ''}`, tipo: 'novidade', texto: `Anúncio ${x.status === 'subido' ? 'subido (oculto)' : 'aprovado'}: ${x.titulo || x.nome || ''}`, quando: x.quando || idData(x.id), origem: 'aprovações da Shopee' }));
+  }
+  if (id === 'marketing') ((conteudoMkt && conteudoMkt.videos) || []).slice(0, 6).forEach(v => add({ id: `mkt:${v.video}`, tipo: 'novidade', texto: `Vídeo pronto: ${v.produto}${v.vinheta ? ' · com vinheta' : ''}`, quando: v.data, origem: 'estúdio no PC' }));
+  if (id === 'dev') {
+    ((pedidosDev && pedidosDev.pedidos) || []).slice(0, 10).forEach(p => add({ id: `pd:${p.id}:${p.status}`, tipo: p.status === 'duvida' ? 'pendencia' : 'novidade', prio: 1, texto: `${p.status === 'feito' ? 'Pronto' : p.status === 'duvida' ? 'Precisa de você' : p.status === 'andamento' ? 'Modelando' : 'Pedido na fila'}: ${String(p.texto).slice(0, 110)}${p.resposta ? ' — ' + p.resposta : ''}`, quando: p.quando, origem: p.origem === 'voz' ? 'voz' : p.origem === 'chat' ? 'chat' : 'app' }));
+    ((devDados && devDados.projetos) || []).forEach(p => add({ id: `proj:${p.codigo}:${p.status}:${p.versao || ''}`, tipo: 'novidade', texto: `${p.nome} → ${(ETAPAS_DEV[p.status] || ETAPAS_DEV.ideia)[0]}`, quando: p.atualizadoEm || '', origem: 'Desenvolvedor no PC', acao: ['Ver projeto', `abrirProjetoDev('${esc(p.codigo)}')`] }));
+  }
+  if (id === 'digital') ((ebookDados && ebookDados.capitulos) || []).forEach(c => add({ id: `cap:${c.id}:${c.status}`, tipo: 'novidade', texto: `Capítulo ${c.n}: ${c.titulo} → ${ESTADOS_CAP[c.status] || c.status}`, quando: c.atualizadoEm || (ebookDados && ebookDados.atualizadoEm) || '', origem: 'e-book (PC)' }));
+  return out;
+}
+/** O bloco: pendências reais primeiro, depois novidades AINDA NÃO VISTAS, depois 1 oportunidade. base = o que já tinha sido visto ao abrir. */
+function novidadesAgente(id, base) {
+  const todos = id === 'jarvis' ? agentesCentral().flatMap(a => itensAgente(a.id).map(x => ({ ...x, agente: a.id, nomeAg: a.nome }))) : itensAgente(id);
+  const visto = base && base.ids ? new Set(base.ids) : null, recente = new Date(Date.now() - 2 * 86400000).toISOString().slice(0, 10);
+  const novo = x => visto ? !visto.has(x.id) : String(x.quando || '') >= recente;
+  const pend = todos.filter(x => x.tipo === 'pendencia').sort((a, b) => (a.prio || 3) - (b.prio || 3));
+  const nov = todos.filter(x => x.tipo === 'novidade' && novo(x)).sort((a, b) => String(b.quando || '').localeCompare(String(a.quando || '')));
+  const op = todos.filter(x => x.tipo === 'oportunidade' && novo(x));
+  const lista = [...pend.slice(0, 2), ...nov, ...op].slice(0, 3);
+  return { lista, novas: nov.length, ids: todos.map(x => x.id) };
+}
+function htmlNovidades(id) {
+  const n = novidadesAgente(id, cc.vistoBase), ult = cc.vistoBase && cc.vistoBase.quando;
+  cc.novidadesN = n.novas; cc.novidadesIds = n.ids;
+  const tag = { pendencia: 'Pendência', novidade: 'Novidade', oportunidade: 'Oportunidade' };
+  const item = x => `<li class="agn-item agn-${x.tipo}"><span class="agn-tag">${tag[x.tipo]}${x.nomeAg ? ' · ' + esc(x.nomeAg) : ''}</span><b>${esc(x.texto)}</b><small>${esc(quandoTxt(x.quando) || 'sem data')} · ${esc(x.origem || '')}</small>${x.agente ? `<button type="button" class="agn-acao" onclick="abrirPaginaAgente('${esc(x.agente)}')">Abrir ›</button>` : x.acao ? `<button type="button" class="agn-acao" onclick="${x.acao[1]}">${esc(x.acao[0])} ›</button>` : ''}</li>`;
+  return `<div class="agn-topo"><h2>O que mudou</h2><small>desde sua última visita${ult ? ' (' + esc(quandoTxt(new Date(ult - new Date().getTimezoneOffset() * 60000).toISOString())) + ')' : ''}</small></div>
+    ${n.lista.length ? `<ul class="agn-lista">${n.lista.map(item).join('')}</ul>` : `<p class="agn-vazio">Nenhuma novidade desde a sua última visita.</p>`}
+    <p class="agn-status" id="agn-status" role="status" aria-live="polite">${esc(cc.puxarStatus || '')}</p>`;
+}
+/** Depois de desenhar qualquer página de agente: botão Atualizar (PC) + bloco de novidades logo abaixo da abertura. */
+function posRenderPagina() {
+  const el = $j('ag-pag'), id = cc.pagina; if (!el || el.hidden || !id || String(id).startsWith('eng:') || id === 'calc') return;
+  const topo = el.querySelector('.ag-topo');
+  if (topo && !topo.querySelector('.ag-atualizar')) { const b = document.createElement('button'); b.type = 'button'; b.className = 'ag-atualizar'; b.setAttribute('aria-label', 'Atualizar este agente'); b.innerHTML = '<span aria-hidden="true">↻</span> Atualizar'; b.onclick = () => puxarAtualizar($j('ag-rolo')); topo.insertBefore(b, topo.querySelector('.ag-falar')); }
+  const rolo = $j('ag-rolo'); if (!rolo) return;
+  let bloco = $j('ag-novidades');
+  if (!bloco) { bloco = document.createElement('section'); bloco.id = 'ag-novidades'; bloco.className = 'ag-sec ag-novidades'; const heroi = rolo.querySelector('.ag-heroi, .est-heroi, .jvpg-abre, section'); if (heroi && heroi.parentNode) heroi.parentNode.insertBefore(bloco, heroi.nextSibling); else rolo.prepend(bloco); }
+  bloco.innerHTML = htmlNovidades(id);
+  if (!document.hidden) marcarVistos(id, cc.novidadesIds || []); // só depois de MOSTRAR
+}
+/** Busca planilha + cofre UMA vez (quem chegar no meio espera a mesma busca). Resultado por fonte. */
+function atualizarAgora() {
+  if (cc.atualizando) return cc.atualizando;
+  cc.atualizando = (async () => {
+    const [planilha, cofre] = await Promise.all([Promise.resolve(sincronizar()).catch(e => ({ estado: 'erro', erro: e.message })), sincronizarCofre(true, true).catch(e => ({ estado: 'erro', erro: e.message }))]);
+    return { planilha: planilha || { estado: 'ok' }, cofre: cofre || { estado: 'ok' }, quando: Date.now() };
+  })();
+  cc.atualizando.finally(() => { cc.atualizando = null; });
+  return cc.atualizando;
+}
+function textoResultado(r, novas) {
+  const ok = x => x.estado === 'ok', fora = x => x.estado === 'offline';
+  if (!navigator.onLine || (fora(r.planilha) && (fora(r.cofre) || r.cofre.estado === 'naoconfig'))) return ['Sem conexão · mostrando os últimos dados', 'erro'];
+  if (r.planilha.estado === 'naoconfig' && r.cofre.estado === 'naoconfig') return ['Este aparelho ainda não está ligado à planilha nem ao computador (Ajustes)', 'erro'];
+  if (!ok(r.planilha) && !ok(r.cofre)) return [`Não consegui atualizar (${r.planilha.erro || r.cofre.erro || r.planilha.estado}) · toque em Atualizar para tentar de novo`, 'erro'];
+  const h = new Date(r.quando).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const parte = !ok(r.planilha) ? ` · planilha: ${r.planilha.estado === 'naoconfig' ? 'não configurada neste aparelho' : 'falhou'}` : !ok(r.cofre) ? ` · cofre: ${r.cofre.estado === 'naoconfig' ? 'não conectado' : 'falhou'}` : '';
+  return [`${parte ? 'Atualizado em parte' : 'Atualizado'} às ${h} · ${novas ? plural(novas, 'novidade', 'novidades') : 'nenhuma novidade desde a última consulta'}${parte}`, parte ? 'parcial' : 'ok'];
+}
+/** O gesto (ou o botão) chama isto. alvo = o contêiner que rolou (página, painel da Central ou lista da área). */
+async function puxarAtualizar(alvo) {
+  const pagina = cc.pagina, onde = alvo && alvo.closest ? (alvo.closest('#ag-pag') ? 'pagina' : alvo.closest('#cc-painel') ? 'central' : 'area') : 'pagina';
+  mostrarPuxar(64, 'Atualizando…', true); cc.puxarStatus = 'Atualizando…'; const st = $j('agn-status'); if (st) st.textContent = 'Atualizando…';
+  const b = document.querySelector('#ag-pag .ag-atualizar'); if (b) b.disabled = true;
+  let r; try { r = await atualizarAgora(); } catch (e) { r = { planilha: { estado: 'erro', erro: e.message }, cofre: { estado: 'erro', erro: e.message }, quando: Date.now() }; }
+  if (onde === 'pagina' && cc.pagina === pagina) atualizarTelasSincronizadas('agente'); // trocou de agente no meio? não traz a tela antiga de volta
+  if (onde === 'central') atualizarTelasSincronizadas('central');
+  if (onde === 'area' && jv.heroi) { const a = AREAS_CEREBRO.find(x => x.id === jv.heroi); if (a) renderAgentesFoco(a); }
+  const [txt, tipo] = textoResultado(r, onde === 'pagina' ? (cc.novidadesN || 0) : 0);
+  cc.puxarStatus = txt; const st2 = $j('agn-status'); if (st2) st2.textContent = txt;
+  const b2 = document.querySelector('#ag-pag .ag-atualizar'); if (b2) b2.disabled = false;
+  mostrarPuxar(64, txt, false, tipo); clearTimeout(cc.puxarTimer); cc.puxarTimer = setTimeout(esconderPuxar, 2600);
+}
+function indicadorPuxar() { let i = $j('puxar-ind'); if (!i) { i = document.createElement('div'); i.id = 'puxar-ind'; i.className = 'puxar-ind'; i.setAttribute('role', 'status'); i.setAttribute('aria-live', 'polite'); document.body.appendChild(i); } return i; }
+function mostrarPuxar(dist, texto, girando, tipo) {
+  const i = indicadorPuxar(); i.hidden = false; i.className = `puxar-ind on${girando ? ' girando' : ''}${tipo ? ' ' + tipo : ''}`;
+  i.style.setProperty('--d', Math.round(dist) + 'px'); i.innerHTML = `<span class="puxar-seta" aria-hidden="true" style="--g:${Math.min(1, dist / 64)}">↻</span><span>${esc(texto)}</span>`;
+}
+function esconderPuxar() { const i = $j('puxar-ind'); if (i) { i.classList.remove('on'); setTimeout(() => { if (!i.classList.contains('on')) i.hidden = true; }, 300); } }
+(function ligarPuxar() { // delegação: UMA vez no documento (páginas são redesenhadas sem acumular ouvintes)
+  const ALVOS = '#ag-pag #ag-rolo, #cc-painel, #jv-ag-foco .jvf-corpo', LIMIAR = 64, RES = 0.45;
+  const proibido = el => el.closest('input, textarea, select, canvas, [contenteditable="true"], .cc-seca, .cc-fab, .ag-3d, .ag-palco, #cv-mundo, .dev-abas, .cc-filadia, [data-sem-puxar]');
+  let p = null;
+  document.addEventListener('touchstart', e => { p = null; if (e.touches.length !== 1 || cc.atualizando) return; const alvo = e.target.closest(ALVOS); if (!alvo || alvo.scrollTop > 0 || proibido(e.target)) return; p = { alvo, x0: e.touches[0].clientX, y0: e.touches[0].clientY, d: 0, ativo: false }; }, { passive: true });
+  document.addEventListener('touchmove', e => {
+    if (!p) return; if (e.touches.length !== 1) { p = null; esconderPuxar(); return; }
+    const dx = e.touches[0].clientX - p.x0, dy = e.touches[0].clientY - p.y0;
+    if (!p.ativo) { if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy)) { p = null; return; } if (dy < 10) { if (dy < -6) p = null; return; } if (p.alvo.scrollTop > 0 || (window.getSelection && String(window.getSelection()))) { p = null; return; } p.ativo = true; }
+    e.preventDefault(); p.d = Math.min(110, dy * RES); mostrarPuxar(p.d, p.d >= LIMIAR ? 'Solte para atualizar' : 'Puxe para atualizar');
+  }, { passive: false });
+  const fim = () => { if (!p) return; const ok = p.ativo && p.d >= LIMIAR, alvo = p.alvo; p = null; if (ok) puxarAtualizar(alvo); else esconderPuxar(); };
+  document.addEventListener('touchend', fim, { passive: true }); document.addEventListener('touchcancel', () => { p = null; esconderPuxar(); }, { passive: true });
+})();
+
 /** A rolagem comanda: --h (0→1 na 1ª tela) no rolo; --p em cada seção/bloco; números contam ao aparecer; 3D gira junto. */
 function animarPaginaAgente() {
+  posRenderPagina();
   const bf = document.querySelector('#ag-pag .ag-falar'); if (bf && COR_AGENTE[cc.pagina]) { bf.style.setProperty('--ag', COR_AGENTE[cc.pagina]); bf.classList.add('cor'); } // fase 9: o "Falar" na cor do agente
   const r = $j('ag-rolo'); if (!r) return;
   const alvos = [...r.querySelectorAll('.ag-num, .ag-corpo > *, .ag-completa > h2, .ag-completa > .ag-sub, .ag-embed > *')];
@@ -8480,7 +8643,28 @@ function cabecalhoAgente(a, extra) {
     <p>${esc(a.funcao || a.missao || '')}</p><div class="cc-tags">${(a.skills || []).map(k => `<em>${esc(k)}</em>`).join('')}</div>${extra || ''}</header>`;
 }
 function ccNums(lista) { return `<div class="cc-nums">${lista.map(([v, r, cor]) => `<div><strong${cor ? ` style="color:${cor}"` : ''}>${v}</strong><small>${r}</small></div>`).join('')}</div>`; }
-// --- DESENVOLVEDOR (fase 8): abas por nicho; cada projeto segue ideia → imagem (o Rafael aprova) → 3MF editável → feito.
+// --- PRODUTO DIGITAL (fase 10, pedido do Rafael 04/10/2026): o agente que DOCUMENTA tudo o que o J.A.R.V.I.S. e os agentes
+//     produzem e transforma em produto digital (e-book primeiro, depois mentoria). Por enquanto quem escreve é o Claude no PC:
+//     texto em "Primos 3D Central\11 Produto Digital\E-book J.A.R.V.I.S" → resumo no cofre dados/ebook.json → cache lifeos_ebook.
+let ebookDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_ebook')); } catch (e) { return null; } })();
+const ESTADOS_CAP = { ideia: 'Ideia', rascunho: 'Rascunho', revisao: 'Em revisão', pronto: 'Pronto' };
+const COR_CAP = { ideia: '#8e8e93', rascunho: '#ff9f0a', revisao: '#0a84ff', pronto: '#30d158' };
+function palcoLivro() {
+  const t = (ebookDados && ebookDados.titulo) || 'J.A.R.V.I.S.', st = (ebookDados && ebookDados.subtitulo) || 'Do zero à fábrica inteligente';
+  return `<div class="ag-livro" aria-hidden="true"><div class="ag-livro-obj">${Array.from({ length: 6 }, (_, k) => `<i class="pg" style="--k:${k}"></i>`).join('')}<div class="capa"><small>Primos 3D apresenta</small><b>${esc(t)}</b><span>${esc(st)}</span><em>e-book</em></div></div></div>`;
+}
+function htmlAgenteDigital(a) {
+  const d = ebookDados || {}, cs = d.capitulos || [], pr = d.produto || {};
+  const sumario = cs.length ? `<ol class="dg-sumario">${cs.map(c => `<li style="--c:${COR_CAP[c.status] || '#8e8e93'}"><span><b>${esc(c.titulo)}</b><small>${esc(c.resumo || '')}</small></span><em>${esc(ESTADOS_CAP[c.status] || c.status)}${c.palavras ? ' · ' + Number(c.palavras).toLocaleString('pt-BR') + ' pal.' : ''}</em></li>`).join('')}</ol>` : '<p class="cc-txt">O sumário chega do computador (o Claude escreve o e-book na pasta 11 Produto Digital da Central).</p>';
+  const etapas = (pr.etapas || []).length ? `<ol class="dg-etapas">${pr.etapas.map((e, k) => `<li class="${e.feito ? 'ok' : ''}" style="--k:${k}"><b>${esc(e.titulo)}</b><small>${esc(e.como || '')}</small></li>`).join('')}</ol>` : '';
+  return cabecalhoAgente(a)
+    + ccNums([[cs.length, 'capítulos'], [cs.filter(c => c.status !== 'ideia').length, 'escritos'], [cs.filter(c => c.status === 'pronto').length, 'prontos']])
+    + (d.proximo ? ccBloco('Agora', `<p class="cc-txt">${esc(d.proximo)}</p>${d.atualizadoEm ? `<p class="cc-nota">Atualizado em ${esc(quandoTxt(d.atualizadoEm))} · pasta ${esc(d.pasta || '11 Produto Digital')}</p>` : ''}`) : '')
+    + ccBloco(esc(d.titulo || 'O e-book'), sumario)
+    + (etapas ? ccBloco('Do e-book ao produto', etapas) : '')
+    + ccBloco('Como ele trabalha', '<p class="cc-txt">Ele acompanha os relatórios dos agentes, os projetos do Desenvolvedor, os vídeos do Marketing e as conversas com o J.A.R.V.I.S. O que vira aprendizado entra no e-book, sem nome de cliente e sem número sigiloso. Você aprova cada capítulo antes de ir para o produto final.</p>')
+    + botaoConversarAgente(a);
+}// --- DESENVOLVEDOR (fase 8): abas por nicho; cada projeto segue ideia → imagem (o Rafael aprova) → 3MF editável → feito.
 //     Fonte: cofre dados/dev.json (o PC mantém em .claude/jarvis/dev/projetos.json) → CACHE local lifeos_dev.
 let devDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_dev')); } catch (e) { return null; } })();
 // fase 10: PEDIDOS DO RAFAEL ao Desenvolvedor (voz/chat → J.A.R.V.I.S. → cofre dados/pedidos-dev.json → o Desenvolvedor no PC pega na
@@ -8680,6 +8864,7 @@ function miniFilaHTML(titulo, cor) {
 function ccBloco(titulo, corpo) { return `<section class="cc-bloco"><h4>${titulo}</h4>${corpo}</section>`; }
 function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente('${esc(a.id)}')">Perguntar a este agente</button>`; }
 const VOZ_AGENTES = {
+  digital: { voz: 'Vindemiatrix', persona: 'Mulher, voz calma e clara de editora e professora. Organiza o conhecimento do Rafael e dos agentes em capítulos, aulas e checklists; pergunta o que ele aprendeu, transforma em exemplo prático e sempre propõe o próximo capítulo ou o próximo passo do produto digital. Nunca expõe dado de cliente nem número sigiloso sem autorização.' },
   estoque: { voz: 'Alnilam', persona: 'Homem, voz firme e serena, presença forte. Centrado, confiável, companheiro e PERFECCIONISTA: conhece cada bobina da secadora (cor, marca, gramas, data e preço da compra), não deixa número solto e confere tudo duas vezes. Conduz a contagem de filamentos com calma (uma cor por vez, repete o peso para confirmar) e usa registrar_contagem_estoque; avisa o que está acabando e o que está parado há muito tempo. SABE que o carretel vazio da Voolt 3D pesa 120 g: sempre confirma se o peso é na balança (com carretel — você tira 120 g por carretel) ou só o filamento. Explica que a contagem é o ponto de partida: depois disso as compras da planilha somam e as impressões da Bambu descontam sozinhas, então ele só precisa pesar de vez em quando.' },
   contabil: { voz: 'Rasalgethi', persona: 'Homem, voz clara e segura, analista financeiro direto ao ponto. Fala de caixa, custo, preço, margem, payback e metas sempre com o número na mão, sem jargão. Honesto quando a notícia é ruim e sempre termina com a próxima ação.' },
   vendas: { voz: 'Puck', persona: 'Homem, animado e persuasivo, vendedor de rua de Viçosa que conhece os clientes. Pensa em orçamento, pedido, prazo e follow-up; dá roteiros curtos de abordagem para WhatsApp e lojas.' },
@@ -8690,7 +8875,7 @@ const VOZ_AGENTES = {
   dev: { voz: 'Achird', persona: 'Homem, voz suave e calma, criativo de verdade — designer de produto que entende de tendência, de moda e de forma, mas com cabeça de engenheiro de impressão 3D (encaixe, folga, camada, cor, AMS). Fala com entusiasmo tranquilo, propõe ideias concretas (placas de profissão, carimbos, chaveiros com logo de comércio, kits empresariais, luminárias, camisa da marca), sempre diz em que etapa cada projeto está (conceito, modelo digital, fatiado, testado) e o que ele precisa do Rafael para seguir. Nunca diz que algo está aprovado sem teste físico.' },
 };
 // fase 9: a cor de cada agente (a bolinha da voz e o destaque da página dele)
-const COR_AGENTE = { contabil: '#30d158', marketing: '#ff375f', estoque: '#ff9f0a', producao: '#0a84ff', vendas: '#ffd60a', consignacao: '#bf5af2', shopee: '#ff6b2c', dev: '#64d2ff' };
+const COR_AGENTE = { contabil: '#30d158', marketing: '#ff375f', estoque: '#ff9f0a', producao: '#0a84ff', vendas: '#ffd60a', consignacao: '#bf5af2', shopee: '#ff6b2c', dev: '#64d2ff', digital: '#e9c46a' };
 function falarComAgente(id) { const a = todosAgentes().find(x => x.id === id), v = VOZ_AGENTES[id]; if (!a || !v) return conversarComAgente(id); iniciarConversaVoz(`Central › agente ${a.nome}`, 'primos', { voz: v.voz, persona: v.persona, nomeAgente: a.nome, cor: COR_AGENTE[id], funcao: a.funcao }); }
 function conversarComAgente(id) {
   const a = todosAgentes().find(x => x.id === id); if (!a) return;
@@ -8705,14 +8890,14 @@ function htmlPainelAgente(id) {
     : pausado ? `<p class="cc-exec">⏸ Pausado: fora da rodada das 7h. <button type="button" class="cc-mini" onclick="controlarAgente('retomar', '${id}')">Retomar</button></p>` : '';
   const resp = r && r.resposta ? ccBloco('Resposta ao seu comando', `<div class="cc-relatorio cc-resp"><p class="cc-nota">Você pediu: “${esc(r.comando || '')}”</p><p class="cc-txt">${textoAgente(r.resposta)}</p></div>`) : '';
   const cmd = `<form class="cc-cmd" onsubmit="enviarComandoAgente(event, '${id}')"><input id="cc-cmd" placeholder="Comando para o agente (ex.: refaça o payback com 30 vendas/mês)" maxlength="400" autocomplete="off" enterkeyhint="send"><button type="submit" aria-label="Enviar comando">↑</button></form>
-    <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Rodar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="conversarComAgente('${id}')">💬 Escrever</button></div>`;
+    <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Reanalisar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="conversarComAgente('${id}')">💬 Escrever</button></div>`;
   const agv = todosAgentes().find(x => x.id === id), falar = VOZ_AGENTES[id] && agv ? `<button type="button" class="cc-falar" style="--ag:${COR_AGENTE[id] || '#0a84ff'}" onclick="falarComAgente('${id}')"><i></i>Falar com ${esc(agv.nome)}</button>` : '';
   const ag = todosAgentes().find(x => x.id === id), sk = ((ag && ag.skills) || []).filter(k => SKILLS_DESC[k]);
   const skills = sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '';
   const i = html.indexOf('</header>') + 9, abrir = cc.pagina ? '' : `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('${id}')">Abrir a página completa de ${esc(ag ? ag.nome : '')} ›</button>`;
   const limpo = html.slice(i).replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const recs = recadosAgentes.filter(x => (x.agentes || []).includes(id)).slice(0, 6); // fase 7: o que o Rafael contou ao J.A.R.V.I.S. e ele passou a este agente
-  const recados = recs.length ? ccBloco('Recados que o J.A.R.V.I.S. me passou', `<ul class="cc-lista">${recs.map(x => `<li><span><b>${esc(x.texto)}</b><small>${esc(isoParaBR(x.quando.slice(0, 10)))} · ${x.origem === 'voz' ? '🎙 voz' : '💬 chat'}${x.tipo ? ' · ' + esc(x.tipo) : ''}</small></span></li>`).join('')}</ul><p class="cc-nota">Eu leio estes recados na próxima rodada (todo dia às 7h ou ao tocar em Rodar agora).</p>`) : '';
+  const recados = recs.length ? ccBloco('Recados que o J.A.R.V.I.S. me passou', `<ul class="cc-lista">${recs.map(x => `<li><span><b>${esc(x.texto)}</b><small>${esc(isoParaBR(x.quando.slice(0, 10)))} · ${x.origem === 'voz' ? '🎙 voz' : '💬 chat'}${x.tipo ? ' · ' + esc(x.tipo) : ''}</small></span></li>`).join('')}</ul><p class="cc-nota">Eu leio estes recados na próxima rodada (todo dia às 7h ou ao tocar em Reanalisar agora).</p>`) : '';
   return html.slice(0, i) + abrir + falar + est + cmd + resp + recados + limpo + skills;
 }
 function htmlPainelAgenteBase(id) {
@@ -8729,6 +8914,7 @@ function htmlPainelAgenteBase(id) {
   if (a.id === 'marketing') return htmlAgenteMarketing(a);
   if (a.id === 'estoque') return htmlAgenteEstoque(a);
   if (a.id === 'producao') return htmlAgenteProducao(a);
+  if (a.id === 'digital') return htmlAgenteDigital(a);
   if (a.aba) return cabecalhoAgente(a) + htmlRelatorioAgente(a.id) + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('${a.aba}')">Abrir ${esc(a.nome)} na Primos</button>` + botaoConversarAgente(a);
   if (a.id === 'mercado') return cabecalhoAgente(a) + `<div class="cc-embed">${typeof htmlMercado === 'function' ? htmlMercado(true) : ''}</div>` + botaoConversarAgente(a);
   if (a.id === 'treino') {
@@ -8832,6 +9018,20 @@ function htmlAgenteContabil(a) {
 }
 
 // --- agente MARKETING ---
+// --- MARKETING: DICAS DE FILMAGEM (fase 10, pedido do Rafael): o agente traz 3 por dia (relatorios.agentes.marketing.dicasFilmagem);
+//     enquanto ele não traz, fica o guia base abaixo. Acessório = sugestão barata, nunca compra (quem compra é o Rafael).
+const DICAS_FILMAGEM_BASE = [
+  { titulo: 'O bico em macro', como: 'Lente 2× do iPhone a uns 5 cm do bico, celular preso num braço articulado. Toque e segure na tela para travar foco e exposição (AE/AF). 4K a 60 qps, luz vinda de lado para as camadas aparecerem.', equipamento: 'braço articulado de mesa', para: 'abertura de qualquer vídeo' },
+  { titulo: 'AMS trocando de cor em câmera lenta', como: 'Câmera lenta (240 qps) de frente para o AMS Lite na hora da troca: o filamento recolhendo e o novo entrando. Fundo escuro e uma luz forte de cima.', equipamento: 'luz de LED pequena com difusor', para: 'peças multicoloridas (placas, chaveiros)' },
+  { titulo: 'Mesa vazia → peça pronta (corte no mesmo lugar)', como: 'Tripé travado no mesmo ponto: filme a mesa vazia, depois a peça pronta no mesmo enquadramento. No CapCut, corte seco na batida. Não mexa no tripé entre as tomadas.', equipamento: 'tripé flexível', para: 'antes/depois' },
+  { titulo: 'Revelação 360°', como: 'Peça num prato giratório devagar, celular na altura da peça, fundo infinito (uma cartolina curvada). Luz de um lado e um rebatedor branco do outro.', equipamento: 'prato giratório e cartolina preta ou branca', para: 'placas profissionais, santos, cavalo' },
+  { titulo: 'O "pop" da mesa PEI', como: 'Plano fechado das mãos dobrando a mesa e a peça soltando. Microfone de lapela preso perto da impressora para pegar o estalo. Esse som segura a atenção.', equipamento: 'microfone de lapela com fio', para: 'vídeo curto e satisfatório' },
+  { titulo: 'As 3 máquinas trabalhando', como: 'Movimento lateral lento passando pelas 2 A1 e pela Kobra X: celular em modo Cinema, bem perto, foco puxando de uma máquina para a outra. Luz ambiente baixa e o LED das máquinas ligado.', equipamento: 'gimbal (opcional) ou a mão bem firme', para: 'mostrar a fábrica / bastidores' },
+];
+function htmlDicasFilmagem(r) {
+  const ds = (r && (r.dicasFilmagem || []).length) ? r.dicasFilmagem : DICAS_FILMAGEM_BASE, doAgente = !!(r && (r.dicasFilmagem || []).length);
+  return `<div class="mkt-dicas">${ds.slice(0, 6).map((d, k) => `<article class="mkt-dica" style="--k:${k}"><b>🎥 ${esc(d.titulo || '')}</b><p>${esc(d.como || '')}</p>${d.equipamento ? `<small>Ajuda: ${esc(d.equipamento)}</small>` : ''}${d.para ? `<em>${esc(d.para)}</em>` : ''}</article>`).join('')}</div><p class="cc-nota">${doAgente ? `Dicas do agente de hoje${r.dia ? ' (' + esc(isoParaBR(r.dia).slice(0, 5)) + ')' : ''}. Mudam todo dia.` : 'Guia base. O agente traz dicas novas todo dia na rodada da manhã.'} Acessórios são sugestões: quem decide e compra é você.</p>`;
+}
 function htmlAgenteMarketing(a) {
   const pc = primosCentral || {}, tk = pc.tiktokPerfil || {}, mk = pc.marketing || {}, t = mk.tiktok || {}, p7 = t.periodo7d || {}, pub = t.publico || {};
   if (!pc.tiktokPerfil && !pc.marketing) return cabecalhoAgente(a) + ccBloco('Sem dados', '<p class="cc-txt">Ainda não li o TikTok. Peça “atualizar marketing” pelo chat.</p>');
@@ -8844,6 +9044,7 @@ function htmlAgenteMarketing(a) {
     + (pub.faixa ? ccBloco('Seu público hoje', `<p class="cc-txt">${pub.homens}% homens · ${esc(pub.faixa)} · pico ${esc(pub.pico || '')}</p>`) : '')
     + ((t.buscas || []).length ? ccBloco('O que as pessoas buscam', `<div class="cc-tags solto">${t.buscas.map(b => `<em>${esc(b)}</em>`).join('')}</div>`) : '')
     + htmlConteudoMarketing()
+    + ccBloco('Dicas de filmagem', htmlDicasFilmagem(relatorioAgente('marketing')))
     + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('marketing')">Abrir o marketing completo</button>` + botaoConversarAgente(a);
 }
 
@@ -8956,6 +9157,7 @@ function renderPaginaEstoque() {
       <footer class="ag-fim">J.A.R.V.I.S. · Estoque da Primos 3D</footer></div></div>`;
   restaurarRascunhoContagem();
   montarSecadora3D();
+  posRenderPagina(); // fase 10: Atualizar + O que mudou
 }
 // --- ATUALIZAR O ESTOQUE (fase 8, 3ª versão — pedido do Rafael): UMA linha por cor, um campo só. Ele digita quanto tem AGORA,
 //     do jeito que preferir: "Só o filamento" (líquido) ou "Na balança" (com carretel: tiro 120 g de cada carretel da Voolt).
@@ -9143,7 +9345,8 @@ function renderAjustesJarvis() {
   // aparência
   h += `<section class="jva-sec" id="jva-tema"><h4>3 · Aparência</h4><p class="jva-txt">Escolha o tema do J.A.R.V.I.S. Muda na hora (a esfera, a página inicial e o chat).</p>
     <div class="jva-temas">${Object.entries(TEMAS_JARVIS).map(([k, t]) => `<button type="button" class="jva-tema${k === tema ? ' on' : ''}${t.escuro ? ' esc' : ''}" onclick="escolherTemaJarvis('${k}')" style="--fundo:${t.fundo}; --luz:${t.luz}"><span class="jva-bola" style="background:${t.bola}"></span><b>${t.nome}</b><small>${t.desc}</small></button>`).join('')}</div>
-    <label class="jva-linha"><input type="checkbox" ${prefs.jvSemAbertura ? '' : 'checked'} onchange="prefs.jvSemAbertura = !this.checked; salvarPrefsJarvis()"> <span>Vinheta de abertura (o feixe de luz ao abrir o app)</span></label></section>`;
+    <label class="jva-linha"><input type="checkbox" ${prefs.jvSemAbertura ? '' : 'checked'} onchange="prefs.jvSemAbertura = !this.checked; salvarPrefsJarvis()"> <span>Vinheta de abertura (o feixe de luz ao abrir o app)</span></label>
+    <label class="jva-linha"><input type="checkbox" ${prefs.jvSemSomAbertura ? '' : 'checked'} onchange="prefs.jvSemSomAbertura = !this.checked; salvarPrefsJarvis()"> <span>Som da abertura (2 s, corte seco · no iPhone, só fora do modo silencioso)</span></label></section>`;
   // voz
   const mv = jvConfig.iaModeloVoz;
   h += `<section class="jva-sec" id="jva-voz"><h4>4 · Voz</h4>
@@ -9248,10 +9451,56 @@ window.addEventListener('popstate', () => { if (popIgnorar > 0) { popIgnorar--; 
 // some no transparente → aparece a página inicial (e a esfera chega de longe). Ao abrir/atualizar o app e ao
 // voltar para ele depois de 5 min. O desenho é todo CSS (index.html + style.css): funciona mesmo antes do JS.
 // ============================================================================
-function iniciarAbertura() {
+// SOM DA ABERTURA (fase 10, pedido do Rafael 04/10/2026): ~2 s, CORTE SECO no fim. Tudo sintetizado aqui (nenhum áudio de
+// terceiros): órgão espacial + tique-taque de relógio (clima de Interstellar) → groove em 5 por 4 (3+2, o "jeito" do jazz
+// tipo Take Five: ride, baixo e acordes curtos de piano) com batucada de samba-drive por cima (surdo, tamborim, pandeiro),
+// e o corte seco na pulsação da luz. iPhone: sessão "ambient" = respeita o modo silencioso. O navegador só deixa tocar som
+// depois de um toque: se ainda não puder, toca no primeiro toque durante a abertura (ou não toca).
+function somAbertura() {
+  if (prefs.jvSemSomAbertura) return;
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'ambient'; } catch (e) { }
+  let ctx; try { ctx = new AC(); } catch (e) { return; }
+  const tocar = () => {
+    const t0 = ctx.currentTime + 0.03, FIM = 1.95, B = 0.3, S = B / 4; // 200 bpm, semicolcheia
+    const mestre = ctx.createGain(), comp = ctx.createDynamicsCompressor(); mestre.gain.value = 0.55; comp.threshold.value = -18; comp.ratio.value = 4;
+    mestre.connect(comp); comp.connect(ctx.destination);
+    mestre.gain.setValueAtTime(0.55, t0 + FIM - 0.004); mestre.gain.linearRampToValueAtTime(0, t0 + FIM); // o corte seco
+    const ruido = (() => { const b = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; })();
+    const env = (g, t, a, v, dec) => { g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + a); g.gain.exponentialRampToValueAtTime(0.0001, t + a + dec); };
+    const osc = (tipo, f, t, a, v, dec, destino = mestre, glide) => { const o = ctx.createOscillator(), g = ctx.createGain(); o.type = tipo; o.frequency.setValueAtTime(f, t); if (glide) o.frequency.exponentialRampToValueAtTime(glide, t + dec); env(g, t, a, v, dec); o.connect(g); g.connect(destino); o.start(t); o.stop(t + a + dec + 0.05); };
+    const chiado = (t, dur, v, tipoF, freq, q = 1) => { const s = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain(); s.buffer = ruido; f.type = tipoF; f.frequency.value = freq; f.Q.value = q; env(g, t, 0.002, v, dur); s.connect(f); f.connect(g); g.connect(mestre); s.start(t); s.stop(t + dur + 0.05); };
+    // 1) o espaço: órgão (Lá menor com 9ª) que cresce enquanto a luz desce + tique-taque
+    [110, 164.81, 220, 246.94, 261.63].forEach((f, k) => [1, 2, 4].forEach((h, j) => { const o = ctx.createOscillator(), g = ctx.createGain(), tr = ctx.createOscillator(), tg = ctx.createGain(); o.type = 'sine'; o.frequency.value = f * h; tr.frequency.value = 5.5; tg.gain.value = 0.004; tr.connect(tg); tg.connect(g.gain);
+      const v = [0.085, 0.036, 0.014][j] * (k === 0 ? 1.3 : 1); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(v, t0 + 0.55); g.gain.setValueAtTime(v, t0 + 1.05); g.gain.exponentialRampToValueAtTime(v * 0.35, t0 + 1.4);
+      o.connect(g); g.connect(mestre); o.start(t0); tr.start(t0); o.stop(t0 + FIM + 0.02); tr.stop(t0 + FIM + 0.02); }));
+    [0, 0.3, 0.6].forEach(d => chiado(t0 + d, 0.014, 0.3, 'highpass', 3000));
+    // 2) o groove em 5/4 (3+2) a partir de 0,6 s
+    const G = t0 + 0.6;
+    for (let k = 0; k < 6; k++) chiado(G + k * B * (k % 2 ? 0.66 : 1) + (k > 1 ? (k - 1) * 0.12 : 0), 0.18, 0.05, 'highpass', 7000);   // ride (balançado)
+    osc('sine', 55, G, 0.01, 0.42, 0.42, mestre, 50); osc('sine', 82.41, G + 3 * B, 0.01, 0.36, 0.3, mestre, 78);                    // baixo: 1 e 4
+    const acorde = (t, fs, v) => fs.forEach(f => osc('triangle', f, t, 0.005, v, 0.16));
+    acorde(G + B * 0.5, [220, 261.63, 329.63, 392], 0.045); acorde(G + B * 3.5, [196, 246.94, 293.66, 370], 0.04);                      // piano curto: "e" do 1 e do 4
+    // 3) samba-drive por cima: surdo (2 e 5), tamborim no teleco-teco, pandeiro em toda semicolcheia
+    [1, 4].forEach(b => osc('sine', 72, G + b * B, 0.004, 0.55, 0.32, mestre, 46));
+    [0, 3, 5, 8, 10, 12, 15, 17].forEach(i => osc('square', 820, G + i * S, 0.002, 0.03, 0.05));
+    for (let i = 0; i < 20; i++) chiado(G + i * S, 0.035, i % 4 === 2 ? 0.05 : 0.02, 'bandpass', 6800, 2.5);
+    // 4) o acento final e o CORTE SECO (na pulsação da luz)
+    const A = t0 + 1.78; osc('sine', 62, A, 0.003, 0.6, 0.4, mestre, 40); acorde(A, [220, 277.18, 329.63, 415.3], 0.05); chiado(A, 0.25, 0.08, 'highpass', 5000);
+    setTimeout(() => { try { ctx.close(); } catch (e) { } try { if (navigator.audioSession) navigator.audioSession.type = 'auto'; } catch (e) { } }, (FIM + 0.4) * 1000);
+  };
+  const tentar = () => ctx.resume().then(() => ctx.state === 'running');
+  tentar().then(ok => {
+    if (ok) return tocar();
+    const limite = Date.now() + 2000, toque = () => { tirar(); if (Date.now() < limite) tentar().then(o => { if (o) tocar(); else ctx.close(); }); else ctx.close(); }; // sem toque: não insiste
+    const tirar = () => ['pointerdown', 'keydown', 'touchend'].forEach(ev => document.removeEventListener(ev, toque, true));
+    ['pointerdown', 'keydown', 'touchend'].forEach(ev => document.addEventListener(ev, toque, true));
+    setTimeout(() => { tirar(); if (ctx.state !== 'running') try { ctx.close(); } catch (e) { } }, 2300);
+  }).catch(() => { });
+}function iniciarAbertura() {
   const el = $j('jv-abertura'); if (!el) return;
   if (prefs.jvSemAbertura) { el.remove(); document.documentElement.classList.remove('jv-abrindo'); atualizarCasaJarvis(abaAtual()); return; }
-  clearTimeout(jv.abTimer1); clearTimeout(jv.abTimer2);
+  clearTimeout(jv.abTimer1); clearTimeout(jv.abTimer2); somAbertura();
   jv.abTimer1 = setTimeout(() => { if (window.JarvisBrain && jv.modo === '3d' && abaAtual() === 'cerebro') JarvisBrain.entrada(); else jv.entradaPendente = true; }, 1150);
   jv.abTimer2 = setTimeout(() => { const a = $j('jv-abertura'); if (a) a.remove(); document.documentElement.classList.remove('jv-abrindo'); atualizarCasaJarvis(abaAtual()); }, 2200);
 }
@@ -9265,6 +9514,7 @@ function tocarAbertura() {
 }
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') { jv.escondidoEm = Date.now(); return; }
+  if (cc.pagina && cc.novidadesIds && $j('ag-pag') && !$j('ag-pag').hidden) marcarVistos(cc.pagina, cc.novidadesIds); // fase 10: o que estava na tela escondida conta como visto quando ela volta
   if (jv.escondidoEm && Date.now() - jv.escondidoEm > 5 * 60000 && abaAtual() === 'cerebro' && $j('jv-chat').hidden) tocarAbertura();
 });
 
@@ -11613,10 +11863,14 @@ function agendarSync() {
 
 function syncConfigurado() { return !!(syncConfig.url && syncConfig.token); }
 
-async function sincronizar() {
-  if (!syncConfigurado()) { setSyncStatus('naoconfig'); registrarDiagSync({ ok: false, erro: 'a sincronização não está configurada neste aparelho' }); verificarNovoDia(); return; }
-  if (syncEmAndamento) return;
-  if (!navigator.onLine) { setSyncStatus('offline'); verificarNovoDia(); return; }
+/** fase 10 (pedido do Codex): devolve { estado: ok|erro|offline|naoconfig, mudou } e reaproveita o envio em andamento. */
+let syncPromessa = null;
+function sincronizar() { if (syncEmAndamento && syncPromessa) return syncPromessa; syncPromessa = sincronizarAgora(); return syncPromessa; }
+async function sincronizarAgora() {
+  if (!syncConfigurado()) { setSyncStatus('naoconfig'); registrarDiagSync({ ok: false, erro: 'a sincronização não está configurada neste aparelho' }); verificarNovoDia(); return { estado: 'naoconfig' }; }
+  if (syncEmAndamento) return { estado: 'andamento' };
+  if (!navigator.onLine) { setSyncStatus('offline'); verificarNovoDia(); return { estado: 'offline' }; }
+  let resultado = { estado: 'ok', mudou: [] };
 
   syncEmAndamento = true; syncEditouDurante = false; setSyncStatus('andamento');
   const controle = typeof AbortController !== 'undefined' ? new AbortController() : null, limite = setTimeout(() => controle && controle.abort(), 25000); // fase 9: não fica preso
@@ -11668,18 +11922,21 @@ async function sincronizar() {
     setSyncStatus(editouDurante ? 'pendente' : 'ok');
     if (mudou.length) redesenharTudo(mudou);
     if (editouDurante) agendarSync();
+    resultado = { estado: 'ok', mudou };
   } catch (err) {
     console.error('Sync:', err);
     const msg = err && err.name === 'AbortError' ? 'a planilha demorou demais para responder (vou tentar de novo)' : String(err.message || err);
     if (!/não guardou/.test(msg)) registrarDiagSync({ ok: false, erro: msg });
     marcarPendente(true);
     setSyncStatus(navigator.onLine ? 'erro' : 'offline', msg);
+    resultado = { estado: navigator.onLine ? 'erro' : 'offline', erro: msg };
   } finally {
     clearTimeout(limite); syncEmAndamento = false;
     // Só depois de saber o estado mais novo é que fechamos o dia anterior
     // (evita que um aparelho zere hábitos que o outro já marcou hoje).
     verificarNovoDia();
   }
+  return resultado;
 }
 
 /** Adota o que veio da planilha se for mais novo (ou igual e diferente — empate: planilha vence). */
