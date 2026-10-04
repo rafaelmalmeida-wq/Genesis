@@ -7901,7 +7901,7 @@ function htmlAgenteProducao(a) {
     ${f.status === 'feito' ? '<em>✓</em>' : `<button type="button" class="cc-mini${f.status === 'imprimindo' ? '' : ' sec'}" onclick="mudarFila(${f.id}, '${f.status === 'imprimindo' ? 'feito' : 'imprimindo'}')">${f.status === 'imprimindo' ? '✓ Pronto' : '▶ Imprimir'}</button>`}<button type="button" class="cc-mini sec" onclick="removerFila(${f.id})" aria-label="Tirar da fila">✕</button></li>`;
   return cabecalhoAgente(a)
     + `<section class="cc-bloco cc-fab-bloco"><h4>Fábrica · ao vivo</h4><div id="cc-fab" class="cc-fab"><div class="cc-seca-carregando"><span class="spin"></span> Ligando as impressoras…</div></div><p class="cc-nota">${impressoesBambu ? `As A1 mostram o que está imprimindo DE VERDADE (conta Bambu, lida às ${esc(String(impressoesBambu.lidoEm || '').slice(11, 16))}); a Kobra X mostra o que você marcou como "imprimindo" ou o 1º da fila do dia.` : 'As impressoras mostram o que está em "imprimindo" (ou o 1º da fila do dia).'}</p></section>`
-    + dia + htmlRelatorioAgente('producao')
+    + htmlConsenso('producao') + dia + htmlRelatorioAgente('producao')
     + ccBloco(`Sua fila · ${plural(abertos.length, 'item', 'itens')}`, `<ul class="cc-fila">${abertos.map(linha).join('') || '<li><span><small>Vazia. Fale “quero imprimir …” para o J.A.R.V.I.S. ou anote aqui embaixo.</small></span></li>'}${feitos.map(linha).join('')}</ul>
       <form class="cc-form cc-fila-form" onsubmit="event.preventDefault(); const t = document.getElementById('cc-fila-txt'); const d = detectarFila('imprimir ' + t.value) || { titulo: t.value, qtd: 1 }; if (d.titulo) { adicionarFila(d, 'app'); t.value = ''; }"><input id="cc-fila-txt" placeholder="Ex.: 20 chaveiros Nossa Senhora em PLA dourado" maxlength="120" required><button type="submit" class="cc-btn">＋ Pôr na fila</button></form>`)
     + datas + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('producao')">Abrir Produção na Primos</button>` + botaoConversarAgente(a);
@@ -9046,7 +9046,36 @@ function htmlAgenteProspeccao(a) {
   return cabecalhoAgente(a)
     + ccNums([[reaisK(Object.values(m.jaDeu).reduce((s, v) => s + v, 0)), 'já entrou'], [reaisK(m.rea.total(H)), 'realista 12 m'], [reaisK(m.esc.total(H)), 'em escala 12 m']])
     + ccBloco('Os próximos 12 meses por canal', `<ul class="pr-mini">${ks.map(k => { const r = somaArr(m.rea.canais[k].lucro, H), e = somaArr(m.esc.canais[k].lucro, H); return `<li style="--c:${CANAIS_PROSP[k][1]}"><span>${CANAIS_PROSP[k][2]} ${esc(CANAIS_PROSP[k][0])}</span><b>${reaisK(r)} <small>→ ${reaisK(e)}</small></b><i><u style="width:${(Math.max(0, r) / mx * 100).toFixed(1)}%"></u><s style="width:${(Math.max(0, e) / mx * 100).toFixed(1)}%"></s></i></li>`; }).join('')}</ul><p class="cc-nota">Barra cheia = realista · contorno = em escala. Gargalo em escala: <b>${esc(GARGALO_TXT[m.gargalo][0])}</b>${m.gargaloMes ? ` (no ${m.gargaloMes}º mês)` : ""}.</p>`)
-    + htmlRelatorioAgente(a.id) + botaoConversarAgente(a);
+    + htmlConsenso('mini') + htmlRelatorioAgente(a.id) + botaoConversarAgente(a);
+}
+// --- ITEM DA VEZ (fase 10, pedido do Rafael 04/10/2026): Marketing + Produção + Prospecção escolhem JUNTOS, na rodada da nuvem
+//     (rodar.mjs, bloco CONSENSO), 1 item que está estourando no TikTok/Shopee e dá para imprimir agora com as cores do estoque e a
+//     capacidade de hoje — com o plano de postagem. Fica em relatorios.consenso; aparece na Prospecção, na Produção e no Marketing.
+function consensoAtual() { const c = relatoriosAgentes && relatoriosAgentes.consenso; return c && c.item ? c : null; }
+function consensoNaFila(c) { return filaImpressao.some(f => f.status !== 'feito' && semAcentoCer(f.titulo) === semAcentoCer(c.item)); }
+function porConsensoNaFila() {
+  const c = consensoAtual(); if (!c) return; if (consensoNaFila(c)) { toast('Já está na fila de impressão.'); return; }
+  adicionarFila({ titulo: c.item, qtd: c.qtd || 1, cor: (c.cores || []).join(' + '), obs: `Item da vez (consenso) · ${c.dias || ''}` }, 'consenso');
+  toast(`🔥 ${c.item} entrou na fila de impressão.`, 5000); atualizarTelasSincronizadas('central', 'agente');
+}
+function htmlConsenso(modo) {
+  const c = consensoAtual();
+  if (!c) return modo === 'pagina' ? ccBloco('🔥 Item da vez', '<p class="cc-txt">Marketing, Produção e Prospecção escolhem juntos, na próxima rodada (todo dia às 7h), um item que está estourando no TikTok ou na Shopee e que dá para imprimir com as cores que você tem.</p>') : '';
+  const nomeAg = { marketing: 'Marketing', producao: 'Produção', prospeccao: 'Prospecção' }, naFila = consensoNaFila(c), curto = modo === 'mini';
+  const horas = c.horasPorPeca && c.qtd ? c.horasPorPeca * c.qtd : null;
+  const chips = [[c.qtd ? `${c.qtd} peças` : '', ''], [c.maquina || '', ''], [horas ? `${horas.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h de máquina` : '', ''], [c.preco ? `vende a ${reais(c.preco)}` : '', ''], [c.lucroPorPeca ? `sobra ${reais(c.lucroPorPeca)}/peça` : '', 'ok'], [c.dias ? `imprimir ${c.dias}` : '', '']].filter(x => x[0]);
+  const cores = (c.cores || []).map(cor => { const f = corFilamento(cor); return `<span class="cs-cor"><i style="background:${f.cor}"></i>${esc(cor)}</span>`; }).join('');
+  const avisos = [!c.estoqueOk && (c.faltam || []).length ? `⚠️ Pode faltar filamento: ${esc(c.faltam.join(', '))}.` : '', c.licenca && c.licenca !== 'ok' ? `⚠️ Licença: ${c.licenca === 'nao' ? 'esse modelo não pode ser vendido — o Desenvolvedor cria um próprio' : 'confira antes de vender'}.` : ''].filter(Boolean);
+  const corpo = `<div class="cs"><small class="cs-tag">consenso · Marketing + Produção + Prospecção · ${esc(isoParaBR(c.dia || '').slice(0, 5))}${c.velho ? ' (anterior)' : ''}</small>
+    <h3>${esc(c.item)}</h3><p class="cs-pq">${esc(c.porque || '')}${c.fonte ? ` <em class="cs-fonte">${esc(c.fonte)}</em>` : ''}</p>
+    <div class="cs-cores">${cores}</div><div class="cs-chips">${chips.map(([t, k]) => `<span class="${k}">${esc(t)}</span>`).join('')}</div>
+    ${avisos.map(a => `<p class="cc-alerta">${a}</p>`).join('')}
+    ${curto ? '' : `<ul class="cs-votos">${Object.entries(c.votos || {}).filter(([, v]) => v).map(([k, v]) => `<li style="--c:${COR_AGENTE[k] || '#8e8e93'}"><b>${nomeAg[k] || k}</b><span>${esc(v)}</span></li>`).join('')}</ul>`}
+    ${(c.marketing || []).length && modo !== 'producao' ? `<div class="cs-posts"><small>Plano de postagem</small>${c.marketing.map(p => `<div class="cs-post"><b>${esc(isoParaBR(p.dia || '').slice(0, 5))} · ${esc(p.formato || '')}</b><span>“${esc(p.gancho || '')}”</span>${curto ? '' : `<p>${esc(p.legenda || '')}</p>`}</div>`).join('')}</div>` : ''}
+    ${!curto && c.modelo ? `<p class="cc-nota">Modelo: ${esc(c.modelo)}</p>` : ''}
+    ${!curto && (c.alternativas || []).length ? `<p class="cc-nota">Outras opções: ${c.alternativas.map(a => `<b>${esc(a.item)}</b> (${esc(a.porque)})`).join(' · ')}</p>` : ''}
+    <div class="cs-btns"><button type="button" class="cs-btn" ${naFila ? 'disabled' : ''} onclick="porConsensoNaFila()">${naFila ? '✓ Já está na fila' : '＋ Pôr na fila de impressão'}</button>${curto ? '' : `<button type="button" class="cs-btn sec" onclick="controlarAgente('rodar', 'prospeccao')">Procurar outro</button>`}</div></div>`;
+  return ccBloco('🔥 Item da vez', corpo);
 }
 /** A página completa: radar, horizontes, capacidade, ranking por hora, canal por canal, simulador, produto novo e a leitura do agente. */
 function renderPaginaProspeccao() {
@@ -9065,6 +9094,7 @@ function renderPaginaProspeccao() {
       <section class="ag-sec ag-nums">${[[reaisK(ja), 'já entrou'], [reaisK(m.rea.total(12)), 'realista · 12 meses'], [reaisK(m.esc.total(12)), 'em escala · 12 meses'], [reaisK(m.esc.total(36)), 'em escala · 3 anos']].map(([v, t], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(v)}</strong><small>${esc(t)}</small></div>`).join('')}</section>
       <section class="ag-sec ag-corpo">
         ${ccBloco('Quanto volta, por canal', `<div id="pr-horiz">${htmlHorizProsp(m)}</div>`)}
+        ${htmlConsenso('pagina')}
         ${ops.length ? ccBloco(`Oportunidades do dia · ${esc(isoParaBR(r.dia || ''))}`, `<ol class="pr-ops">${ops.map((o, k) => `<li style="--c:${(CANAIS_PROSP[o.canal] || [, COR_PROSP])[1]}; --k:${k}"><span class="n">${k + 1}</span><span><b>${textoAgente(o.titulo)}</b><small>${esc((CANAIS_PROSP[o.canal] || [o.canal || ''])[0])} · ${esc(o.prazo || '')} · confiança ${esc(o.confianca || '')}</small><p>${textoAgente(o.porque || '')}</p>${o.primeiroPasso ? `<p class="passo">Primeiro passo: ${textoAgente(o.primeiroPasso)}</p>` : ''}</span><em>${esc(o.retornoMes || '')}</em></li>`).join('')}</ol>${r.escala ? `<p class="cc-txt"><b>Para escalar:</b> ${textoAgente(r.escala)}</p>` : ''}`) : ''}
         ${ccBloco('Capacidade e gargalo', `<div id="pr-cap">${htmlCapProsp(m)}</div>`)}
         ${ccBloco('Lucro por hora de máquina', `<div id="pr-itens">${htmlItensProsp(m)}</div>`)}
@@ -9461,7 +9491,7 @@ function htmlAgenteMarketing(a) {
   if (!pc.tiktokPerfil && !pc.marketing) return cabecalhoAgente(a) + ccBloco('Sem dados', '<p class="cc-txt">Ainda não li o TikTok. Peça “atualizar marketing” pelo chat.</p>');
   const temas = (t.temas || []).slice().sort((x, y) => (y.taxa || 0) - (x.taxa || 0)).slice(0, 3);
   return cabecalhoAgente(a, mk.atualizadoEm ? `<small class="cc-quando">lido em ${esc(isoParaBR(mk.atualizadoEm))}</small>` : '')
-    + htmlRelatorioAgente(a.id)
+    + htmlConsenso('marketing') + htmlRelatorioAgente(a.id)
     + ccNums([[tk.seguidores ?? '—', 'seguidores'], [p7.views ? (p7.views / 1000).toFixed(1).replace('.', ',') + ' mil' : '—', `views 7 dias ${p7.varViews ? `<em class="cc-up">${esc(p7.varViews)}</em>` : ''}`], [tk.curtidas ?? '—', 'curtidas'], [tk.videos ?? '—', 'vídeos']])
     + (mk.manchete ? ccBloco('O que fazer agora', `<p class="cc-txt">${mk.manchete}</p>`) : '')
     + (temas.length ? ccBloco('O que engaja (curtidas por view)', `<ul class="cc-lista">${temas.map(x => `<li><span><b>${esc(x.tema)}</b><small>${esc(x.leitura || '')}</small></span><em class="cc-pct">${String(x.taxa).replace('.', ',')}%</em></li>`).join('')}</ul>`) : '')
@@ -9637,11 +9667,22 @@ function escolherCorEstoque(i) { if (i < 0 || !cc.seca3d) return; const b = cc.s
 /** Contagem = CALIBRAGEM de cada cor (app, voz e chat usam esta). itens: [{ material, cor, gramas, comCarretel?, carreteis?, acabou? }].
  *  gramas com carretel → tira 120 g por carretel. Sempre grava um 'ajuste' com a hora (o novo ponto zero da cor, mesmo sem diferença),
  *  medido contra o saldo SEM a Bambu — depois disso só as impressões novas descontam. 0 = carretel acabou (fica na lista própria). */
+/** Cor do estoque mais parecida com o que ele falou ("preto 2790"). Antes pegava a PRIMEIRA que tinha a palavra — e a lista vem
+ *  do menor para o maior, então "preto" caía no "PLA Ingeo Preto" vazio em vez do Velvet Preto em uso (04/10/2026: o preto contou
+ *  duas vezes e o estoque foi de 16,8 para 22 kg). Agora: mais palavras em comum; empate → a cor que TEM filamento (a mais cheia). */
+function corParecidaEstoque(cores, mat, nome) {
+  const pal = s => semAcentoCer(s).split(/[^a-z0-9]+/).filter(w => w.length > 1 && !['pla', 'petg', 'tpu', 'abs', 'asa', 'de', 'da', 'do'].includes(w));
+  const alvo = pal(nome); if (!alvo.length) return null;
+  const cand = cores.filter(x => semAcentoCer(x.material) === semAcentoCer(mat)).map(x => { const p = pal(x.cor); return { x, n: alvo.filter(w => p.some(q => q === w || q.startsWith(w) || w.startsWith(q))).length, todas: alvo.every(w => p.some(q => q === w || q.startsWith(w) || w.startsWith(q))) }; }).filter(o => o.n > 0);
+  if (!cand.length) return null;
+  cand.sort((a, b) => (b.todas - a.todas) || (b.n - a.n) || (b.x.kg - a.x.kg));
+  return cand[0].x;
+}
 function contagemEstoque(itens, origem) {
   const e = calcularEstoque({ semBambu: true }), feitos = [], agora = new Date().toISOString(), antes = estoquePrimos.length;
   (itens || []).forEach(it => { let g = Number(it.gramas); if (!(g >= 0) || !it.cor) return; const mat = String(it.material || 'PLA').toUpperCase();
     if (it.comCarretel && g > 0) g = Math.max(0, g - TARA_CARRETEL_G * Math.max(1, Number(it.carreteis) || 1));
-    const c = e.cores.find(x => chaveCor(x.material, x.cor) === chaveCor(mat, it.cor)) || e.cores.find(x => semAcentoCer(x.cor).includes(semAcentoCer(it.cor)) && semAcentoCer(x.material) === semAcentoCer(mat));
+    const c = e.cores.find(x => chaveCor(x.material, x.cor) === chaveCor(mat, it.cor)) || corParecidaEstoque(e.cores, mat, it.cor);
     const material = c ? c.material : mat, cor = c ? c.cor : it.cor, dif = g / 1000 - (c ? c.kg : 0);
     estoquePrimos.push({ id: novoId(), data: hojeISO(), quando: agora, tipo: 'ajuste', material, cor, kg: Math.round(dif * 1e6) / 1e6, obs: `contagem (${origem || 'app'})` });
     for (let n = Math.max(g === 0 ? 1 : 0, Number(it.acabou) || 0); n > 0; n--) estoquePrimos.push({ id: novoId(), data: hojeISO(), tipo: 'acabou', material, cor, kg: 0, obs: `carretel acabou (contagem ${origem || 'app'})` });

@@ -3657,3 +3657,28 @@ body.eb-aberto { overflow: hidden; }
 .pr-fontes { margin-top: 18px; }
 #ag-pag .pr .ag-heroi-txt h1 { background: linear-gradient(90deg, #fff, #2dd4bf); -webkit-background-clip: text; background-clip: text; color: transparent; }
 @media (max-width: 420px) { .pr-meds { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; } .pr-med strong { font-size: 1rem; } .pr-ops li { grid-template-columns: 28px minmax(0, 1fr); } .pr-ops em { grid-column: 2; text-align: left; max-width: none; } }
+
+/* ITEM DA VEZ (fase 10): consenso Marketing + Produção + Prospecção */
+.cs { position: relative; padding: 16px; border-radius: 18px; overflow: hidden; background: linear-gradient(140deg, rgba(255,69,58,0.18), rgba(255,159,10,0.10) 45%, rgba(45,212,191,0.08)); box-shadow: inset 0 0 0 0.5px rgba(255,159,10,0.45); }
+.cs::before { content: ''; position: absolute; inset: -40% -20% auto auto; width: 70%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, rgba(255,120,40,0.35), transparent 65%); animation: csBrasa 4s ease-in-out infinite; pointer-events: none; }
+@keyframes csBrasa { 50% { transform: scale(1.15); opacity: 0.6; } }
+@media (prefers-reduced-motion: reduce) { .cs::before { animation: none; } }
+.cs > * { position: relative; }
+.cs-tag { display: block; font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: #ffb35c; }
+.cs h3 { margin: 4px 0 6px; font-size: 1.35rem; line-height: 1.2; color: #fff; }
+.cs-pq { margin: 0 0 10px; font-size: 0.86rem; line-height: 1.45; color: #e5e5ea; }
+.cs-fonte { font-style: normal; font-size: 0.66rem; padding: 2px 7px; border-radius: 999px; background: rgba(255,255,255,0.12); text-transform: uppercase; letter-spacing: 0.08em; }
+.cs-cores, .cs-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.cs-cor { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 6px; border-radius: 999px; background: rgba(0,0,0,0.3); font-size: 0.76rem; }
+.cs-cor i { width: 14px; height: 14px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.3); }
+.cs-chips span { padding: 5px 10px; border-radius: 999px; background: rgba(255,255,255,0.1); font-size: 0.76rem; color: #e5e5ea; } .cs-chips span.ok { background: rgba(48,209,88,0.2); color: #8ef0a8; }
+.cs-votos { list-style: none; margin: 10px 0; padding: 0; display: grid; gap: 6px; }
+.cs-votos li { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 8px; padding: 8px 10px; border-radius: 12px; background: rgba(0,0,0,0.25); font-size: 0.8rem; line-height: 1.4; }
+.cs-votos b { color: var(--c); } .cs-votos b::before { content: '● '; } .cs-votos span { color: #d1d1d6; }
+.cs-posts { margin: 10px 0; display: grid; gap: 6px; } .cs-posts > small { font-size: 0.64rem; letter-spacing: 0.12em; text-transform: uppercase; color: #ff9fb4; }
+.cs-post { padding: 8px 10px; border-radius: 12px; background: rgba(255,55,95,0.10); font-size: 0.8rem; } .cs-post b { display: block; color: #ff9fb4; font-size: 0.74rem; }
+.cs-post span { display: block; color: #fff; font-weight: 600; } .cs-post p { margin: 4px 0 0; color: #d1d1d6; line-height: 1.4; }
+.cs-btns { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-top: 10px; }
+.cs-btn { padding: 12px 14px; border: none; border-radius: 12px; background: linear-gradient(135deg, #ff6b2c, #ff9f0a); color: #1a0a00; font: inherit; font-size: 0.88rem; font-weight: 700; cursor: pointer; }
+.cs-btn.sec { background: rgba(255,255,255,0.12); color: #fff; font-weight: 600; } .cs-btn:disabled { background: rgba(48,209,88,0.25); color: #8ef0a8; cursor: default; }
+.cs-btn:active:not(:disabled) { transform: scale(0.98); }
