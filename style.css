@@ -3261,3 +3261,16 @@ body.ag-aberta { overflow: hidden; }
 .est-cont .est-carr { padding: 10px 6px; text-align: center; }
 .est-cont .est-liq { grid-column: 2 / -1; justify-self: end; font-style: normal; font-size: .76rem; color: #64d2ff; min-height: 0; }
 .est-cont .est-liq:empty { display: none; }
+/* ===== CONTAGEM por carretel (fase 8, 2ª versão) ===== */
+.est-cor-cont { padding: 12px; border-radius: 18px; background: rgba(255,255,255,0.04); display: grid; gap: 8px; }
+.est-cor-tit { display: grid; grid-template-columns: 22px 1fr auto; gap: 10px; align-items: center; }
+.est-cor-tit i { width: 20px; height: 20px; border-radius: 50%; } .est-cor-tit span { display: grid; font-size: .95rem; } .est-cor-tit small { color: #8e8e93; font-size: .72rem; }
+.est-cor-tit .est-liq { font-style: normal; font-size: .8rem; font-weight: 600; color: #64d2ff; }
+.est-carrs { display: grid; gap: 6px; }
+.est-carr-lin { display: grid !important; grid-template-columns: 78px 1fr 70px !important; gap: 8px; align-items: center; padding: 0 !important; background: none !important; }
+.est-carr-lin small { color: #aeaeb2; font-size: .78rem; }
+.est-carr-lin .est-liq-1 { font-style: normal; font-size: .78rem; color: #64d2ff; text-align: right; } .est-carr-lin .est-liq-1.acabou { color: #ff9f0a; }
+.est-mais { justify-self: start; border: 0; border-radius: 999px; padding: 6px 14px; font: inherit; font-size: .82rem; background: rgba(100,210,255,.14); color: #64d2ff; cursor: pointer; }
+.est-acabados { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.est-acabados li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 14px; background: rgba(255,255,255,.04); opacity: .75; }
+.est-acabados i { width: 16px; height: 16px; border-radius: 50%; } .est-acabados span { display: grid; } .est-acabados small { color: #8e8e93; font-size: .72rem; }

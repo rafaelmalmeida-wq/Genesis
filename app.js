@@ -4936,7 +4936,7 @@ function nivelArea(area) {
   const porQtd = (n, pouco, bom) => n >= bom ? 2 : n >= pouco ? 1 : 0;
   if (area === 'primos') {
     const pc = primosCentral;
-    if (pc) { tem.push(`Central importada em ${isoParaBR(pc.geradoEm.slice(0, 10))}`); if (diasEntre(pc.geradoEm.slice(0, 10), hoje) > 7) falta.push('atualizar os dados da Central (mais de 7 dias)'); }
+    if (pc && pc.geradoEm) { tem.push(`Central importada em ${isoParaBR(pc.geradoEm.slice(0, 10))}`); if (diasEntre(pc.geradoEm.slice(0, 10), hoje) > 7) falta.push('atualizar os dados da Central (mais de 7 dias)'); }
     else falta.push(claudeConfigurado() ? 'aguardar os dados do cofre' : 'conectar o J.A.R.V.I.S. ao computador (Ajustes do J.A.R.V.I.S.)');
     if (orders.length) tem.push(plural(orders.length, 'pedido no app', 'pedidos no app')); else falta.push('lançar os pedidos no app');
     if (pc && !(pc.vendas || []).length && !orders.some(o => o.paid)) falta.push('registrar as vendas');
@@ -8483,6 +8483,8 @@ function bobinasEstoque(e) {
   const lista = [];
   e.cores.filter(c => c.kg > 0.01).forEach(c => { const { cor, brilho } = corFilamento(c.cor + ' ' + c.material); let resta = c.kg, n = 0;
     const cs = (compras[chaveCor(c.material, c.cor)] || []).slice().sort((a, b) => String(b.data || '').localeCompare(String(a.data || '')));
+    const pes = (estoquePrimos.filter(m => m.tipo === 'carreteis' && chaveCor(m.material, m.cor) === chaveCor(c.material, c.cor)).pop() || {}).pesos; // fase 8: a última pesagem por carretel
+    if (Array.isArray(pes) && pes.length && Math.abs(pes.reduce((a, b) => a + b, 0) / 1000 - c.kg) < 0.006) { pes.filter(g => g > 0).forEach((g, i) => lista.push({ nome: c.cor, material: c.material, cor, brilho, kg: g / 1000, capacidade: 1, compra: cs[Math.min(i, cs.length - 1)] || null, totalCor: c.kg, usado: c.usado, chave: chaveCor(c.material, c.cor) })); return; }
     while (resta > 0.01) { const kg = Math.min(1, resta), cp = cs[Math.min(n, cs.length - 1)] || null; lista.push({ nome: c.cor, material: c.material, cor, brilho, kg, capacidade: 1, compra: cp, totalCor: c.kg, usado: c.usado, chave: chaveCor(c.material, c.cor) }); resta -= kg; n++; } });
   return lista;
 }
@@ -8527,6 +8529,7 @@ function renderPaginaEstoque() {
   const el = $j('ag-pag'); if (!el) return; const a = todosAgentes().find(x => x.id === 'estoque'), e = calcularEstoque(), bob = bobinasEstoque(e), r = relatorioAgente('estoque') || {};
   const primeira = {}; bob.forEach((b, i) => { if (primeira[b.chave] === undefined) primeira[b.chave] = i; });
   const cores = e.cores.filter(c => c.kg > 0.01).sort((x, y) => y.kg - x.kg);
+  const acabados = estoquePrimos.filter(m => m.tipo === 'acabou').slice(-12).reverse();
   el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
       <button type="button" class="ag-falar" onclick="falarComAgente('estoque')">🎙 Falar</button></header>
     <div class="ag-rolo est" id="ag-rolo" style="--cor:#64d2ff"><div id="est-pagina">
@@ -8535,10 +8538,12 @@ function renderPaginaEstoque() {
         <div id="cc-seca-dica" class="cc-seca-dica grande" hidden></div></section>
       <section class="ag-sec est-sec"><h2 class="jvpg-tit">Suas cores</h2><div class="est-cores">${cores.map(c => { const { cor } = corFilamento(c.cor + ' ' + c.material), k = chaveCor(c.material, c.cor);
         return `<button type="button" class="est-cor${c.kg < 0.3 ? ' baixo' : ''}" data-chave="${esc(k)}" onclick="escolherCorEstoque(${primeira[k] ?? -1})"><i style="background:${esc(cor)}"></i><span><b>${esc(c.cor)}</b><small>${esc(c.material)}</small></span><em>${fmtKg(c.kg)}</em></button>`; }).join('')}</div></section>
-      <section class="ag-sec est-sec"><h2 class="jvpg-tit">Fazer a contagem</h2><p class="ag-sub">Ponha a bobina na balança e digite o peso <b>com o carretel</b>. Eu desconto <b>${TARA_CARRETEL_G} g por carretel</b> (Voolt) e guardo só o filamento. Se a cor tem mais de uma bobina, some os pesos e ajuste os carretéis. O que você digita fica guardado até salvar.</p>
+      <section class="ag-sec est-sec"><h2 class="jvpg-tit">Fazer a contagem</h2><p class="ag-sub">Pese <b>cada carretel</b> e digite o peso da balança (com o carretel): eu desconto <b>${TARA_CARRETEL_G} g</b> de cada um. Tem outro aberto da mesma cor? Toque em <b>＋ carretel</b>. Digite <b>0</b> quando o carretel acabou. O que você digita fica guardado até salvar.</p>
         <form class="est-cont" onsubmit="salvarContagemForm(event)" oninput="rascunhoContagem()">${cores.map(c => { const k = chaveCor(c.material, c.cor), nb = Math.max(1, bob.filter(b => b.chave === k).length);
-          return `<label><i style="background:${esc(corFilamento(c.cor + ' ' + c.material).cor)}"></i><span>${esc(c.cor)}<small>${esc(c.material)} · hoje ${Math.round(c.kg * 1000)} g líquidos</small></span><input class="est-peso" type="text" inputmode="decimal" autocomplete="off" placeholder="g na balança" data-k="${esc(k)}" data-mat="${esc(c.material)}" data-cor="${esc(c.cor)}"><input class="est-carr" type="number" inputmode="numeric" min="0" step="1" value="${nb}" title="carretéis" aria-label="carretéis de ${esc(c.cor)}" data-k="${esc(k)}"><em class="est-liq" data-k="${esc(k)}"></em></label>`; }).join('')}
+          return `<div class="est-cor-cont" data-k="${esc(k)}" data-mat="${esc(c.material)}" data-cor="${esc(c.cor)}"><div class="est-cor-tit"><i style="background:${esc(corFilamento(c.cor + ' ' + c.material).cor)}"></i><span>${esc(c.cor)}<small>${esc(c.material)} · hoje ${Math.round(c.kg * 1000)} g líquidos</small></span><em class="est-liq"></em></div>
+            <div class="est-carrs">${Array.from({ length: nb }, (_, i) => htmlCarretelCont(i)).join('')}</div><button type="button" class="est-mais" onclick="maisCarretelCont(this)">＋ carretel</button></div>`; }).join('')}
           <div class="est-cont-acoes"><button type="submit" class="cc-btn est-salvar">Salvar contagem</button><button type="button" class="cc-btn" onclick="falarComAgente('estoque')">🎙 Contar por voz</button></div></form></section>
+      ${acabados.length ? `<section class="ag-sec est-sec"><h2 class="jvpg-tit">Carretéis que acabaram</h2><ul class="est-acabados">${acabados.map(m => `<li><i style="background:${esc(corFilamento(m.cor + ' ' + m.material).cor)}"></i><span><b>${esc(m.cor)}</b><small>${esc(m.material)} · acabou em ${esc(isoParaBR(m.data))}</small></span></li>`).join('')}</ul></section>` : ''}
       ${r.manchete ? `<section class="ag-sec est-sec"><h2 class="jvpg-tit">O Estoque diz</h2><p class="jvpg-txt">${textoAgente(r.manchete)}</p></section>` : ''}
       <section class="ag-sec ag-corpo mkt-mais"><h2 class="jvpg-tit">Mais detalhes</h2>${detalheMkt('Compras, consumo e relatório do agente', htmlPainelAgente('estoque').replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<button type="button" class="cc-btn ag-abrir"[^>]*>[^<]*<\/button>/, '').replace(/<section class="cc-bloco cc-seca-bloco">[\s\S]*?<\/section>/, ''))}</section>
       <footer class="ag-fim">J.A.R.V.I.S. · Estoque da Primos 3D</footer></div></div>`;
@@ -8557,14 +8562,20 @@ function lerPesoG(txt) {
   const n = parseFloat(s); if (!isFinite(n) || n < 0) return null;
   return Math.round(kg || n < 20 ? n * 1000 : n);
 }
+function htmlCarretelCont(i, v) { return `<label class="est-carr-lin"><small>Carretel ${i + 1}</small><input class="est-peso" type="text" inputmode="decimal" autocomplete="off" placeholder="g na balança" value="${esc(v || '')}"><em class="est-liq-1"></em></label>`; }
+function maisCarretelCont(bt) { const box = bt.parentElement.querySelector('.est-carrs'); box.insertAdjacentHTML('beforeend', htmlCarretelCont(box.children.length)); const ins = box.querySelectorAll('.est-peso'); ins[ins.length - 1].focus(); rascunhoContagem(); }
+/** Líquido de cada carretel (bruto − 120 g); 0 digitado = acabou. */
+function liquidoCarretel(txt) { const g = lerPesoG(txt); if (g === null) return null; return g === 0 ? { acabou: true, g: 0 } : { acabou: false, g: Math.max(0, g - TARA_CARRETEL_G) }; }
 function rascunhoContagem() {
-  const d = {}; document.querySelectorAll('.est-cont label').forEach(l => { const p = l.querySelector('.est-peso'), c = l.querySelector('.est-carr'); if (!p) return; d[p.dataset.k] = { p: p.value, c: c ? c.value : '' };
-    const g = lerPesoG(p.value), liq = l.querySelector('.est-liq'); if (liq) liq.textContent = g === null ? '' : `= ${Math.max(0, g - TARA_CARRETEL_G * (Number(c && c.value) || 0))} g`; });
+  const d = {}; document.querySelectorAll('.est-cor-cont').forEach(box => { const vals = [...box.querySelectorAll('.est-peso')].map(i => i.value); d[box.dataset.k] = vals; let soma = 0, algum = false;
+    box.querySelectorAll('.est-carr-lin').forEach(l => { const r = liquidoCarretel(l.querySelector('.est-peso').value), em = l.querySelector('.est-liq-1'); if (!r) { em.textContent = ''; return; } algum = true; soma += r.g; em.textContent = r.acabou ? 'acabou' : `${r.g} g`; em.classList.toggle('acabou', r.acabou); });
+    box.querySelector('.est-liq').textContent = algum ? `${soma} g líquidos` : ''; });
   try { localStorage.setItem(RASCUNHO_CONT, JSON.stringify({ quando: Date.now(), d })); } catch (e) { }
 }
 function restaurarRascunhoContagem() {
   let r = null; try { r = JSON.parse(localStorage.getItem(RASCUNHO_CONT)); } catch (e) { } if (!r || !r.d) return;
-  document.querySelectorAll('.est-cont label').forEach(l => { const p = l.querySelector('.est-peso'), c = l.querySelector('.est-carr'), v = p && r.d[p.dataset.k]; if (!v) return; p.value = v.p || ''; if (c && v.c !== '') c.value = v.c; });
+  document.querySelectorAll('.est-cor-cont').forEach(box => { const vals = r.d[box.dataset.k]; if (!Array.isArray(vals)) return; const c = box.querySelector('.est-carrs');
+    while (c.children.length < vals.length) c.insertAdjacentHTML('beforeend', htmlCarretelCont(c.children.length)); c.querySelectorAll('.est-peso').forEach((i, n) => { i.value = vals[n] || ''; }); });
   rascunhoContagem();
 }
 function escolherCorEstoque(i) { if (i < 0 || !cc.seca3d) return; const b = cc.seca3d.escolherPor(i); if (b) { tocarBobina3D(b, 0, 0, i); const s = $j('cc-seca'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
@@ -8579,11 +8590,16 @@ function contagemEstoque(itens, origem) {
   return feitos;
 }
 function salvarContagemForm(ev) {
-  ev.preventDefault(); const itens = [], ruins = [];
-  document.querySelectorAll('.est-cont label').forEach(l => { const p = l.querySelector('.est-peso'), c = l.querySelector('.est-carr'); if (!p || p.value.trim() === '') return; const g = lerPesoG(p.value);
-    if (g === null) { ruins.push(p.dataset.cor); return; } itens.push({ material: p.dataset.mat, cor: p.dataset.cor, gramas: Math.max(0, g - TARA_CARRETEL_G * (Number(c && c.value) || 0)) }); });
+  ev.preventDefault(); const itens = [], ruins = [], extras = [];
+  document.querySelectorAll('.est-cor-cont').forEach(box => { const vals = [...box.querySelectorAll('.est-peso')].map(i => i.value.trim()).filter(Boolean); if (!vals.length) return;
+    const rs = vals.map(liquidoCarretel); if (rs.some(r => !r)) { ruins.push(box.dataset.cor); return; }
+    const mat = box.dataset.mat, cor = box.dataset.cor, vivos = rs.filter(r => !r.acabou).map(r => r.g);
+    itens.push({ material: mat, cor, gramas: vivos.reduce((a, b) => a + b, 0) });
+    extras.push({ id: novoId(), data: hojeISO(), tipo: 'carreteis', material: mat, cor, pesos: vivos, obs: 'contagem (app)' }); // os carretéis de verdade (a secadora mostra cada um)
+    rs.filter(r => r.acabou).forEach(() => extras.push({ id: novoId(), data: hojeISO(), tipo: 'acabou', material: mat, cor, kg: 0, obs: 'carretel acabou (contagem)' })); });
   if (ruins.length) { toast(`Não entendi o peso de: ${ruins.join(', ')}. Use só números (ex.: 1120).`, 6000); return; }
-  if (!itens.length) { toast('Digite o peso de pelo menos uma cor.'); return; }
+  if (!itens.length) { toast('Digite o peso de pelo menos um carretel.'); return; }
+  estoquePrimos.push(...extras); salvar('estoqueprimos', estoquePrimos);
   const f = contagemEstoque(itens, 'app');
   try { localStorage.removeItem(RASCUNHO_CONT); } catch (e) { }
   if (cc.pagina === 'estoque') renderPaginaEstoque(); // redesenha com os números novos (a secadora também)
