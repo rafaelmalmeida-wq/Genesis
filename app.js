@@ -7020,9 +7020,14 @@ function iniciarConversaVoz(contexto, area, op = {}) {
   if (vz.ativo) { encerrarConversaVoz(); return; }
   if (!iaLigada() || !navigator.onLine || !suportaVozAoVivo() || jvConfig.vozModo === 'classica') { abrirChatJarvis({ contexto, area, ouvir: true }); return; }
   vz.contexto = contexto || nomePaginaJarvis(); vz.area = area !== undefined ? area : (jv.area || null); vz.saudar = !!op.saudar; vz.vozAgente = op.voz || null; vz.persona = op.persona || ''; vz.nomeAgente = op.nomeAgente || '';
-  if ($j('jv-conversa').hidden) { $j('jv-conversa').hidden = false; document.body.classList.add('jv-em-voz'); empilharCamada('voz', encerrarConversaVoz); }
+  // fase 9: conversa com um AGENTE = a bolinha dele, na cor dele, no meio da tela (ouvindo / pensando / falando, treme com a voz)
+  const cv = $j('jv-conversa'), nm = $j('jvv-nome');
+  cv.classList.toggle('agente', !!vz.nomeAgente); cv.style.setProperty('--ag', op.cor || '#0a84ff');
+  if (nm) nm.innerHTML = vz.nomeAgente ? `${esc(vz.nomeAgente)}<small>${esc(op.funcao || 'agente da Primos 3D')}</small>` : '';
+  $j('jvv-orbe').setAttribute('aria-label', vz.nomeAgente ? `Interromper o ${vz.nomeAgente}` : 'Interromper o J.A.R.V.I.S.');
+  if (cv.hidden) { cv.hidden = false; document.body.classList.add('jv-em-voz'); empilharCamada('voz', encerrarConversaVoz); }
   if (!$j('jv-chat').hidden) fecharChatJarvis();
-  vz.legEu = ''; vz.legEle = ''; vz.dica = 'Fale normalmente. Toque na esfera para interromper o J.A.R.V.I.S.';
+  vz.legEu = ''; vz.legEle = ''; vz.dica = vz.nomeAgente ? `Fale com o ${vz.nomeAgente} normalmente. Toque na bolinha para interromper.` : 'Fale normalmente. Toque na esfera para interromper o J.A.R.V.I.S.';
   iniciarSessaoVoz();
 }
 /** Abre microfone, alto-falante e a conexão. O áudio nasce dentro do toque (regra do iPhone). */
@@ -7199,7 +7204,7 @@ function executarFerramentasVoz(chamadas) {
       else if (c.name === 'adicionar_fila_impressao' && a.titulo) { const it = adicionarFila({ titulo: String(a.titulo), qtd: a.qtd, material: a.material, cor: a.cor, obs: a.obs }, 'voz'); toast(`🖨️ Na fila: ${it.titulo} · ${it.qtd} un.`, 4000); r = { ok: true, aviso: 'Anotado na fila de impressão; o agente de Produção vai encaixar na fila do dia.' }; }
       else if (c.name === 'avisar_agentes' && a.resumo) { const rec = registrarRecado(a.agentes, a.resumo, a.tipo, 'voz'); r = rec ? { ok: true, avisados: rec.agentes } : { ok: false, erro: 'agente desconhecido' }; }
       else if (c.name === 'registrar_compra_filamento') r = registrarCompraFilamento(a, 'voz');
-      else if (c.name === 'registrar_contagem_estoque') { const f = contagemEstoque(a.itens, 'voz'); r = f.length ? { ok: true, atualizado: f } : { ok: false, erro: 'não entendi as cores/pesos' }; }
+      else if (c.name === 'registrar_contagem_estoque') { const f = contagemEstoque(a.itens, 'voz'); r = !f ? { ok: false, erro: 'o aparelho está sem espaço: a contagem não foi salva' } : f.length ? { ok: true, atualizado: f } : { ok: false, erro: 'não entendi as cores/pesos' }; }
       else if (c.name === 'lembrar_sobre_rafael' && a.fato) { guardarMemoria({ tipo: 'perfil', texto: String(a.fato).slice(0, 240) }); r = { ok: true }; }
       else if (c.name === 'pedir_ao_computador' && a.tarefa && claudeConfigurado()) { vz.pediuEm = Date.now(); const tipo = classificarPedidoPC(String(a.tarefa)); enviarAoComputadorAuto(desanonimizar(vz.legEu || a.tarefa, vz.mapa), [], vz.contexto, vz.area, desanonimizar(String(a.tarefa), vz.mapa)); r = tipo === 'proibido' ? { ok: false, erro: 'Bloqueado pela segurança: compras, pagamentos, enviar mensagens/e-mails e postar ficam só com o Rafael. Diga isso a ele.' } : tipo === 'grava' ? { ok: true, aviso: 'Isso grava dados: apareceu no chat um cartão para o Rafael confirmar. Diga a ele para tocar em Confirmar no chat.' } : { ok: true, aviso: 'Pedido de leitura enviado ao Claude no computador; a resposta aparece no chat do app.' }; }
       else r = { ok: false, erro: 'não consegui fazer isso' };
@@ -7210,7 +7215,7 @@ function executarFerramentasVoz(chamadas) {
 }
 
 // --- a telinha da conversa ---
-function estadoVoz(texto, classe) { vz.estado = classe; const el = $j('jvv-estado'); if (el) el.innerText = texto; const c = $j('jv-conversa'); if (c) c.dataset.estado = classe; }
+function estadoVoz(texto, classe) { if (vz.nomeAgente) texto = String(texto).replace('na esfera', 'na bolinha'); vz.estado = classe; const el = $j('jvv-estado'); if (el) el.innerText = texto; const c = $j('jv-conversa'); if (c) c.dataset.estado = classe; }
 function renderLegendaVoz() {
   const el = $j('jvv-legenda'); if (!el) return; const d = t => desanonimizar(t, vz.mapa), fim = s => s.length > 240 ? '…' + s.slice(-240) : s;
   const eu = vz.eu.trim() || vz.legEu, ele = vz.ele.trim() || vz.legEle;
@@ -7224,7 +7229,8 @@ function animarVoz() {
   const passo = () => {
     if (!vz.ativo) return;
     const o = nivel(vz.analisador), m = vz.mudo || vz.falando ? 0 : nivel(vz.analisadorMic), agora = performance.now(), el = $j('jvv-orbe');
-    if (el) { el.style.setProperty('--voz', o.toFixed(3)); el.style.setProperty('--mic', m.toFixed(3)); }
+    if (el) { el.style.setProperty('--voz', o.toFixed(3)); el.style.setProperty('--mic', m.toFixed(3));
+      const t = vz.nomeAgente && o > 0.03 ? o * 7 : 0; el.style.setProperty('--tx', ((Math.random() - 0.5) * t).toFixed(2) + 'px'); el.style.setProperty('--ty', ((Math.random() - 0.5) * t).toFixed(2) + 'px'); } // fase 9: a bolinha do agente treme com a voz
     if (jv.modo === '3d') JarvisBrain.voz(o);
     if (vz.pronto && !vz.falando && !vz.mudo) {
       if (m > 0.12) { vz.ouviuEm = agora; if (vz.estado !== 'escutando') estadoVoz('Ouvindo você…', 'escutando'); }
@@ -7771,19 +7777,32 @@ function enviarComandoAgente(ev, id) {
 // O Rafael fala/escreve "quero imprimir 20 chaveiros de Nossa Senhora em PLA dourado" → entra em filaImpressao (módulo
 // sincronizado). Uma cópia SEM nomes de clientes (fila + pedidos em aberto) vai ao cofre (dados/fila.json) para o agente de
 // Produção montar a FILA DO DIA na nuvem, junto com o que o Marketing viu viralizar, a Shopee e as datas comerciais.
-const RE_FILA = /^(?:(?:eu\s+)?(?:quero|vou|preciso|precisamos|bora|tenho que|temos que|vamos)\s+)?(?:imprimir|adiciona(?:r)?\s+(?:na|a)\s+fila(?:\s+de\s+impress[aã]o)?|coloca(?:r)?\s+na\s+fila(?:\s+de\s+impress[aã]o)?|p[oõ]e\s+na\s+fila)\b[:\s,]*(.+)$/i;
+// fase 9: entende mais jeitos de pedir ("Jarvis, quero imprimir…", "imprime pra mim…", "manda imprimir…", "bota na fila…")
+const RE_FILA = /^(?:(?:eu\s+)?(?:quero|queria|vou|preciso|precisamos|bora|tenho que|temos que|vamos|pode)\s+)?(?:imprimir|imprime|imprima|manda(?:r)?\s+imprimir|(?:adiciona(?:r)?|coloca(?:r)?|p[oõ]e|p[oô]r|bota(?:r)?|joga(?:r)?)\s+(?:na|a)\s+fila(?:\s+de\s+impress[aã]o)?)(?:\s+pra\s+mim|\s+para\s+mim)?\b[:\s,]*(.+)$/i;
 function detectarFila(texto) {
-  const t = String(texto || '').trim(); const m = t.match(RE_FILA); if (!m || /\?$/.test(t)) return null;
+  const t = String(texto || '').trim().replace(/^(?:(?:[oô]h?|oi|ei|hey|fala)\s+)?(?:jarvis|j\.a\.r\.v\.i\.s\.?|java|jet|claude|cl[aá]udio)[,!.:\s]+/i, '').replace(/^por\s+favor[,\s]+/i, '');
+  const m = t.match(RE_FILA); if (!m || /\?$/.test(t)) return null;
   let resto = m[1].trim(), qtd = 1; const q = resto.match(/^(\d{1,4})\s*(?:x|un\.?|unidades?|pe[cç]as?)?\s*(?:de\s+)?/i); if (q) { qtd = Number(q[1]); resto = resto.slice(q[0].length); }
   const s = semAcentoCer(resto), mat = (s.match(/\b(pla|petg|tpu|abs|asa|silk|seda)\b/) || [])[1];
-  const corM = s.match(/\b(preto|preta|branco|branca|cinza|vermelho|vermelha|azul|verde|amarelo|amarela|laranja|rosa|roxo|roxa|dourado|dourada|prata|bege|marrom|natural|transparente)\b/);
+  const corM = s.match(/\b(preto|preta|branco|branca|cinza|vermelho|vermelha|azul|verde|amarelo|amarela|laranja|rosa|roxo|roxa|dourado|dourada|prata|bege|marrom|natural|transparente)s?\b/);
   const titulo = resto.replace(/\s+(?:em|de|no)\s+(?:pla|petg|tpu|abs|asa|silk|seda)\b.*$/i, '').replace(/[.!]+$/, '').trim();
   if (titulo.length < 2) return null;
   return { titulo: titulo.charAt(0).toUpperCase() + titulo.slice(1), qtd, material: mat ? mat.toUpperCase().replace('SEDA', 'Silk') : '', cor: corM ? corM[1] : '' };
 }
 function adicionarFila(it, origem) {
   const novo = { id: novoId(), titulo: String(it.titulo).slice(0, 80), qtd: Math.max(1, Math.min(9999, Number(it.qtd) || 1)), material: it.material || '', cor: it.cor || '', origem: origem || 'app', status: 'fila', criado: new Date().toISOString(), obs: String(it.obs || '').slice(0, 200) };
-  filaImpressao.push(novo); salvar('filaimpressao', filaImpressao); publicarFilaCofre(); if (cc.agente === 'producao') renderCentral(); return novo;
+  filaImpressao.push(novo); salvar('filaimpressao', filaImpressao); publicarFilaCofre(); replanejarProducao(); if (cc.agente === 'producao') renderCentral(); return novo;
+}
+/** fase 9: o que o Rafael põe na fila entra no PLANO do dia — o agente de Produção replaneja na nuvem (1 pedido a cada 20 min, no máximo). */
+function replanejarProducao() {
+  clearTimeout(cc.tReplan); if (!claudeConfigurado()) return;
+  cc.tReplan = setTimeout(async () => {
+    if (Date.now() - (Number(localStorage.getItem('lifeos_replan')) || 0) < 20 * 60000) return;
+    const novos = filaImpressao.filter(f => f.status === 'fila').slice(-6).map(f => `${f.qtd}× ${f.titulo}${f.cor ? ' ' + f.cor : ''}${f.material ? ' ' + f.material : ''}`).join('; ');
+    if (!novos) return;
+    try { localStorage.setItem('lifeos_replan', String(Date.now())); } catch (e) { }
+    try { await gravarControleCofre(d => { d.pedidos = (d.pedidos || []).filter(p => !(p.agente === 'producao' && p.replan)).concat({ id: 'p' + novoId(), agente: 'producao', instrucao: `O Rafael pôs na fila agora: ${novos}. Refaça a fila do dia encaixando isso (máquina, cor, horas e ordem).`.slice(0, 400), quando: new Date().toISOString(), replan: true, de: 'app' }); }, 'App: replanejar a produção'); } catch (e) { }
+  }, 90 * 1000);
 }
 function mudarFila(id, status) { const f = filaImpressao.find(x => x.id === id); if (!f) return; f.status = status; if (status === 'feito') f.feitoEm = new Date().toISOString(); salvar('filaimpressao', filaImpressao); publicarFilaCofre(); renderCentral(); }
 function removerFila(id) { filaImpressao = filaImpressao.filter(x => x.id !== id); salvar('filaimpressao', filaImpressao); publicarFilaCofre(); renderCentral(); }
@@ -7805,13 +7824,21 @@ const ORIGEM_FILA = { voz: '🎙 você', chat: '💬 você', app: '✎ você', a
 /** Painel do agente de Produção: fila do dia (nuvem) + a sua fila + a fábrica em 3D + datas que vêm aí. */
 function htmlAgenteProducao(a) {
   const r = relatorioAgente('producao') || {}, abertos = filaImpressao.filter(f => f.status !== 'feito'), feitos = filaImpressao.filter(f => f.status === 'feito').slice(-5).reverse();
-  const dia = (r.filaDia || []).length ? ccBloco(`Fila do dia · ${esc(isoParaBR(r.dia || '').slice(0, 5))}`, `<ol class="cc-filadia">${r.filaDia.map(f => `<li>${miniaturaFila(f.titulo) ? miniFilaHTML(f.titulo, COR_FILA[semAcentoCer(f.cor)] || '#8e8e93') : ''}<span><b>${esc(f.titulo)}${f.qtd ? ` · ${esc(String(f.qtd))} un.` : ''}</b><small>${esc([f.maquina, f.horas ? f.horas + ' h' : '', f.motivo].filter(Boolean).join(' · '))}</small></span>${f.origem ? `<em>${esc(ORIGEM_FILA[f.origem] || f.origem)}</em>` : ''}</li>`).join('')}</ol>`) : ccBloco('Fila do dia', '<p class="cc-txt">A primeira fila do dia sai na próxima rodada (7h) — ou toque em <b>▶ Rodar agora</b>.</p>');
+  // fase 9: a FILA DO DIA é uma esteira horizontal com os modelos em 3D passando: primeiro o que VOCÊ pediu (entra na hora),
+  // depois o plano do agente (feito de manhã e refeito quando você põe algo na fila).
+  const minhas = abertos.map(f => ({ titulo: f.titulo, qtd: f.qtd, cor: f.cor, maquina: f.status === 'imprimindo' ? 'imprimindo agora' : 'você pediu', origem: f.origem, minha: true }));
+  const doAgente = (r.filaDia || []).filter(x => !minhas.some(m => semAcentoCer(m.titulo) === semAcentoCer(x.titulo)));
+  const itensDia = [...minhas, ...doAgente];
+  const cartao = f => { const cor = COR_FILA[semAcentoCer(f.cor || '')] || '#8e8e93', m = miniaturaFila(f.titulo);
+    return `<article class="fd-card${f.minha ? ' minha' : ''}" style="--cor:${cor}"><div class="fd-mini">${m ? `<img data-cofre="${esc(m.src)}" alt="" loading="lazy">` : `<span class="fd-sem" style="background:${cor}"></span>`}</div><b>${esc(f.titulo)}</b><small>${esc([f.qtd ? f.qtd + ' un.' : '', f.maquina, f.horas ? f.horas + ' h' : ''].filter(Boolean).join(' · '))}</small>${f.motivo ? `<small class="fd-motivo">${esc(f.motivo)}</small>` : ''}${f.origem ? `<em>${esc(ORIGEM_FILA[f.origem] || f.origem)}</em>` : ''}</article>`; };
+  const dia = itensDia.length ? ccBloco(`Fila do dia · ${plural(itensDia.length, 'peça', 'peças')}${r.dia ? ' · plano de ' + esc(isoParaBR(r.dia).slice(0, 5)) : ''}`, `<div class="fd-esteira"><div class="fd-trilho">${itensDia.map(cartao).join('')}</div></div><p class="cc-nota">O agente refaz o plano todo dia de manhã e sempre que você põe algo na fila (“quero imprimir…”, “imprime pra mim…”, “bota na fila…”).</p>`)
+    : ccBloco('Fila do dia', '<p class="cc-txt">A fila do dia sai na rodada da manhã. Para adiantar, fale “quero imprimir …” ou toque em <b>▶ Rodar agora</b>.</p>');
   const datas = (r.datas || []).length ? ccBloco('Datas que vêm aí', `<ul class="cc-lista">${r.datas.map(d => `<li><span><b>${esc(d.tema)}</b><small>${esc(isoParaBR(d.data || ''))}${d.comecarEm ? ` · começar a imprimir até ${esc(isoParaBR(d.comecarEm))}` : ''}</small></span></li>`).join('')}</ul>`) : '';
   const linha = f => `<li class="${f.status}">${miniFilaHTML(f.titulo, COR_FILA[semAcentoCer(f.cor)] || '#8e8e93')}<span><b>${esc(f.titulo)} · ${f.qtd} un.</b><small>${esc([f.material, f.cor, ORIGEM_FILA[f.origem] || ''].filter(Boolean).join(' · '))}</small></span>
     ${f.status === 'feito' ? '<em>✓</em>' : `<button type="button" class="cc-mini${f.status === 'imprimindo' ? '' : ' sec'}" onclick="mudarFila(${f.id}, '${f.status === 'imprimindo' ? 'feito' : 'imprimindo'}')">${f.status === 'imprimindo' ? '✓ Pronto' : '▶ Imprimir'}</button>`}<button type="button" class="cc-mini sec" onclick="removerFila(${f.id})" aria-label="Tirar da fila">✕</button></li>`;
   return cabecalhoAgente(a)
     + `<section class="cc-bloco cc-fab-bloco"><h4>Fábrica · ao vivo</h4><div id="cc-fab" class="cc-fab"><div class="cc-seca-carregando"><span class="spin"></span> Ligando as impressoras…</div></div><p class="cc-nota">${impressoesBambu ? `As A1 mostram o que está imprimindo DE VERDADE (conta Bambu, lida às ${esc(String(impressoesBambu.lidoEm || '').slice(11, 16))}); a Kobra X mostra o que você marcou como "imprimindo" ou o 1º da fila do dia.` : 'As impressoras mostram o que está em "imprimindo" (ou o 1º da fila do dia).'}</p></section>`
-    + htmlRelatorioAgente('producao') + dia
+    + dia + htmlRelatorioAgente('producao')
     + ccBloco(`Sua fila · ${plural(abertos.length, 'item', 'itens')}`, `<ul class="cc-fila">${abertos.map(linha).join('') || '<li><span><small>Vazia. Fale “quero imprimir …” para o J.A.R.V.I.S. ou anote aqui embaixo.</small></span></li>'}${feitos.map(linha).join('')}</ul>
       <form class="cc-form cc-fila-form" onsubmit="event.preventDefault(); const t = document.getElementById('cc-fila-txt'); const d = detectarFila('imprimir ' + t.value) || { titulo: t.value, qtd: 1 }; if (d.titulo) { adicionarFila(d, 'app'); t.value = ''; }"><input id="cc-fila-txt" placeholder="Ex.: 20 chaveiros Nossa Senhora em PLA dourado" maxlength="120" required><button type="submit" class="cc-btn">＋ Pôr na fila</button></form>`)
     + datas + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('producao')">Abrir Produção na Primos</button>` + botaoConversarAgente(a);
@@ -8106,7 +8133,7 @@ function salvarMeta(ev) {
 }
 function adicionarMeta(m, origem) {
   const meta = { id: novoId(), criada: hojeISO(), tipo: TIPO_META[m.tipo] ? m.tipo : 'outro', quem: QUEM_META[m.quem] ? m.quem : 'empresa', titulo: String(m.titulo || '').slice(0, 160), valor: Number(m.valor) || null, prazo: m.prazo || null, obs: String(m.obs || '').slice(0, 300) };
-  metasPrimos.push(meta); salvar('metasprimos', metasPrimos); publicarRecadosCofre();
+  metasPrimos.push(meta); if (!salvar('metasprimos', metasPrimos)) { metasPrimos.pop(); return null; } publicarRecadosCofre();
   if (origem !== 'recado') registrarRecado(['contabil'], `Meta nova (${QUEM_META[meta.quem]}): ${meta.titulo}${meta.prazo ? ' até ' + isoParaBR(meta.prazo) : ''}${meta.obs ? ' — ' + meta.obs : ''}`, 'meta', origem);
   return meta;
 }
@@ -8292,6 +8319,7 @@ function renderPaginaAgente() {
 }
 /** A rolagem comanda: --h (0→1 na 1ª tela) no rolo; --p em cada seção/bloco; números contam ao aparecer; 3D gira junto. */
 function animarPaginaAgente() {
+  const bf = document.querySelector('#ag-pag .ag-falar'); if (bf && COR_AGENTE[cc.pagina]) { bf.style.setProperty('--ag', COR_AGENTE[cc.pagina]); bf.classList.add('cor'); } // fase 9: o "Falar" na cor do agente
   const r = $j('ag-rolo'); if (!r) return;
   const alvos = [...r.querySelectorAll('.ag-num, .ag-corpo > *, .ag-completa > h2, .ag-completa > .ag-sub, .ag-embed > *')];
   if (cc.obsPag) cc.obsPag.disconnect();
@@ -8481,17 +8509,55 @@ function abrirProjetoDev(codigo) {
   const arqs = p.arquivos || [], ico = n => /\.3mf$/i.test(n) ? '🧊' : /\.stl$/i.test(n) ? '🔺' : /\.svg$/i.test(n) ? '✒️' : '🖼';
   el.innerHTML = `<div class="dev-jan">
     <button type="button" class="dev-x" onclick="fecharProjetoDev()" aria-label="Fechar">✕</button>
-    <div class="dev-palco${p.previaTipo === 'giro' ? ' giro' : ''}">${p.previa ? `<img data-cofre="${esc(p.previa)}" alt="Prévia de ${esc(p.nome)}">` : `<span class="dev-palco-vazio">✦<small>Ainda sem imagem — o Desenvolvedor faz na próxima etapa.</small></span>`}</div>
+    ${p.folha ? `<div class="dev-palco giro interativo" id="dev-palco"><div class="dev-giro" id="dev-giro"></div><span class="dev-dica">Arraste para girar · pinça ou rodinha para zoom · toque duplo volta</span><button type="button" class="dev-cheia" onclick="telaCheiaDev()" aria-label="Tela cheia">⤢</button></div>`
+      : p.previa ? `<div class="dev-palco interativo${p.previaTipo === 'giro' ? ' giro' : ''}" id="dev-palco"><img data-cofre="${esc(p.previa)}" alt="Prévia de ${esc(p.nome)}"><span class="dev-dica">Pinça ou rodinha para zoom · arraste para mover</span><button type="button" class="dev-cheia" onclick="telaCheiaDev()" aria-label="Tela cheia">⤢</button></div>`
+      : `<div class="dev-palco"><span class="dev-palco-vazio">✦<small>Ainda sem imagem — o Desenvolvedor faz na próxima etapa.</small></span></div>`}
     <span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span>
     <h3>${esc(p.nome)}</h3><p class="dev-cod">${esc(p.codigo)} ${esc(p.versao || '')}${p.etapa ? ' · ' + esc(p.etapa) : ''}${p.atualizadoEm ? ' · ' + esc(isoParaBR(p.atualizadoEm)) : ''}</p>
     ${p.personaliza ? `<p class="dev-txt"><b>Personaliza:</b> ${esc(p.personaliza)}</p>` : ''}<p class="dev-txt"><b>Falta:</b> ${esc(p.falta || '—')}</p>
-    ${arqs.length ? `<div class="dev-baixar">${arqs.map((a, i) => `<button type="button" onclick="baixarArquivoDev('${esc(p.codigo)}', ${i})"><span>${ico(a.nome)}</span><b>${esc(a.nome)}</b><small>${a.kb >= 1024 ? (a.kb / 1024).toFixed(1).replace('.', ',') + ' MB' : a.kb + ' KB'} · baixar</small></button>`).join('')}</div>` : '<p class="dev-txt dev-nota">Os arquivos aparecem aqui quando o 3MF ficar pronto.</p>'}
-    ${p.pastaPC ? `<button type="button" class="dev-pasta" onclick="copiarPastaDev('${esc(p.codigo)}')">📁 Copiar o caminho da pasta no PC</button><p class="dev-nota">No computador: cole na barra de endereço do Explorador de Arquivos (Win + E) e dê Enter.</p>` : ''}
+    ${arqs.length ? `<div class="dev-baixar">${arqs.map((a, i) => `<button type="button" onclick="baixarArquivoDev('${esc(p.codigo)}', ${i})"><span>${ico(a.nome)}</span><b>${esc(a.nome)}</b><small>${a.kb >= 1024 ? (a.kb / 1024).toFixed(1).replace('.', ',') + ' MB' : a.kb + ' KB'} · ${/\.3mf$/i.test(a.nome) ? 'baixar e abrir no Bambu Studio' : 'baixar'}</small></button>`).join('')}</div>${arqs.some(a => /\.3mf$/i.test(a.nome)) ? '<p class="dev-nota">No computador, o 3MF baixado abre no Bambu Studio com dois cliques (fica na pasta Downloads).</p>' : ''}` : '<p class="dev-txt dev-nota">Os arquivos aparecem aqui quando o 3MF ficar pronto.</p>'}
+    ${p.pastaPC ? `<button type="button" class="dev-pasta" onclick="copiarPastaDev('${esc(p.codigo)}')">📁 Copiar o caminho da pasta no PC</button><p class="dev-nota" title="${esc(p.pastaPC)}">No computador: cole na barra de endereço do Explorador de Arquivos (Win + E) e dê Enter.<br>${esc(p.pastaPC.split('\\').slice(-2).join(' › '))}</p>` : ''}
   </div>`;
   if (el.hidden) empilharCamada('devprojeto', fecharProjetoDev);
   el.hidden = false; carregarMidiasCofre(el);
+  if (p.folha) montarGiroDev($j('dev-giro'), p.folha); else if (p.previa) zoomImagemDev($j('dev-palco'));
 }
-function fecharProjetoDev(daVolta) { const el = document.getElementById('dev-janela'); if (!el || el.hidden) return; el.hidden = true; if (!daVolta) desempilharCamada('devprojeto'); }
+function fecharProjetoDev(daVolta) { const el = document.getElementById('dev-janela'); if (!el || el.hidden) return; el.hidden = true; el.querySelector('.dev-jan') && el.querySelector('.dev-jan').classList.remove('cheia'); if (!daVolta) desempilharCamada('devprojeto'); }
+function telaCheiaDev() { const j = document.querySelector('#dev-janela .dev-jan'); if (j) j.classList.toggle('cheia'); }
+/** fase 9: o modelo GIRA com o dedo — a "folha de giro" tem os 36 ângulos que o Blender renderizou (grade 6×6, giros.ps1).
+ *  Arrastar = girar; pinça ou rodinha = zoom (até 3×); toque duplo = volta. Parado, ele gira sozinho devagar. */
+async function montarGiroDev(el, caminho) {
+  if (!el) return; const u = await fotoCofre(caminho).catch(() => null); if (!u || !el.isConnected) { if (el) el.classList.add('erro'); return; }
+  el.style.backgroundImage = `url("${u}")`; el.classList.add('ok');
+  const N = 36, COLS = 6, pts = new Map(); let q = 0, mexeu = 0, zoom = 1, x0 = 0, q0 = 0, d0 = 0, z0 = 1;
+  const desenhar = () => { el.style.backgroundPosition = `${(q % COLS) * 20}% ${Math.floor(q / COLS) * 20}%`; el.style.transform = `scale(${zoom})`; };
+  desenhar();
+  const girarSozinho = () => { if (!el.isConnected) return; if (Date.now() - mexeu > 3500 && zoom === 1) { q = (q + 1) % N; desenhar(); } setTimeout(girarSozinho, 90); };
+  girarSozinho();
+  el.addEventListener('pointerdown', e => { try { el.setPointerCapture(e.pointerId); } catch (x) { } pts.set(e.pointerId, e); mexeu = Date.now(); el.classList.add('pegando');
+    if (pts.size === 1) { x0 = e.clientX; q0 = q; } else if (pts.size === 2) { const [a, b] = [...pts.values()]; d0 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1; z0 = zoom; } });
+  el.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, e); mexeu = Date.now();
+    if (pts.size === 1) { q = ((q0 + Math.round((e.clientX - x0) / 8)) % N + N) % N; desenhar(); }
+    else if (pts.size === 2) { const [a, b] = [...pts.values()]; zoom = Math.min(3, Math.max(1, z0 * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / d0)); desenhar(); } });
+  const soltar = e => { pts.delete(e.pointerId); if (!pts.size) el.classList.remove('pegando'); };
+  el.addEventListener('pointerup', soltar); el.addEventListener('pointercancel', soltar);
+  el.addEventListener('wheel', e => { e.preventDefault(); mexeu = Date.now(); zoom = Math.min(3, Math.max(1, zoom * (e.deltaY < 0 ? 1.12 : 0.89))); desenhar(); }, { passive: false });
+  el.addEventListener('dblclick', () => { mexeu = Date.now(); zoom = zoom > 1 ? 1 : 2; desenhar(); });
+}
+/** Imagem do projeto (sem modelo 3D ainda): pinça/rodinha = zoom, arrastar = mover, toque duplo = volta. */
+function zoomImagemDev(palco) {
+  const img = palco && palco.querySelector('img'); if (!img) return;
+  const pts = new Map(); let zoom = 1, tx = 0, ty = 0, p0 = null, d0 = 1, z0 = 1;
+  const aplicar = () => { if (zoom <= 1) { zoom = 1; tx = ty = 0; } img.style.transform = `translate(${tx}px, ${ty}px) scale(${zoom})`; };
+  palco.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; try { palco.setPointerCapture(e.pointerId); } catch (x) { } pts.set(e.pointerId, e);
+    if (pts.size === 1) p0 = { x: e.clientX - tx, y: e.clientY - ty }; else if (pts.size === 2) { const [a, b] = [...pts.values()]; d0 = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1; z0 = zoom; } });
+  palco.addEventListener('pointermove', e => { if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, e);
+    if (pts.size === 1 && zoom > 1 && p0) { tx = e.clientX - p0.x; ty = e.clientY - p0.y; aplicar(); }
+    else if (pts.size === 2) { const [a, b] = [...pts.values()]; zoom = Math.min(4, Math.max(1, z0 * Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / d0)); aplicar(); } });
+  const soltar = e => pts.delete(e.pointerId); palco.addEventListener('pointerup', soltar); palco.addEventListener('pointercancel', soltar);
+  palco.addEventListener('wheel', e => { e.preventDefault(); zoom = Math.min(4, Math.max(1, zoom * (e.deltaY < 0 ? 1.15 : 0.87))); aplicar(); }, { passive: false });
+  palco.addEventListener('dblclick', () => { zoom = zoom > 1 ? 1 : 2.2; aplicar(); });
+}
 async function baixarArquivoDev(codigo, i) {
   const p = ((devDados && devDados.projetos) || []).find(x => x.codigo === codigo), a = p && (p.arquivos || [])[i]; if (!a) return;
   if (!claudeConfigurado()) { toast('Conecte o J.A.R.V.I.S. ao computador (Ajustes → 2) para baixar do cofre.'); return; }
@@ -8535,7 +8601,9 @@ const VOZ_AGENTES = {
   marketing: { voz: 'Aoede', persona: 'Mulher, extrovertida, animada e falante, com humor — obcecada por viralizar a Primos 3D no TikTok e no Instagram. Dá ideias de vídeo concretas (gancho, formato, áudio, horário), cita o que está bombando e avisa quando algo deve ir para a fila de impressão. Animada, mas sempre com dados.' },
   dev: { voz: 'Achird', persona: 'Homem, voz suave e calma, criativo de verdade — designer de produto que entende de tendência, de moda e de forma, mas com cabeça de engenheiro de impressão 3D (encaixe, folga, camada, cor, AMS). Fala com entusiasmo tranquilo, propõe ideias concretas (placas de profissão, carimbos, chaveiros com logo de comércio, kits empresariais, luminárias, camisa da marca), sempre diz em que etapa cada projeto está (conceito, modelo digital, fatiado, testado) e o que ele precisa do Rafael para seguir. Nunca diz que algo está aprovado sem teste físico.' },
 };
-function falarComAgente(id) { const a = todosAgentes().find(x => x.id === id), v = VOZ_AGENTES[id]; if (!a || !v) return conversarComAgente(id); iniciarConversaVoz(`Central › agente ${a.nome}`, 'primos', { voz: v.voz, persona: v.persona, nomeAgente: a.nome }); }
+// fase 9: a cor de cada agente (a bolinha da voz e o destaque da página dele)
+const COR_AGENTE = { contabil: '#30d158', marketing: '#ff375f', estoque: '#ff9f0a', producao: '#0a84ff', vendas: '#ffd60a', consignacao: '#bf5af2', shopee: '#ff6b2c', dev: '#64d2ff' };
+function falarComAgente(id) { const a = todosAgentes().find(x => x.id === id), v = VOZ_AGENTES[id]; if (!a || !v) return conversarComAgente(id); iniciarConversaVoz(`Central › agente ${a.nome}`, 'primos', { voz: v.voz, persona: v.persona, nomeAgente: a.nome, cor: COR_AGENTE[id], funcao: a.funcao }); }
 function conversarComAgente(id) {
   const a = todosAgentes().find(x => x.id === id); if (!a) return;
   abrirChatJarvis({ contexto: `Central de Comando › ${setorCentral(a.setor).nome} › agente ${a.nome} (especialista em: ${(a.skills || []).join(', ')}${a.missao ? '; missão: ' + a.missao : ''}). Responda como esse especialista.`, area: a.setor === 'outros' ? null : a.setor });
@@ -8549,14 +8617,15 @@ function htmlPainelAgente(id) {
     : pausado ? `<p class="cc-exec">⏸ Pausado: fora da rodada das 7h. <button type="button" class="cc-mini" onclick="controlarAgente('retomar', '${id}')">Retomar</button></p>` : '';
   const resp = r && r.resposta ? ccBloco('Resposta ao seu comando', `<div class="cc-relatorio cc-resp"><p class="cc-nota">Você pediu: “${esc(r.comando || '')}”</p><p class="cc-txt">${textoAgente(r.resposta)}</p></div>`) : '';
   const cmd = `<form class="cc-cmd" onsubmit="enviarComandoAgente(event, '${id}')"><input id="cc-cmd" placeholder="Comando para o agente (ex.: refaça o payback com 30 vendas/mês)" maxlength="400" autocomplete="off" enterkeyhint="send"><button type="submit" aria-label="Enviar comando">↑</button></form>
-    <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Rodar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="${VOZ_AGENTES[id] ? `falarComAgente('${id}')` : `conversarComAgente('${id}')`}">${VOZ_AGENTES[id] ? '🎙 Falar' : '💬 Conversar'}</button></div>`;
+    <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Rodar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="conversarComAgente('${id}')">💬 Escrever</button></div>`;
+  const agv = todosAgentes().find(x => x.id === id), falar = VOZ_AGENTES[id] && agv ? `<button type="button" class="cc-falar" style="--ag:${COR_AGENTE[id] || '#0a84ff'}" onclick="falarComAgente('${id}')"><i></i>Falar com ${esc(agv.nome)}</button>` : '';
   const ag = todosAgentes().find(x => x.id === id), sk = ((ag && ag.skills) || []).filter(k => SKILLS_DESC[k]);
   const skills = sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '';
   const i = html.indexOf('</header>') + 9, abrir = cc.pagina ? '' : `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('${id}')">Abrir a página completa de ${esc(ag ? ag.nome : '')} ›</button>`;
   const limpo = html.slice(i).replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const recs = recadosAgentes.filter(x => (x.agentes || []).includes(id)).slice(0, 6); // fase 7: o que o Rafael contou ao J.A.R.V.I.S. e ele passou a este agente
   const recados = recs.length ? ccBloco('Recados que o J.A.R.V.I.S. me passou', `<ul class="cc-lista">${recs.map(x => `<li><span><b>${esc(x.texto)}</b><small>${esc(isoParaBR(x.quando.slice(0, 10)))} · ${x.origem === 'voz' ? '🎙 voz' : '💬 chat'}${x.tipo ? ' · ' + esc(x.tipo) : ''}</small></span></li>`).join('')}</ul><p class="cc-nota">Eu leio estes recados na próxima rodada (todo dia às 7h ou ao tocar em Rodar agora).</p>`) : '';
-  return html.slice(0, i) + abrir + est + cmd + resp + recados + limpo + skills;
+  return html.slice(0, i) + abrir + falar + est + cmd + resp + recados + limpo + skills;
 }
 function htmlPainelAgenteBase(id) {
   if (id === 'jarvis') {
@@ -8624,8 +8693,25 @@ function htmlConteudoMarketing() {
     <button type="button" class="cc-mini sec" onclick="copiarLegendaMkt(${i})">Copiar legenda</button><em title="${esc(x.pasta || '')}">📁 ${esc((x.pasta || '').split('\\').pop())}</em></div></article>`).join('')}</div>${prox}<p class="cc-nota">Para postar: abra o vídeo completo da pasta no celular, escolha um áudio em alta no TikTok e cole a legenda. O J.A.R.V.I.S. nunca posta sozinho.</p>`);
 }
 function copiarLegendaMkt(i) { const x = ((conteudoMkt && conteudoMkt.videos) || [])[i]; if (!x) return; const t = `${x.legenda || ''}\n\n${x.hashtags || ''}`.trim(); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Legenda copiada.'), () => toast('Não consegui copiar.')); }
+/** A esteira da fila do dia anda devagar sozinha (como na fábrica); parou de mexer 4 s → volta a andar; no fim, recomeça. */
+function iniciarEsteiraFila(el) {
+  el.dataset.on = '1'; let pausa = 0, pos = el.scrollLeft;
+  const parar = () => { pausa = Date.now() + 4000; };
+  ['pointerdown', 'wheel', 'touchstart', 'pointerenter'].forEach(ev => el.addEventListener(ev, parar, { passive: true }));
+  const passo = () => {
+    if (!el.isConnected) return;
+    if (Math.abs(el.scrollLeft - pos) > 3) pos = el.scrollLeft; // você rolou com o dedo: continua de onde parou
+    if (Date.now() > pausa && !document.hidden && el.scrollWidth > el.clientWidth + 4 && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      pos += 0.5; el.scrollLeft = pos;
+      if (pos + el.clientWidth >= el.scrollWidth - 1) { pausa = Date.now() + 4500; setTimeout(() => { if (el.isConnected) { el.scrollTo({ left: 0, behavior: 'smooth' }); pos = 0; } }, 2000); }
+    }
+    requestAnimationFrame(passo);
+  };
+  requestAnimationFrame(passo);
+}
 /** Carrega fotos/vídeos/capas do cofre dentro de um pedaço da tela (painel ou página). */
 function carregarMidiasCofre(raiz) {
+  if (raiz) raiz.querySelectorAll('.fd-esteira:not([data-on])').forEach(iniciarEsteiraFila); // fase 9: a fila do dia "passa" sozinha
   if (!raiz || !claudeConfigurado()) return;
   raiz.querySelectorAll('img[data-cofre]:not(.ok)').forEach(async img => { const u = await fotoCofre(img.dataset.cofre).catch(() => null); if (u) { img.src = u; img.classList.add('ok'); } });
   raiz.querySelectorAll('video[data-cofre]:not([data-ok])').forEach(async v => { v.dataset.ok = '1'; if (v.dataset.poster) { const p = await fotoCofre(v.dataset.poster).catch(() => null); if (p) v.poster = p; } const u = await videoCofre(v.dataset.cofre).catch(() => null); if (u) { v.muted = true; v.playsInline = true; v.src = u; v.play().catch(() => { }); } });
@@ -8837,7 +8923,7 @@ function escolherCorEstoque(i) { if (i < 0 || !cc.seca3d) return; const b = cc.s
  *  gramas com carretel → tira 120 g por carretel. Sempre grava um 'ajuste' com a hora (o novo ponto zero da cor, mesmo sem diferença),
  *  medido contra o saldo SEM a Bambu — depois disso só as impressões novas descontam. 0 = carretel acabou (fica na lista própria). */
 function contagemEstoque(itens, origem) {
-  const e = calcularEstoque({ semBambu: true }), feitos = [], agora = new Date().toISOString();
+  const e = calcularEstoque({ semBambu: true }), feitos = [], agora = new Date().toISOString(), antes = estoquePrimos.length;
   (itens || []).forEach(it => { let g = Number(it.gramas); if (!(g >= 0) || !it.cor) return; const mat = String(it.material || 'PLA').toUpperCase();
     if (it.comCarretel && g > 0) g = Math.max(0, g - TARA_CARRETEL_G * Math.max(1, Number(it.carreteis) || 1));
     const c = e.cores.find(x => chaveCor(x.material, x.cor) === chaveCor(mat, it.cor)) || e.cores.find(x => semAcentoCer(x.cor).includes(semAcentoCer(it.cor)) && semAcentoCer(x.material) === semAcentoCer(mat));
@@ -8845,7 +8931,8 @@ function contagemEstoque(itens, origem) {
     estoquePrimos.push({ id: novoId(), data: hojeISO(), quando: agora, tipo: 'ajuste', material, cor, kg: Math.round(dif * 1e6) / 1e6, obs: `contagem (${origem || 'app'})` });
     for (let n = Math.max(g === 0 ? 1 : 0, Number(it.acabou) || 0); n > 0; n--) estoquePrimos.push({ id: novoId(), data: hojeISO(), tipo: 'acabou', material, cor, kg: 0, obs: `carretel acabou (contagem ${origem || 'app'})` });
     feitos.push(`${cor}: ${g === 0 ? 'acabou' : g.toLocaleString('pt-BR') + ' g'}`); });
-  if (feitos.length) { salvar('estoqueprimos', estoquePrimos); registrarRecado(['estoque'], `Contagem de filamentos (${isoParaBR(hojeISO())}, líquido, sem carretel): ${feitos.join(' · ')}`, 'fato', origem || 'app');
+  if (feitos.length && !salvar('estoqueprimos', estoquePrimos)) { estoquePrimos.splice(antes); return null; } // não salvou (sem espaço): desfaz e não confirma (auditoria do Codex)
+  if (feitos.length) { registrarRecado(['estoque'], `Contagem de filamentos (${isoParaBR(hojeISO())}, líquido, sem carretel): ${feitos.join(' · ')}`, 'fato', origem || 'app');
     if (typeof publicarFilaCofre === 'function') publicarFilaCofre(); // o estoque real vai junto para os agentes da nuvem
     if (cc.pagina === 'estoque') renderPaginaEstoque(); else if (typeof renderCentral === 'function') renderCentral(); }
   return feitos;
@@ -8856,7 +8943,7 @@ function salvarContagemForm(ev) {
     itens.push({ material: l.dataset.mat, cor: l.dataset.cor, gramas: r.g, acabou: r.acabou }); });
   if (ruins.length) { toast(`Não entendi o número de: ${ruins.join(', ')}. Use só números (ex.: 2790 ou 1500 + 1290).`, 7000); return; }
   if (!itens.length) { toast('Digite quanto tem agora de pelo menos uma cor.'); return; }
-  const f = contagemEstoque(itens, 'app');
+  const f = contagemEstoque(itens, 'app'); if (!f) return; // não salvou: o rascunho fica e o aviso de espaço já apareceu
   try { localStorage.removeItem(RASCUNHO_CONT); } catch (e) { }
   if (cc.pagina === 'estoque') { renderPaginaEstoque(); const s = document.querySelector('.estc-sec'); if (s) s.scrollIntoView({ block: 'start' }); }
   toast(`✓ Estoque atualizado — ${f.join(' · ')}`, 7000);
@@ -9160,10 +9247,13 @@ function validarBackup(data) {
     const esperado = tipoDe(atual[k]) || tipoDe(local); // o formato que o app usa (ou o que já está gravado); módulo desconhecido: aceita
     if (esperado && tipo !== esperado) erros.push(`${k}: deveria ser ${nomeTipo(esperado)} e veio ${nomeTipo(tipo)}`);
     else if (tipo === 'array' && v.some(x => x === null || x === undefined)) erros.push(`${k}: tem itens vazios`);
+    else if (tipo === 'object' && tipoDe(atual[k]) === 'object') { // um nível para dentro (ex.: budget.items tem que ser lista) — achado do Codex
+      Object.keys(atual[k]).forEach(c => { const ta = tipoDe(atual[k][c]), tb = tipoDe(v[c]); if (tb && (ta === 'array' || ta === 'object') && tb !== ta) erros.push(`${k}.${c}: deveria ser ${nomeTipo(ta)} e veio ${nomeTipo(tb)}`); });
+    }
   });
   return erros;
 }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { let data; try { data = JSON.parse(e.target.result); } catch (error) { alert('Erro ao ler o arquivo: não é um backup do app.'); return; } const erros = validarBackup(data); if (erros.length) { alert('Backup NÃO importado (nada foi alterado):\n• ' + erros.slice(0, 6).join('\n• ')); return; } try { tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length || !data.orders.length) salvar('orders', ped); /* lista vazia no backup = sem pedidos (achado 6); backup antigo só com entregas não mexe nos pedidos */ } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.metasprimos) salvar('metasprimos', data.metasprimos); if (data.shopeeaprov) salvar('shopeeaprov', data.shopeeaprov); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { let data; try { data = JSON.parse(e.target.result); } catch (error) { alert('Erro ao ler o arquivo: não é um backup do app.'); return; } const erros = validarBackup(data); if (erros.length) { alert('Backup NÃO importado (nada foi alterado):\n• ' + erros.slice(0, 6).join('\n• ')); return; } const salvarOrig = salvar; let falhou = false; salvar = (m, v) => { if (falhou) return false; const ok = salvarOrig(m, v); if (!ok) falhou = true; return ok; }; /* se faltar espaço no meio, para (auditoria do Codex) */ try { tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length || !data.orders.length) salvar('orders', ped); /* lista vazia no backup = sem pedidos (achado 6); backup antigo só com entregas não mexe nos pedidos */ } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.metasprimos) salvar('metasprimos', data.metasprimos); if (data.shopeeaprov) salvar('shopeeaprov', data.shopeeaprov); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); salvar = salvarOrig; snapPausado = false; if (falhou) { alert('O aparelho ficou sem espaço no meio da importação: o backup NÃO entrou por inteiro. Uma cópia de antes foi guardada em Ajustes → Cópias.'); return; } location.reload(); } catch (error) { salvar = salvarOrig; snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"

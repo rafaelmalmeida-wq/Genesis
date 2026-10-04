@@ -3334,3 +3334,92 @@ body.ag-aberta { overflow: hidden; }
 @media (max-width: 380px) { .shp-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .dev-lista .dev-item { cursor: pointer; }
 .dev-abrir { margin-left: auto; align-self: center; font-style: normal; color: #636366; font-size: 1.2rem; padding-left: 6px; }
+/* ===== FASE 9: ORDEM DAS CAMADAS (auditoria visual do Codex, achado 1) — quem abre por cima da página do agente fica VISÍVEL =====
+   Central 9000 · página do agente 9500 · projeto do Desenvolvedor 9700 · chat 9750 · voz 9800–9850 · vídeo 9900 · avisos 9990 */
+.dev-janela { z-index: 9700; }
+.jv-chat { z-index: 9750; }
+.jv-voz { z-index: 9800; }
+.jv-conversa { z-index: 9850; }
+.toast, [data-tema="ios"] .toast { z-index: 9990; }
+
+/* ===== FASE 9: visualizador do Desenvolvedor (girar com o dedo, zoom, tela cheia) ===== */
+.dev-palco.interativo { touch-action: none; user-select: none; -webkit-user-select: none; }
+.dev-giro { width: 100%; height: 100%; background-repeat: no-repeat; background-size: 600% 600%; cursor: grab; transition: transform .12s ease-out; opacity: 0; }
+.dev-giro.ok { opacity: 1; transition: opacity .35s ease, transform .12s ease-out; }
+.dev-giro.pegando { cursor: grabbing; }
+.dev-palco.interativo img { transition: transform .12s ease-out, opacity .35s ease; cursor: zoom-in; }
+.dev-dica { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%); font-size: 11px; color: rgba(242,242,247,.7); background: rgba(0,0,0,.35); padding: 4px 10px; border-radius: 999px; white-space: nowrap; pointer-events: none; max-width: 92%; overflow: hidden; text-overflow: ellipsis; }
+.dev-cheia { position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: rgba(0,0,0,.4); color: #fff; font-size: 16px; cursor: pointer; }
+.dev-jan.cheia { width: 100vw; max-width: none; height: 100dvh; max-height: none; border-radius: 0; padding: 12px; }
+.dev-jan.cheia .dev-palco { aspect-ratio: auto; max-height: none; height: calc(100dvh - 24px); width: 100%; margin: 0; }
+.dev-jan.cheia > :not(.dev-palco):not(.dev-x) { display: none; }.dev-janela:has(.dev-jan.cheia) { padding: 0; }
+
+/* ===== FASE 9: a BOLINHA de cada agente na conversa por voz (cor do agente, no meio da tela) ===== */
+.jvv-nome, .jvv-mic, .jvv-anel2 { display: none; }
+.jv-conversa.agente { inset: 0; top: 0; align-items: center; justify-content: center; padding: 16px; pointer-events: auto;
+  background: radial-gradient(circle at 50% 42%, color-mix(in srgb, var(--ag) 26%, transparent) 0, rgba(0, 0, 0, 0.78) 60%); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); }
+.jv-conversa.agente .jvv-palco { background: none; box-shadow: none; border: 0; gap: 16px; width: min(520px, 100%); }
+.jv-conversa.agente .jvv-nome { display: block; margin: 0; text-align: center; color: #fff; font-size: 1.5rem; font-weight: 700; letter-spacing: -0.01em; }
+.jv-conversa.agente .jvv-nome small { display: block; margin-top: 4px; font-size: 0.8rem; font-weight: 500; color: rgba(235, 235, 245, 0.6); letter-spacing: 0; }
+.jv-conversa.agente .jvv-orbe { width: 176px; height: 176px; }
+.jv-conversa.agente .jvv-nucleo { inset: 34px;
+  background: radial-gradient(circle at 40% 34%, #fff 0 9%, color-mix(in srgb, var(--ag) 55%, #fff) 24%, var(--ag) 58%, color-mix(in srgb, var(--ag) 55%, #000) 100%);
+  box-shadow: 0 0 calc(26px + var(--voz) * 70px) color-mix(in srgb, var(--ag) 75%, transparent), inset 0 -10px 24px rgba(0, 0, 0, 0.25);
+  transform: translate(var(--tx, 0px), var(--ty, 0px)) scale(calc(1 + var(--voz) * 0.24)); transition: transform 0.05s linear, box-shadow 0.08s linear; animation: none; }
+.jv-conversa.agente .jvv-anel { display: block; inset: 8px; border: 2px solid color-mix(in srgb, var(--ag) 40%, transparent); transform: scale(calc(1 + var(--mic) * 0.5)); transition: transform 0.07s linear, border-color 0.2s; }
+.jv-conversa.agente .jvv-anel2 { inset: -6px; border-width: 1px; opacity: 0.45; transform: scale(calc(1 + var(--voz) * 0.35)); }
+.jv-conversa.agente .jvv-mic { display: grid; position: absolute; inset: 0; place-items: center; color: rgba(255, 255, 255, 0.95); pointer-events: none; transition: opacity 0.2s, transform 0.2s; }
+.jv-conversa.agente .jvv-mic svg { width: 38px; height: 38px; filter: drop-shadow(0 1px 6px rgba(0, 0, 0, 0.45)); }
+.jv-conversa.agente[data-estado="ouvindo"] .jvv-anel:not(.jvv-anel2) { animation: jvvRespira 2.6s ease-in-out infinite; }
+.jv-conversa.agente[data-estado="escutando"] .jvv-anel { border-color: var(--ag); box-shadow: 0 0 22px color-mix(in srgb, var(--ag) 60%, transparent); }
+.jv-conversa.agente[data-estado="pensando"] .jvv-anel:not(.jvv-anel2) { border-style: dashed; border-color: var(--ag); animation: jvvGira 2.2s linear infinite; }
+.jv-conversa.agente[data-estado="pensando"] .jvv-mic { opacity: 0.35; transform: scale(0.9); }
+.jv-conversa.agente[data-estado="falando"] .jvv-mic { opacity: 0; transform: scale(0.7); }
+.jv-conversa.agente[data-estado="conectando"] .jvv-nucleo { opacity: 0.55; }
+.jv-conversa.agente .jvv-estado { color: color-mix(in srgb, var(--ag) 55%, #fff); font-size: 0.78rem; }
+.jv-conversa.agente .jvv-legenda { max-height: 22vh; }
+@keyframes jvvRespira { 0%, 100% { transform: scale(1); opacity: 0.55; } 50% { transform: scale(1.09); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .jv-conversa.agente .jvv-anel { animation: none !important; } .jv-conversa.agente .jvv-nucleo { transform: scale(calc(1 + var(--voz) * 0.12)); } }
+/* o botão "Falar" em destaque, na cor do agente */
+.cc-falar { --ag: #0a84ff; display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; margin: 10px 0 4px; padding: 13px 16px; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-weight: 700; font-size: 0.95rem; color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ag) 92%, #fff), color-mix(in srgb, var(--ag) 80%, #000)); box-shadow: 0 8px 24px color-mix(in srgb, var(--ag) 40%, transparent); }
+.cc-falar i { width: 12px; height: 12px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); animation: ccFalarPulso 1.8s ease-out infinite; }
+@keyframes ccFalarPulso { 0% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7); } 100% { box-shadow: 0 0 0 12px rgba(255, 255, 255, 0); } }.ag-falar.cor { background: var(--ag); color: #fff; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 6px 18px color-mix(in srgb, var(--ag) 45%, transparent); }
+.ag-falar.cor::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #fff; animation: ccFalarPulso 1.8s ease-out infinite; }
+
+/* ===== FASE 9: FILA DO DIA em esteira horizontal (modelos em 3D passando) ===== */
+.fd-esteira { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; margin: 6px -4px 0; padding: 4px; -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0, #000 5%, #000 95%, transparent 100%); }
+.fd-esteira::-webkit-scrollbar { display: none; }
+.fd-trilho { display: flex; gap: 10px; width: max-content; padding: 0 8px; }
+.fd-card { --cor: #8e8e93; width: 152px; flex: none; padding: 10px; border-radius: 18px; background: rgba(255, 255, 255, 0.05); border: 0.5px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.fd-card.minha { border-color: color-mix(in srgb, var(--cor) 70%, rgba(255, 255, 255, 0.3)); background: color-mix(in srgb, var(--cor) 10%, rgba(255, 255, 255, 0.04)); }
+.fd-mini { aspect-ratio: 1 / 1; border-radius: 14px; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02) 70%); margin-bottom: 4px; }
+.fd-mini img { width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 0.3s ease; }
+.fd-mini img.ok { opacity: 1; }
+.fd-sem { width: 48%; aspect-ratio: 1 / 1; border-radius: 32%; box-shadow: inset 0 -10px 18px rgba(0, 0, 0, 0.35), 0 6px 16px rgba(0, 0, 0, 0.3); }
+.fd-card b { font-size: 0.82rem; font-weight: 600; line-height: 1.25; color: #f2f2f7; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fd-card small { font-size: 0.7rem; color: #8e8e93; line-height: 1.3; }
+.fd-card .fd-motivo { color: #636366; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.fd-card em { margin-top: auto; font-style: normal; font-size: 0.68rem; color: color-mix(in srgb, var(--cor) 60%, #aeaeb2); }
+/* ===== FASE 9: AJUSTES VISUAIS da revisão do Codex (04/10/2026) ===== */
+/* #3 os cartões de números não passam da largura e o valor aparece inteiro */
+.ag-nums { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.ag-num { min-width: 0; }
+.ag-num strong { overflow-wrap: anywhere; }
+@media (max-width: 800px) { .ag-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .ag-num { padding: 18px 14px; border-radius: 20px; } .ag-num strong { font-size: clamp(1.1rem, 5.6vw, 1.6rem); } }
+@media (max-width: 340px) { .ag-nums { grid-template-columns: minmax(0, 1fr); } }
+/* #4 títulos longos (ex.: "Desenvolvedor") cabem no celular estreito */
+.ag-heroi-txt { min-width: 0; }
+.ag-heroi-txt h1 { overflow-wrap: anywhere; }
+@media (max-width: 420px) { .ag-heroi-txt h1 { font-size: clamp(2rem, 12.5vw, 3rem); } }
+/* #5 sem animação ("reduzir movimentos"): os 4 indicadores do Financeiro ficam parados em volta da moeda, sem se sobrepor */
+@media (prefers-reduced-motion: reduce) { .ag-orbita { animation: none !important; transform: translate(-50%, -50%) rotate(calc(var(--k, 0) * 90deg + 45deg)) translateX(min(30vw, 220px)) rotate(calc(var(--k, 0) * -90deg - 45deg)) !important; } }
+/* #6 a calculadora respeita a largura do celular estreito */
+.calc-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+/* #7 no celular, as ações da tarefa descem para baixo do texto (o texto usa a largura toda) */
+@media (max-width: 480px) { .task-main { flex-wrap: wrap; } .task-main .item-actions { width: 100%; justify-content: flex-end; padding-left: 28px; } }
+/* #8 Primos 3D com o celular deitado: menos espaço em volta para sobrar área de conteúdo */
+@media (max-height: 500px) and (orientation: landscape) { .jv-primos { padding: 4px !important; } .jvp-janela { border-radius: 16px; max-height: 100%; } .jvp-topo { padding-top: 6px !important; padding-bottom: 6px !important; } .jvp-acoes { display: none; } }
+/* #2 formulários da aba Produção: no celular, 2 colunas (e 1 no muito estreito), campos legíveis */
+@media (max-width: 600px) { #prod form [style*="grid-template-columns"], #prod [style*="grid-template-columns: repeat(5"], #prod [style*="grid-template-columns: repeat(6"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+@media (max-width: 360px) { #prod form [style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; } }
