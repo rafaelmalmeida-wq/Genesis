@@ -6202,7 +6202,7 @@ async function sincronizarCofreAgora(forcar, silencioso) {
     try { const g = await (await cofreBruto('dados/giros.json')).json(); if (g && g.tipo === 'jarvis-giros' && (!girosDados || g.atualizadoEm !== girosDados.atualizadoEm)) { girosDados = g; res.mudou.push('giros'); try { localStorage.setItem('lifeos_giros', JSON.stringify(g)); } catch (e) { } if (cc.agente === 'producao') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // miniaturas 3D da fila
     try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; res.mudou.push('engenharia'); guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
     try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; res.mudou.push('relatorios'); try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } atualizarTelasSincronizadas('central'); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
-    try { const eb = await (await cofreBruto('dados/ebook.json')).json(); if (eb && eb.tipo === 'jarvis-ebook' && JSON.stringify(eb) !== JSON.stringify(ebookDados)) { ebookDados = eb; res.mudou.push('ebook'); try { localStorage.setItem('lifeos_ebook', JSON.stringify(eb)); } catch (e) { } if (cc.agente === 'digital' || cc.pagina === 'digital') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 10: Produto Digital (e-book)
+    try { const eb = await (await cofreBruto('dados/ebook.json')).json(); if (eb && eb.tipo === 'jarvis-ebook' && JSON.stringify(eb) !== JSON.stringify(ebookDados)) { ebookDados = eb; res.mudou.push('ebook'); try { localStorage.setItem('lifeos_ebook', JSON.stringify(eb)); } catch (e) { } if (cc.agente === 'digital' || cc.pagina === 'digital') atualizarTelasSincronizadas('central', 'agente'); if (ebLeitorAberto()) renderLeitorEbook(true); } } catch (e) { } // fase 10: Produto Digital (e-book) + a prévia aberta
     autoRodadasNuvem(); // fase 9: se o relógio do GitHub falhou, o app pede (plano C)
   } catch (e) { res.estado = navigator.onLine ? 'erro' : 'offline'; res.erro = e.message; if (forcar && !silencioso) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
   jv.sincronizando = false; jv.cofrePromessa = null; renderAreasJarvis(); atualizarTelasSincronizadas('primos'); renderAjustesJarvis(); setTimeout(renderAreasJarvis, 91000);
@@ -6630,7 +6630,7 @@ QUANDO PRECISAR DO COMPUTADOR (lançar ou corrigir algo na planilha, guardar pri
 PRINTS/FOTOS de compra ou venda: leia loja, data, itens, quantidades, valores, frete e total; mostre um resumo em lista e termine com ⟦PC: lançar ... na aba Filamentos/Despesas/Vendas⟧ (filamento → Filamentos; outras compras → Despesas; venda → Vendas). Se algo estiver ilegível, pergunte antes.
 FILTRO DOS AGENTES (o mais importante): você é o comando dos agentes da Primos 3D (ids: ${agentesCentral().map(a => a.id).join(', ')}; ${MAPA_FILTRO}). Se o que ele contou importa a um agente, termine com a linha ⟦AGENTES: id1, id2 | o recado em 1 frase com os números⟧ e diga em poucas palavras quem avisou. Compra de filamento: ⟦FILAMENTO: kg | material | cor | valor total ou vazio | chegou ou caminho⟧ (entra no estoque e avisa Estoque e Financeiro; se faltar kg ou cor, pergunte). Coisa solta da vida não precisa.
 MODELO 3D NOVO (placa, chaveiro, brinde, peça personalizada): o agente DESENVOLVEDOR modela no PC (OpenSCAD/Blender) e entrega o 3MF pronto para o Bambu Studio, com as peças separadas por cor. Pergunte o que faltar (textos exatos, tamanho, cores, para quem, prazo) e, com o pedido claro, termine com ⟦DEV: <o pedido completo em 1 a 3 frases: o quê, textos exatos, medidas, cores, prazo>⟧. Ele trabalha nas rodadas do PC (10h, 15h e 20h).
-NAVEGAR: se ajudar, termine com ⟦ABRIR: destino⟧, destino entre: primos, primos/analise, primos/contabilidade, primos/vendas, primos/chaveiros, primos/producao, primos/marketing, primos/central, engenharia, seguranca, mercado, academia, familia, diaadia, financas, agenda, tarefas, notas, saude, negocios, ajustes.
+NAVEGAR: se ajudar, termine com ⟦ABRIR: destino⟧, destino entre: primos, primos/analise, primos/contabilidade, primos/vendas, primos/chaveiros, primos/producao, primos/marketing, primos/central, engenharia, seguranca, mercado, academia, familia, diaadia, ebook (a prévia do e-book do Produto Digital), financas, agenda, tarefas, notas, saude, negocios, ajustes.
 BUSCA: para fatos atuais, preços, concorrentes, tendências, datas comemorativas e normas, use a busca do Google e diga de onde veio.
 DESABAFO: acolha primeiro, sem julgar; no máximo uma pergunta; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); use os códigos como estão. Nunca peça senhas ou dados bancários.
@@ -6852,7 +6852,8 @@ const DESTINOS_JARVIS = {
   financas: ['Abrir Finanças', () => changeTab('finances')], agenda: ['Abrir Agenda', () => changeTab('home')], tarefas: ['Abrir Tarefas', () => changeTab('tasks')], notas: ['Abrir Notas', () => changeTab('notes')],
   saude: ['Abrir Saúde', () => changeTab('health')], negocios: ['Abrir Negócios', () => changeTab('business')], ajustes: ['Ajustes do J.A.R.V.I.S.', () => abrirAjustesJarvis()],
   engenharia: ['Abrir Engenharia Civil', () => abrirMenuArea('eng')], seguranca: ['Abrir Segurança do Trabalho', () => abrirMenuArea('sst')], mercado: ['Abrir Mercado', () => abrirMenuArea('mercado')],
-  academia: ['Abrir Academia', () => abrirMenuArea('academia')], familia: ['Abrir Família', () => abrirMenuArea('familia')], diaadia: ['Abrir Dia a dia', () => abrirMenuArea('dia')]
+  academia: ['Abrir Academia', () => abrirMenuArea('academia')], familia: ['Abrir Família', () => abrirMenuArea('familia')], diaadia: ['Abrir Dia a dia', () => abrirMenuArea('dia')],
+  ebook: ['Abrir a prévia do e-book', () => abrirLeitorEbook()] // fase 10: o leitor do e-book do Produto Digital
 };
 const DESTINOS_NA_CASA = ['engenharia', 'seguranca', 'mercado', 'academia', 'familia', 'diaadia']; // menus que vivem na página inicial, como a Primos
 function irDestinoJarvis(d) { const x = DESTINOS_JARVIS[d]; if (!x) return; if (d.startsWith('primos') || DESTINOS_NA_CASA.includes(d)) { fecharChatJarvis(); if (abaAtual() !== 'cerebro') changeTab('cerebro'); } else if (d !== 'ajustes') fecharChatJarvis(); x[1](); }
@@ -8651,20 +8652,130 @@ const ESTADOS_CAP = { ideia: 'Ideia', rascunho: 'Rascunho', revisao: 'Em revisã
 const COR_CAP = { ideia: '#8e8e93', rascunho: '#ff9f0a', revisao: '#0a84ff', pronto: '#30d158' };
 function palcoLivro() {
   const t = (ebookDados && ebookDados.titulo) || 'J.A.R.V.I.S.', st = (ebookDados && ebookDados.subtitulo) || 'Do zero à fábrica inteligente';
-  return `<div class="ag-livro" aria-hidden="true"><div class="ag-livro-obj">${Array.from({ length: 6 }, (_, k) => `<i class="pg" style="--k:${k}"></i>`).join('')}<div class="capa"><small>Primos 3D apresenta</small><b>${esc(t)}</b><span>${esc(st)}</span><em>e-book</em></div></div></div>`;
+  return `<div class="ag-livro" role="button" tabindex="0" aria-label="Ler a prévia do e-book" onclick="abrirLeitorEbook()"><div class="ag-livro-obj" aria-hidden="true">${Array.from({ length: 6 }, (_, k) => `<i class="pg" style="--k:${k}"></i>`).join('')}<div class="capa"><small>Primos 3D apresenta</small><b>${esc(t)}</b><span>${esc(st)}</span><em>e-book</em></div></div><span class="ag-livro-ler">📖 Ler a prévia</span></div>`;
 }
 function htmlAgenteDigital(a) {
   const d = ebookDados || {}, cs = d.capitulos || [], pr = d.produto || {};
-  const sumario = cs.length ? `<ol class="dg-sumario">${cs.map(c => `<li style="--c:${COR_CAP[c.status] || '#8e8e93'}"><span><b>${esc(c.titulo)}</b><small>${esc(c.resumo || '')}</small></span><em>${esc(ESTADOS_CAP[c.status] || c.status)}${c.palavras ? ' · ' + Number(c.palavras).toLocaleString('pt-BR') + ' pal.' : ''}</em></li>`).join('')}</ol>` : '<p class="cc-txt">O sumário chega do computador (o Claude escreve o e-book na pasta 11 Produto Digital da Central).</p>';
+  const sumario = cs.length ? `<ol class="dg-sumario">${cs.map(c => `<li style="--c:${COR_CAP[c.status] || '#8e8e93'}"${c.texto ? ` class="lerc" role="button" tabindex="0" onclick="abrirLeitorEbook('${esc(c.id)}')"` : ''}><span><b>${esc(c.titulo)}</b><small>${esc(c.resumo || '')}</small></span><em>${esc(ESTADOS_CAP[c.status] || c.status)}${c.palavras ? ' · ' + Number(c.palavras).toLocaleString('pt-BR') + ' pal.' : ''}</em></li>`).join('')}</ol>` : '<p class="cc-txt">O sumário chega do computador (o Claude escreve o e-book na pasta 11 Produto Digital da Central).</p>';
+  const escritos = cs.filter(c => c.texto).length;
+  const ler = `<button type="button" class="dg-ler" onclick="abrirLeitorEbook()"><i aria-hidden="true">📖</i><span><b>Ler a prévia do e-book</b><small>${escritos ? `${plural(escritos, 'capítulo escrito', 'capítulos escritos')} · versão de ${esc(quandoTxt(d.atualizadoEm))}` : 'a versão mais nova que o agente gerou'}</small></span><em aria-hidden="true">›</em></button>`;
   const etapas = (pr.etapas || []).length ? `<ol class="dg-etapas">${pr.etapas.map((e, k) => `<li class="${e.feito ? 'ok' : ''}" style="--k:${k}"><b>${esc(e.titulo)}</b><small>${esc(e.como || '')}</small></li>`).join('')}</ol>` : '';
   return cabecalhoAgente(a)
     + ccNums([[cs.length, 'capítulos'], [cs.filter(c => c.status !== 'ideia').length, 'escritos'], [cs.filter(c => c.status === 'pronto').length, 'prontos']])
+    + ler
     + (d.proximo ? ccBloco('Agora', `<p class="cc-txt">${esc(d.proximo)}</p>${d.atualizadoEm ? `<p class="cc-nota">Atualizado em ${esc(quandoTxt(d.atualizadoEm))} · pasta ${esc(d.pasta || '11 Produto Digital')}</p>` : ''}`) : '')
     + ccBloco(esc(d.titulo || 'O e-book'), sumario)
     + (etapas ? ccBloco('Do e-book ao produto', etapas) : '')
     + ccBloco('Como ele trabalha', '<p class="cc-txt">Ele acompanha os relatórios dos agentes, os projetos do Desenvolvedor, os vídeos do Marketing e as conversas com o J.A.R.V.I.S. O que vira aprendizado entra no e-book, sem nome de cliente e sem número sigiloso. Você aprova cada capítulo antes de ir para o produto final.</p>')
     + botaoConversarAgente(a);
-}// --- DESENVOLVEDOR (fase 8): abas por nicho; cada projeto segue ideia → imagem (o Rafael aprova) → 3MF editável → feito.
+}
+// --- PRÉVIA DO E-BOOK (fase 10, pedido do Rafael 04/10/2026): o leitor do e-book como ele está sendo montado, sempre na versão
+//     mais nova que o agente Produto Digital (o Claude no PC) publicou no cofre (dados/ebook.json, com o texto de cada capítulo).
+//     Capa + sumário → capítulo por capítulo; em cada capítulo: "Aprovar" e "Pedir ajuste" vão ao Claude no PC (issue no cofre,
+//     o vigia acorda a conversa do e-book, ele edita, publica e a prévia se atualiza sozinha). Busca a versão nova ao abrir e a cada 60 s.
+const ebLeitor = { cap: null, timer: null, enviados: {} };
+function inlineEbook(s) { return s.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\*([^*\s][^*]*?)\*/g, '<i>$1</i>').replace(/`([^`]+)`/g, '<code>$1</code>'); }
+/** Markdown simples do e-book (títulos, parágrafos, listas, tabelas, citações) → HTML. Recebe linhas JÁ escapadas com esc(). */
+function mdLinhasEbook(L) {
+  let h = '', i = 0;
+  const inicio = l => /^(#{1,4})\s|^\s*([-•]|\d+\.)\s+|^\||^&gt;/.test(l);
+  while (i < L.length) {
+    const l = L[i]; let m;
+    if (!l.trim()) { i++; continue; }
+    if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { const n = m[1].length; h += `<h${n}>${inlineEbook(m[2])}</h${n}>`; i++; continue; }
+    if (/^&gt;/.test(l)) {
+      const q = []; while (i < L.length && /^&gt;/.test(L[i])) q.push(L[i++].replace(/^&gt;\s?/, ''));
+      const grupos = [[]]; q.forEach(x => { if (x.trim()) grupos[grupos.length - 1].push(x); else if (grupos[grupos.length - 1].length) grupos.push([]); }); // "> " vazio separa caixas (checklist ≠ nota de revisão)
+      grupos.filter(g => g.length).forEach(g => { const t = g.join(' '), tipo = /Para revisar/i.test(t) ? 'eb-nota' : /Exerc[ií]cio|Checklist/i.test(t) ? 'eb-caixa' : 'eb-cit';
+        h += `<blockquote class="${tipo}">${tipo === 'eb-nota' ? '<small>Nota de revisão · sai da versão final</small>' : ''}${mdLinhasEbook(g)}</blockquote>`; }); continue;
+    }
+    if (/^\|/.test(l)) {
+      const linhas = []; while (i < L.length && /^\|/.test(L[i])) linhas.push(L[i++]);
+      const cel = r => r.replace(/^\||\|\s*$/g, '').split('|').map(c => inlineEbook(c.trim()));
+      const corpo = linhas.filter(r => !/^\|?\s*:?-{2,}/.test(r)), cab = cel(corpo.shift() || '');
+      h += `<div class="eb-tab"><table><thead><tr>${cab.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${corpo.map(r => `<tr>${cel(r).map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`; continue;
+    }
+    if ((m = l.match(/^\s*([-•]|\d+\.)\s+/))) {
+      const ol = /\d/.test(m[1]), itens = [];
+      while (i < L.length && L[i].trim()) {
+        const x = L[i].match(/^\s*([-•]|\d+\.)\s+(.*)$/);
+        if (x && /\d/.test(x[1]) === ol) itens.push(x[2]); else if (!x && /^\s+/.test(L[i]) && itens.length) itens[itens.length - 1] += ' ' + L[i].trim(); else break;
+        i++;
+      }
+      h += `<${ol ? 'ol' : 'ul'}>${itens.map(t => `<li>${inlineEbook(t)}</li>`).join('')}</${ol ? 'ol' : 'ul'}>`; continue;
+    }
+    const p = [l.trim()]; i++; while (i < L.length && L[i].trim() && !inicio(L[i])) p.push(L[i++].trim());
+    const t = p.join(' '), meta = /^\*[^*].*\*$/.test(t) && /<\/h1>$/.test(h);
+    h += `<p${meta ? ' class="eb-meta"' : ''}>${inlineEbook(t)}</p>`;
+  }
+  return h;
+}
+function mdEbook(md) { return mdLinhasEbook(esc(String(md || '')).split(/\r?\n/)); }
+async function atualizarEbookAgora() {
+  if (!claudeConfigurado() || !navigator.onLine) return false;
+  try {
+    const eb = await (await cofreBruto('dados/ebook.json')).json();
+    if (eb && eb.tipo === 'jarvis-ebook' && JSON.stringify(eb) !== JSON.stringify(ebookDados)) { ebookDados = eb; try { localStorage.setItem('lifeos_ebook', JSON.stringify(eb)); } catch (e) { } return true; }
+  } catch (e) { }
+  return false;
+}
+function ebLeitorAberto() { const el = $j('eb-leitor'); return !!(el && !el.hidden); }
+function abrirLeitorEbook(cap) {
+  let el = $j('eb-leitor'); if (!el) { el = document.createElement('div'); el.id = 'eb-leitor'; el.className = 'eb'; el.hidden = true; document.body.appendChild(el); }
+  ebLeitor.cap = cap || null;
+  if (el.hidden) { empilharCamada('ebook', fecharLeitorEbook); el.hidden = false; document.body.classList.add('eb-aberto'); }
+  renderLeitorEbook();
+  const buscar = async () => { if (!ebLeitorAberto()) return; if (await atualizarEbookAgora() && ebLeitorAberto()) { renderLeitorEbook(true); toast('📖 Prévia atualizada com a versão mais nova do agente.', 4000); } };
+  clearInterval(ebLeitor.timer); ebLeitor.timer = setInterval(buscar, 60000); buscar();
+}
+function fecharLeitorEbook(daVolta) {
+  const el = $j('eb-leitor'); if (!el || el.hidden) return;
+  el.hidden = true; document.body.classList.remove('eb-aberto'); clearInterval(ebLeitor.timer); ebLeitor.timer = null;
+  if (!daVolta) desempilharCamada('ebook');
+  if (cc.agente === 'digital' || cc.pagina === 'digital') atualizarTelasSincronizadas('central', 'agente');
+}
+function irCapEbook(cap) { ebLeitor.cap = cap || null; renderLeitorEbook(); }
+function renderLeitorEbook(manterRolagem) {
+  const el = $j('eb-leitor'); if (!el || el.hidden) return;
+  const rolo0 = $j('eb-rolo'), y = manterRolagem && rolo0 ? rolo0.scrollTop : 0;
+  const d = ebookDados || {}, cs = d.capitulos || [], escritos = cs.filter(c => c.texto), c = cs.find(x => x.id === ebLeitor.cap && x.texto);
+  const versao = d.atualizadoEm ? `Versão de ${esc(quandoTxt(d.atualizadoEm))} · atualiza sozinha` : '';
+  let corpo;
+  if (!escritos.length) {
+    corpo = `<article class="eb-papel eb-vazio"><h2>A prévia ainda não chegou</h2><p>${claudeConfigurado() ? 'O agente Produto Digital publica o texto dos capítulos a partir do computador. Assim que ele mandar, a prévia aparece aqui sozinha.' : 'A prévia vem do computador pelo cofre. Conecte o app em Ajustes do J.A.R.V.I.S. → 2 Computador.'}</p></article>`;
+  } else if (!c) {
+    const pal = cs.reduce((t, x) => t + (Number(x.palavras) || 0), 0);
+    corpo = `<article class="eb-papel eb-capa"><small>Primos 3D apresenta</small><h1>${esc(d.titulo || 'J.A.R.V.I.S.')}</h1><p class="eb-sub">${esc(d.subtitulo || '')}</p><p class="eb-autor">${esc(d.autor || 'Rafael Martins · Primos 3D')}</p><em>rascunho vivo · ${escritos.length} de ${cs.length} capítulos · ${pal.toLocaleString('pt-BR')} palavras</em></article>
+      ${d.proximo ? `<p class="eb-agora"><b>Agora:</b> ${esc(d.proximo)}</p>` : ''}
+      <h2 class="eb-h-sum">Sumário</h2>
+      <ol class="eb-sumario">${cs.map(x => `<li class="${x.texto ? 'ok' : 'breve'}" style="--c:${COR_CAP[x.status] || '#8e8e93'}"${x.texto ? ` role="button" tabindex="0" onclick="irCapEbook('${esc(x.id)}')"` : ''}><span class="n">${x.n}</span><span><b>${esc(x.titulo)}</b><small>${esc(x.resumo || '')}</small></span><em>${x.texto ? esc(ESTADOS_CAP[x.status] || x.status) : 'em breve'}</em></li>`).join('')}</ol>`;
+  } else {
+    const k = escritos.indexOf(c), ant = escritos[k - 1], prox = escritos[k + 1], env = ebLeitor.enviados[c.id];
+    corpo = `<div class="eb-chips"><span style="--c:${COR_CAP[c.status] || '#8e8e93'}">${esc(ESTADOS_CAP[c.status] || c.status)}</span>${c.palavras ? `<span>${Number(c.palavras).toLocaleString('pt-BR')} palavras · ~${Math.max(1, Math.round(c.palavras / 200))} min de leitura</span>` : ''}${c.atualizadoEm ? `<span>mexido em ${esc(quandoTxt(c.atualizadoEm))}</span>` : ''}</div>
+      <article class="eb-papel eb-texto">${mdEbook(c.texto)}</article>
+      <section class="eb-acoes"><h3>Este capítulo</h3>
+        ${env ? `<p class="eb-ok">${env === 'aprovado' ? '✔ Aprovação' : '✎ Pedido de ajuste'} ${claudeConfigurado() ? 'enviado ao agente. Quando ele terminar no computador, esta prévia se atualiza sozinha e a resposta aparece no chat do J.A.R.V.I.S.' : 'guardado: vai ao computador quando o app estiver conectado (Ajustes do J.A.R.V.I.S. → 2 Computador).'}</p>` : ''}
+        <textarea id="eb-pedido" rows="3" placeholder="O que mudar? Ex.: tirar o trecho do sócio, explicar melhor o cofre, trocar o exemplo…"></textarea>
+        <div class="eb-btns"><button type="button" class="eb-btn" onclick="pedirAjusteEbook('${esc(c.id)}')">✎ Pedir ajuste</button><button type="button" class="eb-btn ok" onclick="aprovarCapEbook('${esc(c.id)}')">✔ Aprovar capítulo</button></div></section>
+      <nav class="eb-nav">${ant ? `<button type="button" onclick="irCapEbook('${esc(ant.id)}')"><small>‹ anterior</small><b>${ant.n}. ${esc(ant.titulo)}</b></button>` : '<span></span>'}${prox ? `<button type="button" class="dir" onclick="irCapEbook('${esc(prox.id)}')"><small>próximo ›</small><b>${prox.n}. ${esc(prox.titulo)}</b></button>` : `<button type="button" class="dir" onclick="irCapEbook(null)"><small>fim do que já está escrito</small><b>Voltar ao sumário</b></button>`}</nav>`;
+  }
+  el.innerHTML = `<header class="eb-topo"><button type="button" class="ag-voltar" onclick="${c ? 'irCapEbook(null)' : 'fecharLeitorEbook()'}" aria-label="Voltar">‹</button><div><small>Prévia do e-book</small><strong>${c ? `Capítulo ${c.n}` : esc(d.titulo || 'E-book')}</strong></div>${c ? '<button type="button" class="eb-sum" onclick="irCapEbook(null)">Sumário</button>' : '<button type="button" class="eb-sum" onclick="fecharLeitorEbook()">Fechar</button>'}</header>
+    <div class="eb-rolo" id="eb-rolo">${versao ? `<p class="eb-versao">${versao}</p>` : ''}${corpo}<footer class="eb-fim">J.A.R.V.I.S. · Produto Digital</footer></div>`;
+  const rolo = $j('eb-rolo'); if (rolo) rolo.scrollTop = y;
+}
+async function pedirAjusteEbook(id) {
+  const c = ((ebookDados && ebookDados.capitulos) || []).find(x => x.id === id), t = (($j('eb-pedido') || {}).value || '').trim(); if (!c) return;
+  if (!t) { toast('Escreva o que mudar neste capítulo.', 3500); const a = $j('eb-pedido'); if (a) a.focus(); return; }
+  const r = await enviarAoComputador(`E-book · Capítulo ${c.n} (${c.titulo}): ${t}`, [], 'Produto Digital · prévia do e-book', 'primos', `Produto Digital: ajustar o capítulo ${c.n} do e-book como o Rafael pediu e publicar a prévia (ebook-publicar.ps1).`, 'rafael');
+  if (r) { ebLeitor.enviados[id] = 'ajuste'; renderLeitorEbook(true); }
+}
+async function aprovarCapEbook(id) {
+  const c = ((ebookDados && ebookDados.capitulos) || []).find(x => x.id === id); if (!c) return;
+  const t = (($j('eb-pedido') || {}).value || '').trim();
+  const r = await enviarAoComputador(`E-book · aprovo o capítulo ${c.n} (${c.titulo}).${t ? ' Observação: ' + t : ''}`, [], 'Produto Digital · prévia do e-book', 'primos', `Produto Digital: marcar o capítulo ${c.n} do e-book como aprovado (status "pronto") e publicar a prévia.`, 'rafael');
+  if (r) { ebLeitor.enviados[id] = 'aprovado'; renderLeitorEbook(true); }
+}
+// --- DESENVOLVEDOR (fase 8): abas por nicho; cada projeto segue ideia → imagem (o Rafael aprova) → 3MF editável → feito.
 //     Fonte: cofre dados/dev.json (o PC mantém em .claude/jarvis/dev/projetos.json) → CACHE local lifeos_dev.
 let devDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_dev')); } catch (e) { return null; } })();
 // fase 10: PEDIDOS DO RAFAEL ao Desenvolvedor (voz/chat → J.A.R.V.I.S. → cofre dados/pedidos-dev.json → o Desenvolvedor no PC pega na
