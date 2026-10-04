@@ -6376,6 +6376,7 @@ function dadosPrimosIA() {
   L.push('MÁQUINAS: ' + (pc.maquinas || []).map(m => `${m.nome} (${m.modelo || ''}) custo ${R$(m.custoH)}/h [energia ${R$(m.energiaH)}, depreciação ${R$(m.deprecH)}, manutenção ${R$(m.manutH)}], ${m.potenciaW || '?'} W, pago ${R$(m.preco)}`).join('; ') + '.');
   const kgMat = {}; (pc.filamentos || []).forEach(f => { const k = `${f.material} ${f.cor}`; kgMat[k] = (kgMat[k] || 0) + (f.kg || 0); });
   const porLoja = {}; (pc.filamentos || []).filter(f => f.custoKg).forEach(f => { const l = porLoja[f.loja] = porLoja[f.loja] || { kg: 0, c: 0 }; l.kg += f.kg || 0; l.c += f.total || 0; });
+  { const est = calcularEstoque(); L.push(`ESTOQUE REAL DE FILAMENTO (líquido, sem carretel; carretel Voolt vazio = ${TARA_CARRETEL_G} g; calibrado nas contagens do Rafael e depois descontado pelas impressões da Bambu): ` + est.cores.filter(c => c.kg > 0.005).map(c => `${c.material} ${c.cor} ${Math.round(c.kg * 1000)} g${c.contadoEm ? ` (contado ${isoParaBR(isoDe(new Date(c.contadoEm))).slice(0, 5)}${c.bambu > 0.0005 ? `, Bambu −${Math.round(c.bambu * 1000)} g depois` : ''})` : ' (nunca contado: estimativa pelas compras)'}`).join('; ') + `. Total ${fmtKg(est.total)}.`); }
   L.push('ROLOS COMPRADOS (data · loja · material · cor · kg · total pago · R$/kg): ' + (pc.filamentos || []).slice().sort((a, b) => (b.data || '').localeCompare(a.data || '')).slice(0, 30).map(f => `${isoParaBR(f.data || '').slice(0, 5)} ${f.loja || ''} ${f.material || ''} ${f.cor || ''} ${n1(f.kg)} kg ${R$(f.total)} (${f.custoKg ? R$(f.custoKg) + '/kg' : '—'})`).join('; ') + '.');
   L.push(`FILAMENTO:${n1(Object.values(kgMat).reduce((s, v) => s + v, 0))} kg comprados (consumo ainda não medido). Por cor: ${Object.entries(kgMat).map(([k, v]) => `${k} ${n1(v)} kg`).join('; ')}. Custo real por fornecedor: ${Object.entries(porLoja).map(([l, v]) => `${l} ${R$(v.c / v.kg)}/kg`).join('; ')}.`);
   const cp = (pc.custoPeca || []).filter(p => p.custo);
@@ -6946,7 +6947,7 @@ function ferramentasVoz() {
   const ids = agentesCentral().map(a => a.id);
   f.push({ name: 'avisar_agentes', description: 'O SEU FILTRO: quando o Rafael contar algo que importa a um agente da Primos 3D (gasto, compra, venda, cliente, meta, ideia de produto ou de vídeo, problema numa máquina, estoque...), registre um recado curto para o(s) agente(s) certo(s). Não precisa confirmar; diga de passagem quem você avisou. Mapa: ' + MAPA_FILTRO, parameters: { type: 'OBJECT', properties: { agentes: { type: 'ARRAY', items: { type: 'STRING', enum: ids } }, tipo: { type: 'STRING', enum: ['fato', 'gasto', 'compra', 'venda', 'meta', 'ideia', 'problema', 'pedido'] }, resumo: { type: 'STRING', description: 'o recado em 1 frase objetiva, com os números que ele disse' } }, required: ['agentes', 'resumo'] } });
   f.push({ name: 'registrar_compra_filamento', description: 'Quando ele disser que comprou filamento (ex.: comprei 2 kg de PLA preto por 180 reais): põe no estoque, avisa Estoque e Financeiro e, com o valor, manda lançar na planilha (ele confirma no cartão). Se faltar kg ou cor, pergunte antes.', parameters: { type: 'OBJECT', properties: { kg: { type: 'NUMBER' }, material: { type: 'STRING', description: 'PLA, PETG, TPU, ABS...' }, cor: { type: 'STRING' }, valor: { type: 'NUMBER', description: 'total pago em reais, se ele disse' }, loja: { type: 'STRING' }, chegou: { type: 'BOOLEAN', description: 'false se ainda está a caminho' } }, required: ['kg', 'cor'] } });
-  f.push({ name: 'registrar_contagem_estoque', description: 'Quando ele pesar os filamentos e disser quanto sobrou (ex.: PLA preto 650 gramas, PETG branco 1 quilo e 200): atualiza o estoque digital (secadora) com o peso real de cada cor. Pergunte a cor/material se ficar ambíguo.', parameters: { type: 'OBJECT', properties: { itens: { type: 'ARRAY', items: { type: 'OBJECT', properties: { material: { type: 'STRING' }, cor: { type: 'STRING' }, gramas: { type: 'NUMBER' } }, required: ['cor', 'gramas'] } } }, required: ['itens'] } });
+  f.push({ name: 'registrar_contagem_estoque', description: 'Quando ele disser quanto filamento tem AGORA de cada cor (ex.: PLA preto 2790 gramas, PETG branco 1 quilo e 200): calibra o estoque daquela cor (depois as impressões da Bambu descontam sozinhas). O carretel vazio da Voolt pesa 120 g: se ele pesou NA BALANÇA com o carretel, mande comCarretel=true e quantos carretéis estavam na pesagem; se já é só o filamento, comCarretel=false. Se não ficar claro, pergunte uma vez: com ou sem o carretel? 0 gramas = o carretel acabou.', parameters: { type: 'OBJECT', properties: { itens: { type: 'ARRAY', items: { type: 'OBJECT', properties: { material: { type: 'STRING' }, cor: { type: 'STRING' }, gramas: { type: 'NUMBER' }, comCarretel: { type: 'BOOLEAN' }, carreteis: { type: 'NUMBER' } }, required: ['cor', 'gramas'] } } }, required: ['itens'] } });
   f.push({ name: 'adicionar_fila_impressao', description: 'Anota um item na FILA DE IMPRESSÃO da Primos 3D (o agente de Produção organiza a fila do dia). Use quando o Rafael disser que quer/precisa imprimir algo ou pedir para pôr na fila. Não precisa confirmar.', parameters: { type: 'OBJECT', properties: { titulo: { type: 'STRING', description: 'o que imprimir (ex.: chaveiro Nossa Senhora)' }, qtd: { type: 'NUMBER' }, material: { type: 'STRING' }, cor: { type: 'STRING' }, obs: { type: 'STRING' } }, required: ['titulo'] } });
   return f;
 }
@@ -7633,7 +7634,9 @@ function publicarFilaCofre() {
   clearTimeout(cc.tFila); if (!claudeConfigurado()) return;
   cc.tFila = setTimeout(async () => {
     const pedidos = orders.filter(o => pedidoAberto(o)).map(o => ({ peca: o.title, qtd: o.qty, material: o.material, cor: o.color, prazo: o.due, etapa: o.status, pago: !!o.paid }));
-    const dados = { tipo: 'jarvis-fila', quando: new Date().toISOString(), fila: filaImpressao.filter(f => f.status !== 'feito' || (Date.now() - Date.parse(f.feitoEm || 0)) < 14 * 864e5), pedidos };
+    const est = calcularEstoque(); // fase 8: o estoque REAL (calibrado pelo Rafael, líquido, sem carretel) para os agentes da nuvem
+    const dados = { tipo: 'jarvis-fila', quando: new Date().toISOString(), fila: filaImpressao.filter(f => f.status !== 'feito' || (Date.now() - Date.parse(f.feitoEm || 0)) < 14 * 864e5), pedidos,
+      estoque: { taraCarretelG: TARA_CARRETEL_G, cores: est.cores.map(c => ({ material: c.material, cor: c.cor, gramas: Math.round(Math.max(0, c.kg) * 1000), contadoEm: c.contadoEm || null, bambuDesdeContagemG: Math.round((c.bambu || 0) * 1000) })), aCaminho: est.caminho.map(m => ({ material: m.material, cor: m.cor, kg: m.kg })) } };
     try { let sha = null; try { sha = (await gh('/contents/dados/fila.json?ref=main')).sha; } catch (e) { }
       await gh('/contents/dados/fila.json', { method: 'PUT', body: JSON.stringify({ message: 'App: fila de impressão', content: btoa(unescape(encodeURIComponent(JSON.stringify(dados, null, 1)))), ...(sha ? { sha } : {}) }) }); } catch (e) { }
   }, 4000);
@@ -8305,7 +8308,7 @@ function miniFilaHTML(titulo, cor) {
 function ccBloco(titulo, corpo) { return `<section class="cc-bloco"><h4>${titulo}</h4>${corpo}</section>`; }
 function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente('${esc(a.id)}')">Perguntar a este agente</button>`; }
 const VOZ_AGENTES = {
-  estoque: { voz: 'Alnilam', persona: 'Homem, voz firme e serena, presença forte. Centrado, confiável, companheiro e PERFECCIONISTA: conhece cada bobina da secadora (cor, marca, gramas, data e preço da compra), não deixa número solto e confere tudo duas vezes. Conduz a contagem de filamentos com calma (uma cor por vez, repete o peso para confirmar) e usa registrar_contagem_estoque; avisa o que está acabando e o que está parado há muito tempo.' },
+  estoque: { voz: 'Alnilam', persona: 'Homem, voz firme e serena, presença forte. Centrado, confiável, companheiro e PERFECCIONISTA: conhece cada bobina da secadora (cor, marca, gramas, data e preço da compra), não deixa número solto e confere tudo duas vezes. Conduz a contagem de filamentos com calma (uma cor por vez, repete o peso para confirmar) e usa registrar_contagem_estoque; avisa o que está acabando e o que está parado há muito tempo. SABE que o carretel vazio da Voolt 3D pesa 120 g: sempre confirma se o peso é na balança (com carretel — você tira 120 g por carretel) ou só o filamento. Explica que a contagem é o ponto de partida: depois disso as compras da planilha somam e as impressões da Bambu descontam sozinhas, então ele só precisa pesar de vez em quando.' },
   contabil: { voz: 'Rasalgethi', persona: 'Homem, voz clara e segura, analista financeiro direto ao ponto. Fala de caixa, custo, preço, margem, payback e metas sempre com o número na mão, sem jargão. Honesto quando a notícia é ruim e sempre termina com a próxima ação.' },
   vendas: { voz: 'Puck', persona: 'Homem, animado e persuasivo, vendedor de rua de Viçosa que conhece os clientes. Pensa em orçamento, pedido, prazo e follow-up; dá roteiros curtos de abordagem para WhatsApp e lojas.' },
   consignacao: { voz: 'Sulafat', persona: 'Mulher, voz calorosa e organizada, cuida dos expositores e dos parceiros. Sabe quanto foi colocado, vendido e a receber em cada ponto, e sugere o mix e a próxima visita.' },
@@ -8455,16 +8458,31 @@ function htmlAgenteMarketing(a) {
 // --- agente ESTOQUE: compras da Central (já chegaram) + o que o app registra (compra a caminho/chegou, impressões) ---
 function fmtKg(kg) { return (Math.round(kg * 100) / 100).toLocaleString('pt-BR') + ' kg'; }
 function chaveCor(material, cor) { return semAcentoCer(material) + '|' + semAcentoCer(cor); }
-function calcularEstoque() {
-  const g = {}; const add = (material, cor, kg) => { const k = chaveCor(material, cor); const x = g[k] = g[k] || { material, cor, comprado: 0, usado: 0, kg: 0 }; if (kg > 0) x.comprado += kg; else x.usado -= kg; x.kg += kg; };
+/** ESTOQUE (fase 8 — a lógica do Rafael): compras (planilha + app) − consumo + AJUSTES das contagens. A contagem é uma CALIBRAGEM:
+ *  ela marca o "ponto zero" daquela cor (m.quando) e, dali em diante, cada impressão CONCLUÍDA na Bambu (status 2) desconta sozinha
+ *  os gramas da cor mais parecida (mesmo material, cor do AMS). Compras novas da planilha somam sozinhas. Assim ele só pesa de vez em quando.
+ *  op.semBambu: o saldo SEM os descontos da Bambu (é a base da próxima contagem — senão a calibragem contaria a impressão duas vezes). */
+const TARA_CARRETEL_G = 120; // carretel da Voolt 3D (vazio) — o Estoque desconta quando o peso é "na balança"
+function familiaMaterial(s) { const m = semAcentoCer(s || '').toUpperCase().match(/PETG|PLA|TPU|ABS|ASA|PC/); return m ? m[0] : 'PLA'; }
+function rgbHex(h) { const m = String(h || '').replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i); return m ? m.slice(1).map(x => parseInt(x, 16)) : null; }
+function calcularEstoque(op = {}) {
+  const g = {}; const add = (material, cor, kg) => { const k = chaveCor(material, cor); const x = g[k] = g[k] || { material, cor, comprado: 0, usado: 0, kg: 0, bambu: 0 }; if (kg > 0) x.comprado += kg; else x.usado -= kg; x.kg += kg; return x; };
   ((primosCentral || {}).filamentos || []).forEach(f => { if (!/caminho|transit|aguard/i.test(f.status || '')) add(f.material || 'PLA', f.cor || 'Sem cor', Number(f.kg) || 0); });
+  const base = {}; // última contagem (calibragem) de cada cor
   estoquePrimos.forEach(m => { const kg = Number(m.kg) || 0;
     if (m.tipo === 'compra' && m.status === 'chegou') add(m.material, m.cor, kg);
     else if (m.tipo === 'consumo') add(m.material, m.cor, -kg);
-    else if (m.tipo === 'ajuste') add(m.material, m.cor, kg); });
+    else if (m.tipo === 'ajuste') { const x = add(m.material, m.cor, kg); if (m.quando) { const k = chaveCor(m.material, m.cor); if (!base[k] || m.quando > base[k]) { base[k] = m.quando; x.contadoEm = m.quando; } } } });
+  const auto = [];
+  if (!op.semBambu) {
+    const calib = Object.keys(base).map(k => g[k]).filter(Boolean).map(c => ({ c, fam: familiaMaterial(c.material), rgb: rgbHex(corFilamento(c.cor + ' ' + c.material).cor), desde: Date.parse(base[chaveCor(c.material, c.cor)]) }));
+    ((impressoesBambu && impressoesBambu.impressoes) || []).forEach(t => { if (String(t.status) !== '2') return; const fim = Date.parse(t.fim || t.inicio); if (!fim) return;
+      (t.cores && t.cores.length ? t.cores : [{ tipo: 'PLA', cor: '', gramas: t.gramas }]).forEach(u => { const gr = Number(u.gramas) || 0, rgb = rgbHex(u.cor); if (!gr || !rgb) return;
+        let melhor = null, dmin = 1e9; calib.forEach(x => { if (x.fam !== familiaMaterial(u.tipo) || !x.rgb || fim <= x.desde) return; const d = Math.hypot(x.rgb[0] - rgb[0], x.rgb[1] - rgb[1], x.rgb[2] - rgb[2]); if (d < dmin) { dmin = d; melhor = x; } });
+        if (melhor && dmin < 120) { melhor.c.kg -= gr / 1000; melhor.c.usado += gr / 1000; melhor.c.bambu += gr / 1000; auto.push({ titulo: t.titulo, quando: t.fim, gramas: gr, cor: melhor.c.cor, material: melhor.c.material }); } }); }); }
   const cores = Object.values(g).sort((a, b) => a.material.localeCompare(b.material) || a.kg - b.kg);
   const caminho = estoquePrimos.filter(m => m.tipo === 'compra' && m.status === 'caminho');
-  return { cores, caminho, total: cores.reduce((s, c) => s + Math.max(0, c.kg), 0) };
+  return { cores, caminho, auto, total: cores.reduce((s, c) => s + Math.max(0, c.kg), 0) };
 }
 /** Cor de verdade a partir do nome do filamento ("PLA Basic Cinza", "Silk Dourado"...). brilho: 'seda'/'metal' para o 3D. */
 const CORES_BOBINA = [[/rosa.?beb|baby.?pink/, '#f3b5c9'], [/oliva|olive|militar/, '#6f7a3c'], [/marmor|stone|granit|pedra/, '#a39d93'], [/off.?white|perola|p[eé]rola/, '#ece6d8'], [/preto|black|negro/, '#1d1d20'], [/branco|white|marfim/, '#f1f1ee'], [/cinza|gray|grey|grafite|chumbo/, '#8a8d93'], [/vermelh|red/, '#d3262a'], [/vinho|bord[oô]/, '#7b1e2b'],
@@ -8538,11 +8556,7 @@ function renderPaginaEstoque() {
         <div id="cc-seca-dica" class="cc-seca-dica grande" hidden></div></section>
       <section class="ag-sec est-sec"><h2 class="jvpg-tit">Suas cores</h2><div class="est-cores">${cores.map(c => { const { cor } = corFilamento(c.cor + ' ' + c.material), k = chaveCor(c.material, c.cor);
         return `<button type="button" class="est-cor${c.kg < 0.3 ? ' baixo' : ''}" data-chave="${esc(k)}" onclick="escolherCorEstoque(${primeira[k] ?? -1})"><i style="background:${esc(cor)}"></i><span><b>${esc(c.cor)}</b><small>${esc(c.material)}</small></span><em>${fmtKg(c.kg)}</em></button>`; }).join('')}</div></section>
-      <section class="ag-sec est-sec"><h2 class="jvpg-tit">Fazer a contagem</h2><p class="ag-sub">Pese <b>cada carretel</b> e digite o peso da balança (com o carretel): eu desconto <b>${TARA_CARRETEL_G} g</b> de cada um. Tem outro aberto da mesma cor? Toque em <b>＋ carretel</b>. Digite <b>0</b> quando o carretel acabou. O que você digita fica guardado até salvar.</p>
-        <form class="est-cont" onsubmit="salvarContagemForm(event)" oninput="rascunhoContagem()">${cores.map(c => { const k = chaveCor(c.material, c.cor), nb = Math.max(1, bob.filter(b => b.chave === k).length);
-          return `<div class="est-cor-cont" data-k="${esc(k)}" data-mat="${esc(c.material)}" data-cor="${esc(c.cor)}"><div class="est-cor-tit"><i style="background:${esc(corFilamento(c.cor + ' ' + c.material).cor)}"></i><span>${esc(c.cor)}<small>${esc(c.material)} · hoje ${Math.round(c.kg * 1000)} g líquidos</small></span><em class="est-liq"></em></div>
-            <div class="est-carrs">${Array.from({ length: nb }, (_, i) => htmlCarretelCont(i)).join('')}</div><button type="button" class="est-mais" onclick="maisCarretelCont(this)">＋ carretel</button></div>`; }).join('')}
-          <div class="est-cont-acoes"><button type="submit" class="cc-btn est-salvar">Salvar contagem</button><button type="button" class="cc-btn" onclick="falarComAgente('estoque')">🎙 Contar por voz</button></div></form></section>
+      ${htmlContagemEstoque(e)}
       ${acabados.length ? `<section class="ag-sec est-sec"><h2 class="jvpg-tit">Carretéis que acabaram</h2><ul class="est-acabados">${acabados.map(m => `<li><i style="background:${esc(corFilamento(m.cor + ' ' + m.material).cor)}"></i><span><b>${esc(m.cor)}</b><small>${esc(m.material)} · acabou em ${esc(isoParaBR(m.data))}</small></span></li>`).join('')}</ul></section>` : ''}
       ${r.manchete ? `<section class="ag-sec est-sec"><h2 class="jvpg-tit">O Estoque diz</h2><p class="jvpg-txt">${textoAgente(r.manchete)}</p></section>` : ''}
       <section class="ag-sec ag-corpo mkt-mais"><h2 class="jvpg-tit">Mais detalhes</h2>${detalheMkt('Compras, consumo e relatório do agente', htmlPainelAgente('estoque').replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<button type="button" class="cc-btn ag-abrir"[^>]*>[^<]*<\/button>/, '').replace(/<section class="cc-bloco cc-seca-bloco">[\s\S]*?<\/section>/, ''))}</section>
@@ -8550,10 +8564,34 @@ function renderPaginaEstoque() {
   restaurarRascunhoContagem();
   montarSecadora3D();
 }
-// --- CONTAGEM (fase 8): peso bruto na balança − 120 g por carretel = filamento líquido. Rascunho guardado NO APARELHO a cada tecla
-//     (conveniência por aparelho, não é dado do app: some ao salvar) — antes, perder a página apagava a pesagem inteira.
-const TARA_CARRETEL_G = 120;
-const RASCUNHO_CONT = 'lifeos_rascunho_contagem';
+// --- ATUALIZAR O ESTOQUE (fase 8, 3ª versão — pedido do Rafael): UMA linha por cor, um campo só. Ele digita quanto tem AGORA,
+//     do jeito que preferir: "Só o filamento" (líquido) ou "Na balança" (com carretel: tiro 120 g de cada carretel da Voolt).
+//     Dois carretéis abertos da mesma cor = "1500 + 1290". 0 = acabou. Isso CALIBRA a cor; depois o estoque anda sozinho
+//     (calcularEstoque: compras somam, impressões da Bambu descontam). Rascunho guardado NO APARELHO a cada tecla (conveniência
+//     por aparelho, não é dado do app: some ao salvar).
+const RASCUNHO_CONT = 'lifeos_rascunho_contagem', MODO_CONT = 'lifeos_contagem_modo';
+function modoContagem() { try { return localStorage.getItem(MODO_CONT) === 'bal' ? 'bal' : 'liq'; } catch (e) { return 'liq'; } }
+function trocarModoContagem(m) { try { localStorage.setItem(MODO_CONT, m); } catch (e) { } document.querySelectorAll('.estc-modo button').forEach(b => b.classList.toggle('on', b.dataset.m === m)); const d = $j('estc-dica'); if (d) d.innerHTML = dicaContagem(m); rascunhoContagem(); }
+function dicaContagem(m) { return m === 'bal' ? `Ponha o carretel na balança e digite o peso. Eu tiro <b>${TARA_CARRETEL_G} g</b> de cada carretel (Voolt). Dois abertos da mesma cor? <b>1620 + 1410</b>. <b>0</b> = acabou.` : `Digite só o filamento, sem o carretel. Dois carretéis da mesma cor? <b>1500 + 1290</b> ou já a soma. <b>0</b> = acabou.`; }
+function htmlContagemEstoque(e) {
+  const m = modoContagem(), cores = e.cores.filter(c => c.comprado > 0 || c.kg > 0.01).sort((x, y) => y.kg - x.kg), g = kg => Math.round(Math.max(0, kg) * 1000).toLocaleString('pt-BR');
+  return `<section class="ag-sec est-sec estc-sec"><div class="estc-topo"><div><h2 class="jvpg-tit">Atualizar o estoque</h2><p class="ag-sub">Diga quanto tem <b>agora</b> de cada cor. Depois disso eu sigo sozinho: compras da planilha somam e cada impressão da Bambu desconta.</p></div>
+      <div class="estc-modo" role="group" aria-label="Como você vai digitar">${[['liq', 'Só o filamento'], ['bal', 'Na balança']].map(([k, n]) => `<button type="button" data-m="${k}" class="${m === k ? 'on' : ''}" onclick="trocarModoContagem('${k}')">${n}</button>`).join('')}</div></div>
+    <p class="estc-dica" id="estc-dica">${dicaContagem(m)}</p>
+    <form class="estc" onsubmit="salvarContagemForm(event)" oninput="rascunhoContagem()">
+      <div class="estc-cab" aria-hidden="true"><span></span><span>Cor</span><span>No sistema</span><span>Agora</span><span>Fica</span></div>
+      ${cores.map(c => { const k = chaveCor(c.material, c.cor), extra = [c.contadoEm ? 'contado ' + isoParaBR(isoDe(new Date(c.contadoEm))).slice(0, 5) : 'nunca contado', c.bambu > 0.0005 ? `Bambu −${Math.round(c.bambu * 1000)} g` : ''].filter(Boolean).join(' · ');
+        return `<div class="estc-lin${c.kg < 0.3 ? ' baixo' : ''}" data-k="${esc(k)}" data-mat="${esc(c.material)}" data-cor="${esc(c.cor)}" data-atual="${Math.round(Math.max(0, c.kg) * 1000)}">
+          <i style="background:${esc(corFilamento(c.cor + ' ' + c.material).cor)}"></i><div class="estc-nome"><b>${esc(c.cor)}</b><small>${esc(c.material)} · ${esc(extra)}</small></div>
+          <div class="estc-sis"><strong>${g(c.kg)} g</strong></div><input class="estc-in" type="text" inputmode="decimal" autocomplete="off" placeholder="g" aria-label="${esc(c.cor)} agora"><output class="estc-res"></output></div>`; }).join('') || '<p class="cc-txt">Nenhum filamento ainda.</p>'}
+      <div class="est-cont-acoes"><button type="submit" class="cc-btn est-salvar">Salvar e atualizar</button><button type="button" class="cc-btn" onclick="falarComAgente('estoque')">🎙 Falar com o Estoque</button></div></form></section>`;
+}
+/** O que ele digitou numa linha → { g: gramas líquidas, acabou: nº de carretéis zerados } (ou null se não deu para entender). */
+function lerLinhaContagem(txt, modo) {
+  const termos = String(txt || '').split('+').map(s => s.trim()).filter(Boolean); if (!termos.length) return null; let g = 0, acabou = 0;
+  for (const t of termos) { const v = lerPesoG(t); if (v === null) return null; if (v === 0) { acabou++; continue; } g += modo === 'bal' ? Math.max(0, v - TARA_CARRETEL_G) : v; }
+  return { g, acabou };
+}
 /** "1250", "1.250", "1,25" (kg) ou "1,25 kg" → gramas. Números pequenos (< 20) são kg. */
 function lerPesoG(txt) {
   let s = String(txt || '').trim().toLowerCase().replace(/\s|g$/g, ''); if (!s) return null;
@@ -8562,48 +8600,48 @@ function lerPesoG(txt) {
   const n = parseFloat(s); if (!isFinite(n) || n < 0) return null;
   return Math.round(kg || n < 20 ? n * 1000 : n);
 }
-function htmlCarretelCont(i, v) { return `<label class="est-carr-lin"><small>Carretel ${i + 1}</small><input class="est-peso" type="text" inputmode="decimal" autocomplete="off" placeholder="g na balança" value="${esc(v || '')}"><em class="est-liq-1"></em></label>`; }
-function maisCarretelCont(bt) { const box = bt.parentElement.querySelector('.est-carrs'); box.insertAdjacentHTML('beforeend', htmlCarretelCont(box.children.length)); const ins = box.querySelectorAll('.est-peso'); ins[ins.length - 1].focus(); rascunhoContagem(); }
-/** Líquido de cada carretel (bruto − 120 g); 0 digitado = acabou. */
-function liquidoCarretel(txt) { const g = lerPesoG(txt); if (g === null) return null; return g === 0 ? { acabou: true, g: 0 } : { acabou: false, g: Math.max(0, g - TARA_CARRETEL_G) }; }
 function rascunhoContagem() {
-  const d = {}; document.querySelectorAll('.est-cor-cont').forEach(box => { const vals = [...box.querySelectorAll('.est-peso')].map(i => i.value); d[box.dataset.k] = vals; let soma = 0, algum = false;
-    box.querySelectorAll('.est-carr-lin').forEach(l => { const r = liquidoCarretel(l.querySelector('.est-peso').value), em = l.querySelector('.est-liq-1'); if (!r) { em.textContent = ''; return; } algum = true; soma += r.g; em.textContent = r.acabou ? 'acabou' : `${r.g} g`; em.classList.toggle('acabou', r.acabou); });
-    box.querySelector('.est-liq').textContent = algum ? `${soma} g líquidos` : ''; });
+  const d = {}, m = modoContagem();
+  document.querySelectorAll('.estc-lin').forEach(l => { const inp = l.querySelector('.estc-in'), out = l.querySelector('.estc-res'); d[l.dataset.k] = inp.value;
+    const r = lerLinhaContagem(inp.value, m); l.classList.toggle('erro', !!inp.value.trim() && !r);
+    if (!r) { out.innerHTML = inp.value.trim() ? '<span class="estc-erro">?</span>' : ''; return; }
+    const dif = r.g - Number(l.dataset.atual || 0);
+    out.innerHTML = r.g === 0 && r.acabou ? '<b class="estc-acabou">acabou</b>' : `<b>${r.g.toLocaleString('pt-BR')} g</b>${Math.abs(dif) >= 1 ? `<small class="${dif < 0 ? 'neg' : 'pos'}">${dif > 0 ? '+' : '−'}${Math.abs(dif).toLocaleString('pt-BR')}</small>` : '<small>igual</small>'}`; });
   try { localStorage.setItem(RASCUNHO_CONT, JSON.stringify({ quando: Date.now(), d })); } catch (e) { }
 }
 function restaurarRascunhoContagem() {
   let r = null; try { r = JSON.parse(localStorage.getItem(RASCUNHO_CONT)); } catch (e) { } if (!r || !r.d) return;
-  document.querySelectorAll('.est-cor-cont').forEach(box => { const vals = r.d[box.dataset.k]; if (!Array.isArray(vals)) return; const c = box.querySelector('.est-carrs');
-    while (c.children.length < vals.length) c.insertAdjacentHTML('beforeend', htmlCarretelCont(c.children.length)); c.querySelectorAll('.est-peso').forEach((i, n) => { i.value = vals[n] || ''; }); });
+  document.querySelectorAll('.estc-lin').forEach(l => { const v = r.d[l.dataset.k]; if (typeof v === 'string') l.querySelector('.estc-in').value = v; });
   rascunhoContagem();
 }
 function escolherCorEstoque(i) { if (i < 0 || !cc.seca3d) return; const b = cc.seca3d.escolherPor(i); if (b) { tocarBobina3D(b, 0, 0, i); const s = $j('cc-seca'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
-/** Contagem de filamentos: o Rafael pesou e diz quanto tem de cada cor (gramas) — vira um AJUSTE no estoque. */
+/** Contagem = CALIBRAGEM de cada cor (app, voz e chat usam esta). itens: [{ material, cor, gramas, comCarretel?, carreteis?, acabou? }].
+ *  gramas com carretel → tira 120 g por carretel. Sempre grava um 'ajuste' com a hora (o novo ponto zero da cor, mesmo sem diferença),
+ *  medido contra o saldo SEM a Bambu — depois disso só as impressões novas descontam. 0 = carretel acabou (fica na lista própria). */
 function contagemEstoque(itens, origem) {
-  const e = calcularEstoque(), feitos = [];
-  (itens || []).forEach(it => { const g = Number(it.gramas); if (!(g >= 0) || !it.cor) return; const mat = String(it.material || 'PLA').toUpperCase();
+  const e = calcularEstoque({ semBambu: true }), feitos = [], agora = new Date().toISOString();
+  (itens || []).forEach(it => { let g = Number(it.gramas); if (!(g >= 0) || !it.cor) return; const mat = String(it.material || 'PLA').toUpperCase();
+    if (it.comCarretel && g > 0) g = Math.max(0, g - TARA_CARRETEL_G * Math.max(1, Number(it.carreteis) || 1));
     const c = e.cores.find(x => chaveCor(x.material, x.cor) === chaveCor(mat, it.cor)) || e.cores.find(x => semAcentoCer(x.cor).includes(semAcentoCer(it.cor)) && semAcentoCer(x.material) === semAcentoCer(mat));
-    const atual = c ? c.kg : 0, dif = g / 1000 - atual; if (Math.abs(dif) < 0.001) { feitos.push(`${c ? c.cor : it.cor}: ok`); return; }
-    estoquePrimos.push({ id: novoId(), data: hojeISO(), tipo: 'ajuste', material: c ? c.material : mat, cor: c ? c.cor : it.cor, kg: dif, obs: `contagem (${origem || 'app'})` }); feitos.push(`${c ? c.cor : it.cor}: ${g} g`); });
-  if (feitos.length) { salvar('estoqueprimos', estoquePrimos); registrarRecado(['estoque'], `Contagem de filamentos (${isoParaBR(hojeISO())}): ${feitos.join(' · ')}`, 'fato', origem || 'app'); if (cc.pagina === 'estoque') renderPaginaEstoque(); else if (typeof renderCentral === 'function') renderCentral(); }
+    const material = c ? c.material : mat, cor = c ? c.cor : it.cor, dif = g / 1000 - (c ? c.kg : 0);
+    estoquePrimos.push({ id: novoId(), data: hojeISO(), quando: agora, tipo: 'ajuste', material, cor, kg: Math.round(dif * 1e6) / 1e6, obs: `contagem (${origem || 'app'})` });
+    for (let n = Math.max(g === 0 ? 1 : 0, Number(it.acabou) || 0); n > 0; n--) estoquePrimos.push({ id: novoId(), data: hojeISO(), tipo: 'acabou', material, cor, kg: 0, obs: `carretel acabou (contagem ${origem || 'app'})` });
+    feitos.push(`${cor}: ${g === 0 ? 'acabou' : g.toLocaleString('pt-BR') + ' g'}`); });
+  if (feitos.length) { salvar('estoqueprimos', estoquePrimos); registrarRecado(['estoque'], `Contagem de filamentos (${isoParaBR(hojeISO())}, líquido, sem carretel): ${feitos.join(' · ')}`, 'fato', origem || 'app');
+    if (typeof publicarFilaCofre === 'function') publicarFilaCofre(); // o estoque real vai junto para os agentes da nuvem
+    if (cc.pagina === 'estoque') renderPaginaEstoque(); else if (typeof renderCentral === 'function') renderCentral(); }
   return feitos;
 }
 function salvarContagemForm(ev) {
-  ev.preventDefault(); const itens = [], ruins = [], extras = [];
-  document.querySelectorAll('.est-cor-cont').forEach(box => { const vals = [...box.querySelectorAll('.est-peso')].map(i => i.value.trim()).filter(Boolean); if (!vals.length) return;
-    const rs = vals.map(liquidoCarretel); if (rs.some(r => !r)) { ruins.push(box.dataset.cor); return; }
-    const mat = box.dataset.mat, cor = box.dataset.cor, vivos = rs.filter(r => !r.acabou).map(r => r.g);
-    itens.push({ material: mat, cor, gramas: vivos.reduce((a, b) => a + b, 0) });
-    extras.push({ id: novoId(), data: hojeISO(), tipo: 'carreteis', material: mat, cor, pesos: vivos, obs: 'contagem (app)' }); // os carretéis de verdade (a secadora mostra cada um)
-    rs.filter(r => r.acabou).forEach(() => extras.push({ id: novoId(), data: hojeISO(), tipo: 'acabou', material: mat, cor, kg: 0, obs: 'carretel acabou (contagem)' })); });
-  if (ruins.length) { toast(`Não entendi o peso de: ${ruins.join(', ')}. Use só números (ex.: 1120).`, 6000); return; }
-  if (!itens.length) { toast('Digite o peso de pelo menos um carretel.'); return; }
-  estoquePrimos.push(...extras); salvar('estoqueprimos', estoquePrimos);
+  ev.preventDefault(); const m = modoContagem(), itens = [], ruins = [];
+  document.querySelectorAll('.estc-lin').forEach(l => { const v = l.querySelector('.estc-in').value; if (!v.trim()) return; const r = lerLinhaContagem(v, m); if (!r) { ruins.push(l.dataset.cor); return; }
+    itens.push({ material: l.dataset.mat, cor: l.dataset.cor, gramas: r.g, acabou: r.acabou }); });
+  if (ruins.length) { toast(`Não entendi o número de: ${ruins.join(', ')}. Use só números (ex.: 2790 ou 1500 + 1290).`, 7000); return; }
+  if (!itens.length) { toast('Digite quanto tem agora de pelo menos uma cor.'); return; }
   const f = contagemEstoque(itens, 'app');
   try { localStorage.removeItem(RASCUNHO_CONT); } catch (e) { }
-  if (cc.pagina === 'estoque') renderPaginaEstoque(); // redesenha com os números novos (a secadora também)
-  toast(`✓ Contagem salva — ${f.join(' · ')}`, 6000);
+  if (cc.pagina === 'estoque') { renderPaginaEstoque(); const s = document.querySelector('.estc-sec'); if (s) s.scrollIntoView({ block: 'start' }); }
+  toast(`✓ Estoque atualizado — ${f.join(' · ')}`, 7000);
 }
 function htmlAgenteEstoque(a) {
   const e = calcularEstoque(); const max = Math.max(1, ...e.cores.map(c => c.comprado));
