@@ -196,7 +196,7 @@ class Secadora {
   medir() {
     const h = this.host; if (!h) return; const w = h.clientWidth, a = h.clientHeight; if (!w || !a) return;
     this.renderer.setSize(w, a, false); this.cam.aspect = w / a; this.cam.updateProjectionMatrix();
-    const tg = Math.tan(this.cam.fov * Math.PI / 360); this.dist = Math.max(128 / (2 * tg), 92 / (2 * tg * this.cam.aspect));
+    const tg = Math.tan(this.cam.fov * Math.PI / 360); this.dist = Math.max(108 / (2 * tg), 80 / (2 * tg * this.cam.aspect)); // fase 8: enquadramento mais justo (o Rafael queria ver melhor as bobinas)
   }
   atualizar(dados) {
     if (dados.temp !== this.temp || dados.umid !== this.umid) { this.temp = dados.temp; this.umid = dados.umid; if (this.matVisor.map) this.matVisor.map.dispose(); this.matVisor.map = texturaVisor(dados.temp, dados.umid); this.matVisor.needsUpdate = true; }

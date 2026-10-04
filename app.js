@@ -8501,8 +8501,18 @@ function tocarBobina3D(b, x, y, i) {
   // fase 7: cartão completo da bobina (fica aberto até tocar de novo); na página do Estoque ele aparece embaixo da secadora
   const t = $j('cc-seca-dica'); if (!t) return;
   document.querySelectorAll('.est-cor.on').forEach(el => el.classList.remove('on'));
-  if (!b) { t.hidden = true; return; }
+  const pag = !!$j('est-pagina'), host = $j('cc-seca'); let et = $j('est-etiqueta');
+  if (!b) { t.hidden = true; if (et) et.hidden = true; return; }
   const cp = b.compra || {};
+  if (pag && host) { // fase 8: na página, uma etiqueta AO LADO da bobina tocada (não mais o cartão lá embaixo)
+    if (!et) { et = document.createElement('div'); et.id = 'est-etiqueta'; et.className = 'est-etiqueta'; host.appendChild(et); }
+    const W = host.clientWidth || 320, H = host.clientHeight || 400, px = x || W / 2, py = y || H / 2, dir = px > W * 0.55;
+    et.innerHTML = `<i style="background:${esc(b.cor)}"></i><div><strong>${Math.round(b.kg * 1000)} g</strong><b>${esc(b.nome)}</b><small>${esc(b.material)}${cp.marca ? ' · ' + esc(cp.marca) : ''}${b.totalCor && b.totalCor - b.kg > 0.01 ? ` · ${fmtKg(b.totalCor)} na cor` : ''}</small>${cp.data || cp.precoKg ? `<small>${cp.data ? 'compra ' + esc(isoParaBR(cp.data).slice(0, 5)) : ''}${cp.precoKg ? ' · ' + reais(cp.precoKg) + '/kg' : ''}</small>` : ''}</div>`;
+    et.classList.toggle('esq', dir); et.style.left = Math.max(8, Math.min(px + (dir ? -14 : 14), W - 8)) + 'px'; et.style.top = Math.max(40, Math.min(py, H - 40)) + 'px';
+    et.hidden = false; t.hidden = true; et.style.animation = 'none'; void et.offsetWidth; et.style.animation = '';
+    const li0 = document.querySelector(`.est-cor[data-chave="${CSS.escape(b.chave || '')}"]`); if (li0) li0.classList.add('on');
+    return;
+  }
   t.innerHTML = `<button type="button" class="est-x" onclick="tocarBobina3D(null); cc.seca3d && cc.seca3d.escolher(null)" aria-label="Fechar">✕</button><i style="background:${esc(b.cor)}"></i><span><b>${esc(b.nome)}</b><small>${esc(b.material)}${cp.marca ? ' · ' + esc(cp.marca) : ''}</small></span>
     <div class="est-dados"><div><strong>${Math.round(b.kg * 1000)} g</strong><small>nesta bobina</small></div><div><strong>${fmtKg(b.totalCor || b.kg)}</strong><small>desta cor no total</small></div>
       <div><strong>${cp.data ? esc(isoParaBR(cp.data)) : '—'}</strong><small>compra${cp.loja ? ' · ' + esc(cp.loja) : ''}</small></div><div><strong>${cp.precoKg ? reais(cp.precoKg) + '/kg' : '—'}</strong><small>${cp.total ? 'pago ' + reais(cp.total) : 'preço'}</small></div></div>`;
@@ -8525,13 +8535,37 @@ function renderPaginaEstoque() {
         <div id="cc-seca-dica" class="cc-seca-dica grande" hidden></div></section>
       <section class="ag-sec est-sec"><h2 class="jvpg-tit">Suas cores</h2><div class="est-cores">${cores.map(c => { const { cor } = corFilamento(c.cor + ' ' + c.material), k = chaveCor(c.material, c.cor);
         return `<button type="button" class="est-cor${c.kg < 0.3 ? ' baixo' : ''}" data-chave="${esc(k)}" onclick="escolherCorEstoque(${primeira[k] ?? -1})"><i style="background:${esc(cor)}"></i><span><b>${esc(c.cor)}</b><small>${esc(c.material)}</small></span><em>${fmtKg(c.kg)}</em></button>`; }).join('')}</div></section>
-      <section class="ag-sec est-sec"><h2 class="jvpg-tit">Fazer a contagem</h2><p class="ag-sub">Pesou as bobinas? Digite quanto sobrou de cada cor (só o filamento, sem o carretel) — ou toque em 🎙 e fale para o Estoque.</p>
-        <form class="est-cont" onsubmit="salvarContagemForm(event)">${cores.map(c => `<label><i style="background:${esc(corFilamento(c.cor + ' ' + c.material).cor)}"></i><span>${esc(c.cor)}<small>${esc(c.material)} · hoje ${Math.round(c.kg * 1000)} g</small></span><input type="number" inputmode="numeric" min="0" step="1" placeholder="g" data-mat="${esc(c.material)}" data-cor="${esc(c.cor)}"></label>`).join('')}
+      <section class="ag-sec est-sec"><h2 class="jvpg-tit">Fazer a contagem</h2><p class="ag-sub">Ponha a bobina na balança e digite o peso <b>com o carretel</b>. Eu desconto <b>${TARA_CARRETEL_G} g por carretel</b> (Voolt) e guardo só o filamento. Se a cor tem mais de uma bobina, some os pesos e ajuste os carretéis. O que você digita fica guardado até salvar.</p>
+        <form class="est-cont" onsubmit="salvarContagemForm(event)" oninput="rascunhoContagem()">${cores.map(c => { const k = chaveCor(c.material, c.cor), nb = Math.max(1, bob.filter(b => b.chave === k).length);
+          return `<label><i style="background:${esc(corFilamento(c.cor + ' ' + c.material).cor)}"></i><span>${esc(c.cor)}<small>${esc(c.material)} · hoje ${Math.round(c.kg * 1000)} g líquidos</small></span><input class="est-peso" type="text" inputmode="decimal" autocomplete="off" placeholder="g na balança" data-k="${esc(k)}" data-mat="${esc(c.material)}" data-cor="${esc(c.cor)}"><input class="est-carr" type="number" inputmode="numeric" min="0" step="1" value="${nb}" title="carretéis" aria-label="carretéis de ${esc(c.cor)}" data-k="${esc(k)}"><em class="est-liq" data-k="${esc(k)}"></em></label>`; }).join('')}
           <div class="est-cont-acoes"><button type="submit" class="cc-btn est-salvar">Salvar contagem</button><button type="button" class="cc-btn" onclick="falarComAgente('estoque')">🎙 Contar por voz</button></div></form></section>
       ${r.manchete ? `<section class="ag-sec est-sec"><h2 class="jvpg-tit">O Estoque diz</h2><p class="jvpg-txt">${textoAgente(r.manchete)}</p></section>` : ''}
       <section class="ag-sec ag-corpo mkt-mais"><h2 class="jvpg-tit">Mais detalhes</h2>${detalheMkt('Compras, consumo e relatório do agente', htmlPainelAgente('estoque').replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<button type="button" class="cc-btn ag-abrir"[^>]*>[^<]*<\/button>/, '').replace(/<section class="cc-bloco cc-seca-bloco">[\s\S]*?<\/section>/, ''))}</section>
       <footer class="ag-fim">J.A.R.V.I.S. · Estoque da Primos 3D</footer></div></div>`;
+  restaurarRascunhoContagem();
   montarSecadora3D();
+}
+// --- CONTAGEM (fase 8): peso bruto na balança − 120 g por carretel = filamento líquido. Rascunho guardado NO APARELHO a cada tecla
+//     (conveniência por aparelho, não é dado do app: some ao salvar) — antes, perder a página apagava a pesagem inteira.
+const TARA_CARRETEL_G = 120;
+const RASCUNHO_CONT = 'lifeos_rascunho_contagem';
+/** "1250", "1.250", "1,25" (kg) ou "1,25 kg" → gramas. Números pequenos (< 20) são kg. */
+function lerPesoG(txt) {
+  let s = String(txt || '').trim().toLowerCase().replace(/\s|g$/g, ''); if (!s) return null;
+  const kg = /kg$/.test(s); s = s.replace(/kg$/, '');
+  if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ''); else s = s.replace(',', '.');
+  const n = parseFloat(s); if (!isFinite(n) || n < 0) return null;
+  return Math.round(kg || n < 20 ? n * 1000 : n);
+}
+function rascunhoContagem() {
+  const d = {}; document.querySelectorAll('.est-cont label').forEach(l => { const p = l.querySelector('.est-peso'), c = l.querySelector('.est-carr'); if (!p) return; d[p.dataset.k] = { p: p.value, c: c ? c.value : '' };
+    const g = lerPesoG(p.value), liq = l.querySelector('.est-liq'); if (liq) liq.textContent = g === null ? '' : `= ${Math.max(0, g - TARA_CARRETEL_G * (Number(c && c.value) || 0))} g`; });
+  try { localStorage.setItem(RASCUNHO_CONT, JSON.stringify({ quando: Date.now(), d })); } catch (e) { }
+}
+function restaurarRascunhoContagem() {
+  let r = null; try { r = JSON.parse(localStorage.getItem(RASCUNHO_CONT)); } catch (e) { } if (!r || !r.d) return;
+  document.querySelectorAll('.est-cont label').forEach(l => { const p = l.querySelector('.est-peso'), c = l.querySelector('.est-carr'), v = p && r.d[p.dataset.k]; if (!v) return; p.value = v.p || ''; if (c && v.c !== '') c.value = v.c; });
+  rascunhoContagem();
 }
 function escolherCorEstoque(i) { if (i < 0 || !cc.seca3d) return; const b = cc.seca3d.escolherPor(i); if (b) { tocarBobina3D(b, 0, 0, i); const s = $j('cc-seca'); if (s) s.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }
 /** Contagem de filamentos: o Rafael pesou e diz quanto tem de cada cor (gramas) — vira um AJUSTE no estoque. */
@@ -8545,9 +8579,15 @@ function contagemEstoque(itens, origem) {
   return feitos;
 }
 function salvarContagemForm(ev) {
-  ev.preventDefault(); const itens = [...document.querySelectorAll('.est-cont input')].filter(i => i.value !== '').map(i => ({ material: i.dataset.mat, cor: i.dataset.cor, gramas: Number(i.value) }));
-  if (!itens.length) { toast('Digite o peso (g) de pelo menos uma cor.'); return; }
-  const f = contagemEstoque(itens, 'app'); toast(`Contagem salva: ${f.length} cor(es).`, 3500);
+  ev.preventDefault(); const itens = [], ruins = [];
+  document.querySelectorAll('.est-cont label').forEach(l => { const p = l.querySelector('.est-peso'), c = l.querySelector('.est-carr'); if (!p || p.value.trim() === '') return; const g = lerPesoG(p.value);
+    if (g === null) { ruins.push(p.dataset.cor); return; } itens.push({ material: p.dataset.mat, cor: p.dataset.cor, gramas: Math.max(0, g - TARA_CARRETEL_G * (Number(c && c.value) || 0)) }); });
+  if (ruins.length) { toast(`Não entendi o peso de: ${ruins.join(', ')}. Use só números (ex.: 1120).`, 6000); return; }
+  if (!itens.length) { toast('Digite o peso de pelo menos uma cor.'); return; }
+  const f = contagemEstoque(itens, 'app');
+  try { localStorage.removeItem(RASCUNHO_CONT); } catch (e) { }
+  if (cc.pagina === 'estoque') renderPaginaEstoque(); // redesenha com os números novos (a secadora também)
+  toast(`✓ Contagem salva — ${f.join(' · ')}`, 6000);
 }
 function htmlAgenteEstoque(a) {
   const e = calcularEstoque(); const max = Math.max(1, ...e.cores.map(c => c.comprado));
