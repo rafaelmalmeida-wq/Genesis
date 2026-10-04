@@ -2403,7 +2403,7 @@ function alternarTipoNota(tipo, el) {
 function renderFiltrosNota() {
   const el = document.getElementById('note-labels'); if (!el) return;
   const labels = todosMarcadores();
-  el.innerHTML = labels.length ? `<span class="chip ${noteLabel === '' ? 'sel' : ''}" onclick="filtrarMarcador('')">todos</span>` + labels.map(l => `<span class="chip ${noteLabel === l ? 'sel' : ''}" onclick="filtrarMarcador('${esc(l).replace(/'/g, '&#39;')}')">🏷️ ${esc(l)}</span>`).join('') : '';
+  el.innerHTML = labels.length ? `<span class="chip ${noteLabel === '' ? 'sel' : ''}" onclick="filtrarMarcador('')">todos</span>` + labels.map(l => `<span class="chip ${noteLabel === l ? 'sel' : ''}" data-marcador="${esc(l)}" onclick="filtrarMarcador(this.dataset.marcador)">🏷️ ${esc(l)}</span>`).join('') : '';
 }
 function filtrarMarcador(l) { noteLabel = l; renderNotes(); }
 function filtrarNotas(f, el) { noteFilter = f; document.querySelectorAll('#note-filters span').forEach(s => s.classList.remove('active')); if (el) el.classList.add('active'); renderNotes(); }
@@ -2869,7 +2869,7 @@ function renderMetas() {
     const atual = valorMeta(g); const p = g.target ? Math.min(100, Math.round(atual / g.target * 100)) : 0; const falta = Math.max(0, g.target - atual);
     let porMes = '';
     if (g.deadline && falta > 0) { const [y, m, d] = g.deadline.split('-').map(Number); const meses = Math.max(1, Math.round((new Date(y, m - 1, d) - new Date()) / (30.44 * 86400000))); porMes = ` · ${formatCurrency(falta / meses)}/mês por ${meses} ${meses === 1 ? 'mês' : 'meses'}`; }
-    ul.innerHTML += `<li class="goal-item" style="border-left-color:${p >= 100 ? '#34c759' : '#e0a800'}"><div class="transaction-info" style="flex:1"><span>🎯 ${esc(g.name)} ${p >= 100 ? '<span class="badge-paid">alcançada</span>' : ''}<small class="item-date"> · ${rotuloVinculo(g)}${g.deadline ? ' · até ' + isoParaBR(g.deadline) : ''}</small></span>
+    ul.innerHTML += `<li class="goal-item" style="border-left-color:${p >= 100 ? '#34c759' : '#e0a800'}"><div class="transaction-info" style="flex:1"><span>🎯 ${esc(g.name)} ${p >= 100 ? '<span class="badge-paid">alcançada</span>' : ''}<small class="item-date"> · ${esc(rotuloVinculo(g))}${g.deadline ? ' · até ' + isoParaBR(g.deadline) : ''}</small></span>
         <div class="cat-bar" style="margin-top:6px"><div style="width:${p}%; background:${p >= 100 ? '#34c759' : '#e0a800'}"></div></div>
         <small class="item-date">${formatCurrency(atual)} de ${formatCurrency(g.target)} (${p}%)${falta > 0 ? ` · faltam ${formatCurrency(falta)}${porMes}` : ''}</small>${g.note ? `<small class="item-notes">${esc(g.note)}</small>` : ''}</div>
       <div class="item-actions"><button class="mini-btn" title="Editar" onclick="editarMeta(${g.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMeta(${g.id})">✕</button></div></li>`;
@@ -3878,7 +3878,7 @@ function renderRede() {
   const ul = document.getElementById('rede-lista'); if (!ul) return; ul.innerHTML = '';
   const chips = document.getElementById('rede-chips');
   const lembrar = contacts.filter(precisaFalar).length;
-  if (chips) chips.innerHTML = `<span class="chip ${redeFiltro === '' ? 'sel' : ''}" onclick="filtrarRede('')">todos (${contacts.length})</span><span class="chip ${redeFiltro === '__fav' ? 'sel' : ''}" onclick="filtrarRede('__fav')">⭐ favoritos</span>${lembrar ? `<span class="chip ${redeFiltro === '__lembrar' ? 'sel' : ''}" onclick="filtrarRede('__lembrar')">⏰ falar (${lembrar})</span>` : ''}` + tagsDaRede().map(t => `<span class="chip ${redeFiltro === t ? 'sel' : ''}" onclick="filtrarRede('${esc(t).replace(/'/g, '&#39;')}')">🏷️ ${esc(t)}</span>`).join('');
+  if (chips) chips.innerHTML = `<span class="chip ${redeFiltro === '' ? 'sel' : ''}" onclick="filtrarRede('')">todos (${contacts.length})</span><span class="chip ${redeFiltro === '__fav' ? 'sel' : ''}" onclick="filtrarRede('__fav')">⭐ favoritos</span>${lembrar ? `<span class="chip ${redeFiltro === '__lembrar' ? 'sel' : ''}" onclick="filtrarRede('__lembrar')">⏰ falar (${lembrar})</span>` : ''}` + tagsDaRede().map(t => `<span class="chip ${redeFiltro === t ? 'sel' : ''}" data-tag="${esc(t)}" onclick="filtrarRede(this.dataset.tag)">🏷️ ${esc(t)}</span>`).join('');
   const lista = contatosFiltrados();
   if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:var(--txt4); background:transparent; border:none;">Guarde aqui quem você conhece do trabalho, dos negócios e da vida — com onde conheceu e quando falou pela última vez.</li>'; return; }
   lista.forEach(c => {
@@ -4183,12 +4183,22 @@ const AJUDA_CLAUDE = `<p><strong>1.</strong> Fale a mudança que quer <em>no app
 <p>Para <em>lançar dados</em> (pedido, cliente, gasto...), use o 🎤 azul — ele faz na hora, sem o computador.</p>`;
 
 function repoPadrao() { const h = location.hostname; if (!h.endsWith('.github.io')) return ''; const seg = location.pathname.split('/').filter(Boolean)[0]; return seg ? `${h.split('.')[0]}/${seg}` : ''; }
-function claudeConfigurado() { return !!(claudeConfig.repo && claudeConfig.token); }
-/** Chamada à API do GitHub, sempre dentro do repositório do app. */
+// Auditoria do Codex (04/10/2026, achado 1): o app só fala com o COFRE privado, e confere que ele é privado antes da 1ª gravação da sessão.
+function repoCofre() { return 'rafaelmalmeida-wq/Genesis-JARVIS'; } // função (e não const) para valer antes do JARVIS_REPO existir
+function claudeConfigurado() { return !!(claudeConfig.token && claudeConfig.repo === repoCofre()); }
+let cofrePrivadoOk = false;
+/** Chamada à API do GitHub, sempre dentro do cofre privado. */
 async function gh(caminho, opcoes = {}) {
+  if (claudeConfig.repo !== repoCofre()) throw new Error('o app só fala com o cofre privado do J.A.R.V.I.S.');
+  const cab = { 'Accept': 'application/vnd.github+json', 'Authorization': `Bearer ${claudeConfig.token}`, 'X-GitHub-Api-Version': '2022-11-28' };
+  if (opcoes.method && opcoes.method !== 'GET' && !cofrePrivadoOk) {
+    const ri = await fetch(`https://api.github.com/repos/${repoCofre()}`, { cache: 'no-store', headers: cab }), info = ri.ok ? await ri.json() : null;
+    if (!info || info.private !== true) throw new Error('o cofre não está privado: nada foi enviado');
+    cofrePrivadoOk = true;
+  }
   const r = await fetch(`https://api.github.com/repos/${claudeConfig.repo}${caminho}`, {
     ...opcoes, cache: 'no-store',
-    headers: { 'Accept': 'application/vnd.github+json', 'Authorization': `Bearer ${claudeConfig.token}`, 'X-GitHub-Api-Version': '2022-11-28', ...(opcoes.body ? { 'Content-Type': 'application/json' } : {}) }
+    headers: { ...cab, ...(opcoes.body ? { 'Content-Type': 'application/json' } : {}) }
   });
   if (!r.ok) { let msg = String(r.status); try { msg += ' ' + (await r.json()).message; } catch (e) { } throw new Error(msg); }
   return r.status === 204 ? null : r.json();
@@ -4355,20 +4365,21 @@ function renderPedidosClaude() {
 // Ajustes → ✳ Claude
 function carregarClaudeConfigNaTela() {
   const r = document.getElementById('claude-repo'); const t = document.getElementById('claude-token');
-  if (r) r.value = claudeConfig.repo || repoPadrao(); if (t) t.value = claudeConfig.token || '';
+  if (r) r.value = repoCofre(); if (t) t.value = claudeConfig.token || '';
   setClaudeStatus(claudeConfigurado() ? '🟢 Configurado neste aparelho.' : '⚪ Não configurado.', claudeConfigurado() ? '#34c759' : '#8e8e93');
 }
 function setClaudeStatus(txt, cor) { const el = document.getElementById('claude-status'); if (el) { el.innerText = txt; el.style.color = cor || ''; } }
 async function salvarClaudeConfig() {
-  const repo = document.getElementById('claude-repo').value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '');
-  const token = document.getElementById('claude-token').value.trim();
-  if (repo && !/^[\w.-]+\/[\w.-]+$/.test(repo)) { alert('O repositório deve ser no formato usuario/nome — ex.: fulano/Genesis'); return; }
-  claudeConfig = { repo, token };
-  localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); // configuração do aparelho, como a da sincronização (não é dado do app)
-  if (!claudeConfigurado()) { setClaudeStatus('⚪ Não configurado.', '#8e8e93'); return; }
+  const token = document.getElementById('claude-token').value.trim(), anterior = claudeConfig; // o repositório é sempre o cofre (auditoria do Codex, achado 1)
+  if (!token) { setClaudeStatus(claudeConfigurado() ? '🟢 Configurado neste aparelho.' : '⚪ Cole o token primeiro.', '#8e8e93'); return; }
+  claudeConfig = { repo: repoCofre(), token };
   setClaudeStatus('🔄 Testando...', '#007aff');
-  try { const info = await gh(''); await gh('/issues?per_page=1'); setClaudeStatus(`🟢 Conectado a ${info.full_name}. Já pode usar o botão ✳.`, '#34c759'); atualizarClaude(true); }
-  catch (e) { setClaudeStatus('🔴 Não conectou: ' + e.message + ' — confira o token e as permissões.', '#ff3b30'); }
+  try {
+    const info = await gh(''); if (info.private !== true) throw new Error('o cofre não está privado');
+    await gh('/issues?per_page=1');
+    localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); cofrePrivadoOk = true; // só guarda depois do teste dar certo
+    setClaudeStatus(`🟢 Conectado ao cofre privado (${info.full_name}). Já pode usar o botão ✳.`, '#34c759'); atualizarClaude(true);
+  } catch (e) { claudeConfig = anterior; setClaudeStatus('🔴 Não conectou: ' + e.message + ' — confira o token e as permissões. Nada foi alterado.', '#ff3b30'); }
 }
 // confere o andamento ao abrir o app, ao voltar pra ele e a cada 20 s enquanto houver pedido em andamento
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && Date.now() - claudeUltimaConsulta > 15000) atualizarClaude(true); });
@@ -4794,7 +4805,7 @@ function abrirCerebro() {
 // (chaves da IA e da brapi), caches lifeos_mercado_cache e lifeos_primoscentral (este vem do cofre).
 // Se o aparelho não tiver WebGL (ou o 3D não carregar), fica o cérebro 2D com as abas normais.
 // ============================================================================
-const JARVIS_REPO = 'rafaelmalmeida-wq/Genesis-JARVIS'; // o COFRE (privado). Só o nome; o token fica só no aparelho.
+const JARVIS_REPO = repoCofre(); // o COFRE (privado). Só o nome; o token fica só no aparelho.
 const jv = { modo: null, esperando: false, area: null, painel: null, assinatura: '', expandido: false, ouvindo: false, rec: null, religar: 0, enviarAoParar: false, iaPensando: false,
   anexos: [], contexto: '', areaMsg: null, aba: 'jarvis', atualizado: {}, ultimaSincCofre: 0, sincronizando: false, catalogo: null, fotos: new Map(), busca: '',
   miniaturas: {}, controle: null, payback: 12, calc: null, subContabil: 'geral', catLanc: 'Todos', buscaLanc: '', visita: null, gerandoBriefing: false,
@@ -5521,6 +5532,7 @@ function abrirPrimos(aba) {
 function fecharPrimos(daVolta) {
   if ($j('jv-primos').hidden) return;
   $j('jv-primos').hidden = true; if (!daVolta) desempilharCamada('primos');
+  if (jv.expo3d) jv.expo3d.renderer.domElement.remove(); // o expositor 3D para de desenhar escondido (auditoria do Codex, achado 11)
   if (jv.heroi) { jv.area = jv.heroi; renderHeroiJarvis(); renderAreasJarvis(); } // aberta pela barra do herói: volta para ele
   else if (jv.area === 'primos' && !jv.painel) { jv.area = null; if (jv.modo === '3d') JarvisBrain.voltar(); renderAreasJarvis(); }
 }
@@ -8948,17 +8960,19 @@ async function conectarJarvis() {
   const token = ($j('jv-token').value || '').trim().replace(/\s+/g, ''), st = $j('jv-conexao-status');
   if (/^(AIza|AQ\.)/.test(token)) { st.innerText = '🔴 Essa é a chave do Gemini — ela vai no item 1 (Cérebro). O código do GitHub começa com github_pat_.'; return; }
   if (token && !/^(github_pat_|ghp_)[\w]{20,}$/.test(token)) { st.innerText = '🔴 Esse código não parece do GitHub (começa com github_pat_). Copie de novo — ele só aparece uma vez; se perdeu, gere outro.'; return; }
-  claudeConfig = { repo: JARVIS_REPO, token }; localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); // configuração do aparelho
   if (!token) { st.innerText = 'Cole o código primeiro (passo 4).'; return; }
+  const anterior = claudeConfig; claudeConfig = { repo: JARVIS_REPO, token }; // só fica guardado se o teste der certo (auditoria do Codex, achado 1)
   st.innerText = '🔄 Testando…';
   try {
-    const info = await gh(''); await gh('/issues?per_page=1');
-    if (!info.private) throw new Error('o repositório não está privado');
+    const info = await gh(''); if (info.private !== true) throw new Error('o repositório não está privado');
+    await gh('/issues?per_page=1');
+    localStorage.setItem('lifeos_claude_config', JSON.stringify(claudeConfig)); cofrePrivadoOk = true; // configuração do aparelho
     st.innerText = '🟢 Conectado ao cofre privado. Buscando a Primos 3D…';
     jv.ultimaSincCofre = 0; await sincronizarCofre(true); enviarPendentesClaude(); atualizarClaude(true);
     st.innerText = '🟢 Tudo certo: prints e pedidos já vão para o computador, e a Primos 3D Central chegou.';
     setTimeout(renderAjustesJarvis, 2500);
   } catch (e) {
+    claudeConfig = anterior; // volta para a conexão que já funcionava (ou nenhuma)
     const m = String(e.message || ''); st.innerText = '🔴 Não conectou: ' + (/^401/.test(m) ? 'o GitHub não aceitou o código (copiou inteiro?).' : /^404/.test(m) ? 'o código não enxerga o Genesis-JARVIS — no passo 2, escolha Only select repositories → Genesis-JARVIS.' : /^403/.test(m) ? 'falta permissão — Contents e Issues em Read and write.' : m);
   }
 }
@@ -9054,8 +9068,26 @@ function migrarEntregasDePedidos() {
 }
 
 // Config/Backup
-function exportData() { const data = { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, recadosagentes: recadosAgentes, metasprimos: metasPrimos, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { try { const data = JSON.parse(e.target.result); tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length) salvar('orders', ped); } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.metasprimos) salvar('metasprimos', data.metasprimos); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+/** O que vai no backup (e o formato de cada módulo, que a importação confere). */
+function dadosBackup() { return { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, recadosagentes: recadosAgentes, metasprimos: metasPrimos, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; }
+function exportData() { const data = dadosBackup(); const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
+/** Confere o backup INTEIRO antes de gravar qualquer coisa (auditoria do Codex, achado 5): cada módulo tem que vir no mesmo formato
+ *  do que já está no aparelho (lista continua lista, objeto continua objeto). Devolve a lista de problemas (vazia = pode importar). */
+function validarBackup(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return ['o arquivo não é um backup do app'];
+  const erros = [], nomeTipo = t => t === 'array' ? 'uma lista' : t === 'object' ? 'um objeto' : t === 'number' ? 'um número' : t === 'string' ? 'um texto' : t;
+  const atual = dadosBackup(), tipoDe = x => x === null || x === undefined ? null : Array.isArray(x) ? 'array' : typeof x;
+  Object.keys(data).forEach(k => {
+    const v = data[k]; if (v === null || v === undefined) return;
+    const tipo = tipoDe(v);
+    let local = null; try { local = JSON.parse(localStorage.getItem('lifeos_' + k)); } catch (e) { }
+    const esperado = tipoDe(atual[k]) || tipoDe(local); // o formato que o app usa (ou o que já está gravado); módulo desconhecido: aceita
+    if (esperado && tipo !== esperado) erros.push(`${k}: deveria ser ${nomeTipo(esperado)} e veio ${nomeTipo(tipo)}`);
+    else if (tipo === 'array' && v.some(x => x === null || x === undefined)) erros.push(`${k}: tem itens vazios`);
+  });
+  return erros;
+}
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { let data; try { data = JSON.parse(e.target.result); } catch (error) { alert('Erro ao ler o arquivo: não é um backup do app.'); return; } const erros = validarBackup(data); if (erros.length) { alert('Backup NÃO importado (nada foi alterado):\n• ' + erros.slice(0, 6).join('\n• ')); return; } try { tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length || !data.orders.length) salvar('orders', ped); /* lista vazia no backup = sem pedidos (achado 6); backup antigo só com entregas não mexe nos pedidos */ } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.metasprimos) salvar('metasprimos', data.metasprimos); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -11289,13 +11321,25 @@ let syncEditouDurante = false; // alguma gravação aconteceu enquanto a rede re
 /** Grava um módulo no localStorage, carimba a hora e agenda uma sincronização. */
 function salvar(modulo, valor) {
   if (typeof protegerEsvaziamento === 'function') protegerEsvaziamento(modulo, valor);
-  localStorage.setItem('lifeos_' + modulo, JSON.stringify(valor));
+  // Auditoria do Codex (achado 4): conteúdo e carimbo andam juntos. Se faltar espaço no aparelho no meio do caminho, desfaz tudo
+  // (senão o conteúdo novo ficava com o carimbo velho e a planilha devolvia a versão antiga) e avisa que NÃO salvou.
+  const chave = 'lifeos_' + modulo, antes = localStorage.getItem(chave), carimboAntes = syncMeta[modulo];
+  try {
+    localStorage.setItem(chave, JSON.stringify(valor));
+    syncMeta[modulo] = Date.now();
+    localStorage.setItem('lifeos_sync_meta', JSON.stringify(syncMeta));
+  } catch (e) {
+    try { if (antes === null) localStorage.removeItem(chave); else localStorage.setItem(chave, antes); } catch (e2) { }
+    if (carimboAntes === undefined) delete syncMeta[modulo]; else syncMeta[modulo] = carimboAntes;
+    console.error('salvar:', modulo, e);
+    toast('⚠️ Sem espaço no aparelho: a última alteração NÃO foi salva. Apague fotos ou anexos antigos e tente de novo.', 7000);
+    return false;
+  }
   if (typeof renderAvisos === 'function') setTimeout(renderAvisos, 0);
-  syncMeta[modulo] = Date.now();
-  localStorage.setItem('lifeos_sync_meta', JSON.stringify(syncMeta));
   syncEditouDurante = true;
   marcarPendente(true);
   agendarSync();
+  return true;
 }
 
 function marcarPendente(v) {
@@ -11328,6 +11372,7 @@ async function sincronizar() {
     // Google Calendar: só pede o espelhamento quando plantões/compromissos mudaram desde o último envio
     const agendaStamp = Number(localStorage.getItem('lifeos_agenda_stamp')) || 0;
     const precisaAgenda = !!syncConfig.agenda && (agendaForcar || (syncMeta.shifts || 0) > agendaStamp || (syncMeta.events || 0) > agendaStamp);
+    const agendaEnviada = Math.max((dados.shifts || {}).updatedAt || 0, (dados.events || {}).updatedAt || 0); // o que FOI enviado (auditoria do Codex, achado 7)
     agendaForcar = false;
 
     // Content-Type text/plain de propósito: evita o "preflight" CORS que o Apps Script não responde.
@@ -11342,7 +11387,7 @@ async function sincronizar() {
     const mudou = aplicarRemoto(r.dados || {});
     if (precisaAgenda) {
       if (r.agenda && r.agenda.ok) {
-        localStorage.setItem('lifeos_agenda_stamp', String(Math.max(syncMeta.shifts || 0, syncMeta.events || 0)));
+        localStorage.setItem('lifeos_agenda_stamp', String(agendaEnviada)); // edição feita durante o envio continua pendente para a agenda
         const a = r.agenda; setAgendaStatus('ok', `${a.total} na agenda · +${a.criados} criado${a.criados === 1 ? '' : 's'}, ${a.atualizados} atualizado${a.atualizados === 1 ? '' : 's'}, ${a.removidos} removido${a.removidos === 1 ? '' : 's'}`);
       } else if (r.agenda) setAgendaStatus('erro', r.agenda.erro || 'falha no Calendar');
       else setAgendaStatus('erro', 'o Code.gs implantado ainda é a versão 1 (sem agenda). Cole a v2 e crie uma nova versão da implantação.');

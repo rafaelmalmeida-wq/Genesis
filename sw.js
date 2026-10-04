@@ -1,4 +1,4 @@
-const CACHE_NAME = 'genesis-cache-v58';
+const CACHE_NAME = 'genesis-cache-v59';
 const urlsToCache = [
   './',
   './index.html',
@@ -56,13 +56,25 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(pedido)
       .then(res => {
-        const copia = res.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(req, copia));
-        return res;
+        // só guarda resposta boa: um erro 404/500 passageiro não pode apagar a cópia que funciona (auditoria do Codex, achado 9)
+        if (res.ok && res.type === 'basic') {
+          const copia = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(req, copia));
+          return res;
+        }
+        return reserva(req).then(c => c || res);
       })
-      .catch(() => caches.match(req))
+      .catch(() => reserva(req))
   );
 });
+
+// Reserva sem internet: a cópia exata; numa navegação com endereço diferente (ex.: ./?abrir=diario, vindo da notificação),
+// a página principal guardada — o app lê o endereço e abre a tela certa (auditoria do Codex, achado 10).
+function reserva(req) {
+  return caches.match(req).then(c => c || (req.mode === 'navigate'
+    ? caches.match(req, { ignoreSearch: true }).then(c2 => c2 || caches.match('./index.html'))
+    : undefined));
+}
 
 // NOTIFICAÇÕES do J.A.R.V.I.S. (fase 8): chegam cifradas da nuvem do cofre (agentes/dia.mjs) e aparecem na tela.
 // Toda mensagem PRECISA virar notificação (o iPhone corta a permissão de quem recebe e não mostra).

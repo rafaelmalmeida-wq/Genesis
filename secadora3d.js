@@ -127,11 +127,16 @@ class Secadora {
     const usados = lista.map((b, k) => ({ b, ...lugares[k] }));
     const brilho = usados.filter(u => u.b.brilho), fosco = usados.filter(u => !u.b.brilho);
     this.flanges = new THREE.InstancedMesh(this.geoFlange, this.matFlange, Math.max(1, usados.length * 2));
-    this.miolos = new THREE.InstancedMesh(new THREE.CylinderGeometry(R_MIOLO, R_MIOLO, LARG_BOB, 28, 1, true), this.matMiolo, Math.max(1, usados.length));
-    const geoFio = new THREE.CylinderGeometry(1, 1, LARG_BOB - 0.3, 48, 6);
-    // listras finas de "fio enrolado": ondulação no raio (dá textura sem custo de textura)
-    const pos = geoFio.attributes.position; for (let v = 0; v < pos.count; v++) { const x = pos.getX(v), z = pos.getZ(v), y = pos.getY(v), rr = Math.hypot(x, z); if (rr > 0.5) { const k = 1 + Math.sin(y * 9) * 0.006; pos.setX(v, x * k); pos.setZ(v, z * k); } }
-    geoFio.computeVertexNormals();
+    // miolo e fio não mudam com os dados: são criados UMA vez e reaproveitados (antes vazavam a cada atualização — auditoria do Codex, achado 12)
+    if (!this.geoMiolo) this.geoMiolo = new THREE.CylinderGeometry(R_MIOLO, R_MIOLO, LARG_BOB, 28, 1, true);
+    this.miolos = new THREE.InstancedMesh(this.geoMiolo, this.matMiolo, Math.max(1, usados.length));
+    if (!this.geoFio) {
+      const g = this.geoFio = new THREE.CylinderGeometry(1, 1, LARG_BOB - 0.3, 48, 6);
+      // listras finas de "fio enrolado": ondulação no raio (dá textura sem custo de textura)
+      const pos = g.attributes.position; for (let v = 0; v < pos.count; v++) { const x = pos.getX(v), z = pos.getZ(v), y = pos.getY(v), rr = Math.hypot(x, z); if (rr > 0.5) { const k = 1 + Math.sin(y * 9) * 0.006; pos.setX(v, x * k); pos.setZ(v, z * k); } }
+      g.computeVertexNormals();
+    }
+    const geoFio = this.geoFio;
     this.fios = new THREE.InstancedMesh(geoFio, this.matFio, Math.max(1, fosco.length));
     this.fiosBrilho = new THREE.InstancedMesh(geoFio, this.matFioBrilho, Math.max(1, brilho.length));
     this.flanges.count = usados.length * 2; this.miolos.count = usados.length; this.fios.count = fosco.length; this.fiosBrilho.count = brilho.length;

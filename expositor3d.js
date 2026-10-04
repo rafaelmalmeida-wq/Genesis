@@ -188,7 +188,7 @@ class Vitrine {
   atualizar(dados) { if (dados.nome !== this.nome) { this.nome = dados.nome; const mat = this.placa.material[4]; if (mat.map) mat.map.dispose(); mat.map = texturaPlaca(dados.nome); mat.needsUpdate = true; } this.chaveiros(dados); this.tocar(); }
   tocar() { if (!this.raf && !this.solto) this.raf = requestAnimationFrame(() => this.quadro()); }
   quadro() {
-    this.raf = 0; const el = this.renderer.domElement; if (this.solto || !el.isConnected || document.hidden) return;
+    this.raf = 0; const el = this.renderer.domElement; if (this.solto || !el.isConnected || document.hidden || !el.getClientRects().length) return; // escondido: não desenha (achado 11)
     const agora = performance.now(), parado = agora - (this.mexeu || 0) > 2500;
     if (Math.abs(this.vel) > 0.0004) { this.ang += this.vel; this.vel *= 0.94; } else if (parado) this.ang += 0.0025;
     const alvoBal = Math.max(-0.5, Math.min(0.5, -this.vel * 8)); this.balanco += (alvoBal - this.balanco) * 0.12;
