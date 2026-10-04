@@ -7316,7 +7316,7 @@ function encerrarConversaVoz(daVolta) {
 // cofre (`dados/recados.json`, anonimizado) — os agentes da nuvem leem na próxima rodada. Compra de filamento também
 // entra no estoque na hora (e o lançamento na planilha vai ao PC com cartão de confirmação).
 // ============================================================================
-const MAPA_FILTRO = 'contabil = dinheiro, gasto, preço, caixa, metas, sócio, aporte, MEI · estoque = filamento, insumos, compras de material · producao = imprimir, máquinas, falhas, tempo de impressão · marketing = vídeos, fotos, TikTok, Instagram, ideias de post · vendas = clientes, orçamentos, pedidos, vendas · consignacao = expositores e chaveiros · shopee = loja da Shopee, anúncios · dev = mudanças no app · digital = e-book, mentoria, curso, produto digital, documentar o que o J.A.R.V.I.S. faz';
+const MAPA_FILTRO = 'contabil = dinheiro, gasto, preço, caixa, metas, sócio, aporte, MEI · estoque = filamento, insumos, compras de material · producao = imprimir, máquinas, falhas, tempo de impressão · marketing = vídeos, fotos, TikTok, Instagram, ideias de post · vendas = clientes, orçamentos, pedidos, vendas · consignacao = expositores e chaveiros · shopee = loja da Shopee, anúncios · dev = mudanças no app · digital = e-book, mentoria, curso, produto digital, documentar o que o J.A.R.V.I.S. faz · prospeccao = retorno, previsão de vendas, potencial de um produto ou canal, quanto vou ganhar, vale a pena';
 function registrarRecado(agentes, texto, tipo, origem) {
   const ids = [].concat(agentes || []).map(String).filter(id => agentesCentral().some(a => a.id === id));
   if (!ids.length || !String(texto || '').trim()) return null;
@@ -7508,10 +7508,19 @@ const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafa
   { id: 'consignacao', setor: 'primos', nome: 'Consignação', funcao: 'Parceiros, remessas, acertos e mix', skills: ['Gestão de parceiros e pontos', 'Controle de remessas, vendas e devoluções', 'Conferência de acerto e comissões', 'Gestão de catálogo e personalização', 'Desempenho e reposição por ponto'], aba: 'chaveiros' },
   { id: 'shopee', setor: 'primos', nome: 'Shopee', funcao: 'Mercado, anúncios, catálogo, preço e desempenho da loja', skills: ['Inteligência de mercado 3D', 'Anúncios que vendem', 'Catálogo e publicação', 'Preço e rentabilidade por anúncio', 'Desempenho e Shopee Ads'] },
   { id: 'dev', setor: 'primos', nome: 'Desenvolvedor', funcao: 'Cria os produtos: placas, carimbos, chaveiros com logo, kits empresariais, luminárias e a camisa — em Blender/Fusion e 3MF', skills: ['Modelagem paramétrica FDM', 'Placas, nomes e carimbos', 'Chaveiros e brindes com logo', 'Luminárias e funcionais', 'Projeto 3MF no Bambu Studio'] },
-  { id: 'digital', setor: 'primos', nome: 'Produto Digital', funcao: 'E-book e mentoria: documenta tudo o que o J.A.R.V.I.S. e os agentes produzem e transforma em produto digital', skills: ['Documentação viva', 'E-book', 'Mentoria', 'Lançamento digital', 'Prova e resultados'], semNuvem: true } // fase 10 (pedido do Rafael 04/10/2026): por enquanto o Claude escreve no PC
+  { id: 'digital', setor: 'primos', nome: 'Produto Digital', funcao: 'E-book e mentoria: documenta tudo o que o J.A.R.V.I.S. e os agentes produzem e transforma em produto digital', skills: ['Documentação viva', 'E-book', 'Mentoria', 'Lançamento digital', 'Prova e resultados'], semNuvem: true }, // fase 10 (pedido do Rafael 04/10/2026): por enquanto o Claude escreve no PC
+  { id: 'prospeccao', setor: 'primos', nome: 'Prospecção de Vendas', funcao: 'O analista: lê todos os agentes e mostra quanto cada canal e cada item já deu, quanto dá de forma realista e quanto dá em escala, preso à capacidade real', skills: ['Capacidade e gargalo', 'Lucro por hora de máquina', 'Previsão realista por canal', 'Economia de marketplace', 'Consignação e pontos de venda', 'Produto digital e funil', 'Produto novo: vale a pena?', 'Cenários de escala'] } // fase 10 (pedido do Rafael 04/10/2026)
 ];
 /** O que cada skill faz (pedido do Rafael 02/10/2026) — aparece no painel do agente e vai no "manual" dele na nuvem (rodar.mjs). */
 const SKILLS_DESC = {
+  'Capacidade e gargalo': 'Horas de máquina (impressoras × horas por dia × eficiência), as suas horas na semana e o filamento em estoque: o que acabar primeiro é o teto de vendas — e é ali que um investimento rende mais.',
+  'Lucro por hora de máquina': 'A régua de eficiência da fábrica: quanto cada item deixa por hora de impressora. Põe as máquinas no que mais rende e mostra o que só vale imprimir com a máquina parada.',
+  'Previsão realista por canal': 'Usa o ritmo real de cada canal com freio quando há poucos dias de dados; sem histórico, analogia com item parecido e faixa conservadora — sempre dizendo a confiança. 3 meses, 12 meses e 3 anos.',
+  'Economia de marketplace': 'Shopee (20% + R$ 4 por item) e Mercado Livre (10–14% + custo fixo abaixo de R$ 79): preço, embalagem, anúncios pagos e o lucro real por venda; ROAS não é lucro.',
+  'Consignação e pontos de venda': 'Giro por expositor, comissão, custo de abrir um ponto (estrutura + chaveiros), payback por ponto e onde abrir os próximos.',
+  'Produto digital e funil': 'E-book e mentoria: visitas → página → compra (1–3%), taxas da plataforma, custo por venda no anúncio, order bump e upsell — volume com preço de entrada e lucro no upsell.',
+  'Produto novo: vale a pena?': 'Preço, gramas, horas e canal de um produto novo → lucro por peça, por hora de máquina, por mês e a posição no ranking da fábrica.',
+  'Cenários de escala': 'Realista × em escala: quanto investir (expositores, anúncios, máquinas), o retorno em 3/12/36 meses e o próximo gargalo que aparece quando cresce.',
   'Documentação viva': 'Registra o que cada agente e o J.A.R.V.I.S. produzem (decisões, números, aprendizados) e separa o que vira capítulo, aula ou exemplo.',
   'E-book': 'Escreve e revisa o e-book capítulo por capítulo: como o J.A.R.V.I.S. foi construído e o que a Primos 3D aprendeu de impressão 3D, com exemplos reais e sem dado de cliente.',
   'Mentoria': 'Transforma o e-book em módulos de mentoria/curso: roteiro de aulas, exercícios, checklists e materiais de apoio.',
@@ -7600,6 +7609,7 @@ function estadoAgenteBase(a) {
   }
   if (a.aba) { const r = relatorioAgente(a.id); return r ? { nivel: 'ok', metrica: `Relatório de ${isoParaBR(r.dia || '').slice(0, 5)}` } : { nivel: 'sem', metrica: 'Aguardando o 1º relatório' }; }
   if (a.id === 'mercado') return { nivel: 'ok', metrica: 'Cotações ao vivo' };
+  if (a.id === 'prospeccao') { if (!pc) return { nivel: 'sem', metrica: 'Sem dados do cofre' }; try { const m = modeloProsp(); return { nivel: 'ok', metrica: `${reaisK(m.rea.total(12))} realista · 12 m` }; } catch (e) { return { nivel: 'sem', metrica: 'Calculando…' }; } }
   if (a.id === 'treino') { const n = workouts.filter(w => { const d = w.date || w.data; return d && diasEntre(d, hojeISO()) <= 7; }).length; return { nivel: n >= 3 ? 'ok' : 'atencao', metrica: `${plural(n, 'treino', 'treinos')} em 7 dias` }; }
   return { nivel: 'sem', metrica: 'Em preparação' };
 }
@@ -7643,6 +7653,7 @@ function agentesCentral() { return todosAgentes().filter(a => a.setor === 'primo
 // bloco = reposicionar (fica salvo neste aparelho: prefs.ccPos); tocar no bloco = abre o agente (conversa, comandos, resultados).
 const CV = { cam: null, arrasto: null, ptrs: new Map(), pinca: null };
 const CV_PRIMOS = ['contabil', 'marketing', 'estoque', 'producao', 'vendas', 'consignacao', 'shopee', 'dev'];
+const AGENTES_NUVEM = [...CV_PRIMOS, 'prospeccao']; // fase 10: os que trabalham na rodada da nuvem (comando, ▶, pausar); a Prospecção fica FORA do círculo
 const celCanvas = () => window.innerWidth < 700;
 const chavePosCanvas = () => celCanvas() ? 'ccPosCel' : 'ccPos'; // celular e PC guardam arranjos diferentes
 function posPadraoCanvas() {
@@ -7655,7 +7666,8 @@ function posPadraoCanvas() {
   }
   CV_PRIMOS.forEach((id, i) => { const a = -Math.PI / 2 + i / CV_PRIMOS.length * Math.PI * 2; p[id] = { x: Math.round(Math.cos(a) * R1 * 1.25), y: Math.round(Math.sin(a) * R1) }; });
   p.shopee = { x: -300, y: 600 }; p.dev = { x: 300, y: 600 }; p.digital = { x: 0, y: 820 }; // Shopee, Desenvolvedor e Produto Digital embaixo, fora do círculo da operação
-  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee' && a.id !== 'digital'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
+  p.prospeccao = { x: 0, y: -640 }; // fase 10: o analista em cima do círculo, lendo todos
+  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee' && a.id !== 'digital' && a.id !== 'prospeccao'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
   return p;
 }
 function posCanvas(id) { const s = (prefs[chavePosCanvas()] || {})[id]; return s || posPadraoCanvas()[id] || { x: 0, y: 0 }; }
@@ -7672,6 +7684,8 @@ function fiosCanvas() {
   F.push({ de: 'dev', para: 'digital', rot: 'projetos viram capítulos', lateral: true }); // fase 10: o Produto Digital documenta tudo
   F.push({ de: 'marketing', para: 'digital', rot: 'conteúdo e público', lateral: true });
   F.push({ de: 'producao', para: 'digital', rot: 'saber de impressão', lateral: true });
+  // fase 10: a Prospecção lê os outros (capacidade, custos, giro, anúncios, e-book)
+  [['producao', 'capacidade'], ['contabil', 'custos e margens'], ['consignacao', 'giro dos expositores'], ['shopee', 'anúncios e preços'], ['digital', 'e-book']].forEach(([de, rot]) => F.push({ de, para: 'prospeccao', rot, lateral: true }));
   return F;
 }
 const ESTADOS_CV = { rodando: ['Rodando', '#0a84ff'], pausado: ['Pausado', '#8e8e93'], atencao: ['Atenção', '#ff9f0a'], ok: ['Ativo', '#30d158'], sem: ['Sem dados', '#8e8e93'], fila: ['Na fila', '#bf5af2'] };
@@ -7685,7 +7699,7 @@ function tarefaCanvas(a) {
   const ex = cc.execucao || {}, t = (ex.tarefas || {})[a.id];
   if (t && (t.status === 'rodando' || t.status === 'fila')) return t.instrucao ? `Executando: ${t.instrucao}` : 'Gerando o relatório agora…';
   const r = relatorioAgente(a.id); if (r && (r.acoes || []).length) return r.acoes[0];
-  return a.aba || CV_PRIMOS.includes(a.id) ? 'Aguardando a rodada das 7h' : a.missao || a.funcao || '';
+  return a.aba || AGENTES_NUVEM.includes(a.id) ? 'Aguardando a rodada das 7h' : a.missao || a.funcao || '';
 }
 function renderCanvasCentral() {
   const q = $j('cc-quadro'); if (!q) return;
@@ -7787,7 +7801,7 @@ async function controlarAgente(acao, id, instrucao) {
       const p = { id: 'p' + novoId(), agente: id, instrucao: String(instrucao || '').slice(0, 400), quando: new Date().toISOString() };
       await gravarControleCofre(d => { d.pedidos = (d.pedidos || []).concat(p); d.cancelar = (d.cancelar || []).filter(x => x !== id && x !== 'todos'); }, `Painel: rodar ${id}`);
       cc.execucao = cc.execucao || { tarefas: {} }; cc.execucao.tarefas = cc.execucao.tarefas || {};
-      (id === 'todos' ? CV_PRIMOS : [id]).forEach(x => { cc.execucao.tarefas[x] = { status: 'fila', instrucao: p.instrucao }; });
+      (id === 'todos' ? AGENTES_NUVEM : [id]).forEach(x => { cc.execucao.tarefas[x] = { status: 'fila', instrucao: p.instrucao }; });
       toast(`▶ ${nome}: na fila. O GitHub começa em instantes.`, 4000);
     } else if (acao === 'pausar' || acao === 'retomar') {
       await gravarControleCofre(d => { const s = new Set(d.pausados || []); acao === 'pausar' ? s.add(id) : s.delete(id); d.pausados = [...s]; }, `Painel: ${acao} ${id}`);
@@ -8378,6 +8392,7 @@ function renderPaginaAgente() {
   if (id === 'contabil') return renderPaginaFinanceiro();
   if (id === 'marketing') return renderPaginaMarketing();
   if (id === 'estoque') return renderPaginaEstoque();
+  if (id === 'prospeccao') return renderPaginaProspeccao();
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -8578,7 +8593,8 @@ function desenharFiosCanvas() {
     rot += `<span class="cv-rot${f.lateral ? ' lateral' : ''}${ativo ? ' ativo' : ''}" style="left:${(mx + nx / 2).toFixed(0)}px; top:${(my + ny / 2).toFixed(0)}px">${esc(f.rot)}</span>`;
   });
   svg.innerHTML = h;
-  let r = $j('cv-rots'); if (!r) { r = document.createElement('div'); r.id = 'cv-rots'; r.className = 'cv-rots'; $j('cv-mundo').insertBefore(r, $j('cv-nos')); } // etiquetas por baixo dos blocos r.innerHTML = rot;
+  let r = $j('cv-rots'); if (!r) { r = document.createElement('div'); r.id = 'cv-rots'; r.className = 'cv-rots'; $j('cv-mundo').insertBefore(r, $j('cv-nos')); } // etiquetas por baixo dos blocos
+  r.innerHTML = rot;
 }
 function desenharMiniCanvas() {
   const mini = $j('cv-mini'), q = $j('cc-quadro'); if (!mini || !q || !CV.cam) return;
@@ -8774,6 +8790,301 @@ async function aprovarCapEbook(id) {
   const t = (($j('eb-pedido') || {}).value || '').trim();
   const r = await enviarAoComputador(`E-book · aprovo o capítulo ${c.n} (${c.titulo}).${t ? ' Observação: ' + t : ''}`, [], 'Produto Digital · prévia do e-book', 'primos', `Produto Digital: marcar o capítulo ${c.n} do e-book como aprovado (status "pronto") e publicar a prévia.`, 'rafael');
   if (r) { ebLeitor.enviados[id] = 'aprovado'; renderLeitorEbook(true); }
+}
+// =====================================================================================================================
+// PROSPECÇÃO DE VENDAS (fase 10, pedido do Rafael 04/10/2026): o ANALISTA que lê todos os agentes da Primos e mostra, por canal e
+// por item, quanto JÁ VOLTOU, quanto volta de forma REALISTA (3 meses · 12 meses · 3 anos) e quanto volta EM ESCALA — sempre preso à
+// capacidade real (máquinas × horas por dia × eficiência, as horas do Rafael, o filamento em estoque). Régua de eficiência: LUCRO
+// POR HORA DE MÁQUINA (numa fábrica de impressão 3D a máquina é o gargalo — teoria das restrições). Canal sem histórico (Shopee,
+// Mercado Livre, e-book) = analogia + faixa conservadora, com a confiança dita. As contas são DAQUI (determinísticas; o simulador
+// muda as premissas, guardadas neste aparelho em prefs.prosp) e vão ao cofre (dados/prospeccao.json) para o agente da nuvem
+// (rodar.mjs, id 'prospeccao') ler junto com os relatórios dos outros agentes e ranquear as oportunidades.
+// Taxas pesquisadas em 04/10/2026: Shopee 20% + R$ 4 por item (CNPJ); Mercado Livre clássico 10–14% + custo fixo até ~R$ 6,75
+// abaixo de R$ 79; Kiwify 8,99% + R$ 2,49 (Hotmart 9,9% + R$ 1); página de venda de infoproduto converte 1–3%.
+// =====================================================================================================================
+const PROSP_PADRAO = { maqHorasDia: 12, eficiencia: 0.75, maquinasExtra: 0, horasRafael: 40, novosExpositores: 4, shopeeAds: true, mlMes: 4, ebookPreco: 67, ebookAds: 300, b2bAtivo: true };
+const PROSP_SIM = [ // o simulador da página: [chave, rótulo, mín, máx, passo, formato]
+  ['maqHorasDia', 'Horas por dia de cada impressora', 4, 24, 1, v => v + ' h'],
+  ['maquinasExtra', 'Impressoras a mais', 0, 7, 1, v => v ? '+' + v : 'nenhuma'],
+  ['horasRafael', 'Suas horas por semana na Primos', 5, 70, 5, v => v + ' h'],
+  ['novosExpositores', 'Expositores novos (cenário em escala)', 0, 20, 1, v => String(v)],
+  ['ebookPreco', 'Preço do e-book', 27, 197, 10, v => 'R$ ' + v],
+  ['ebookAds', 'Anúncio do e-book por mês', 0, 2000, 50, v => v ? 'R$ ' + v : 'sem anúncio'],
+  ['mlMes', 'Mercado Livre começa no mês', 1, 12, 1, v => v + 'º']
+];
+const CANAIS_PROSP = { consignado: ['Chaveiros · consignado', '#bf5af2', '🔑'], shopee: ['Shopee', '#ff6b2c', '🛍'], ml: ['Mercado Livre', '#ffd60a', '🤝'], direto: ['Direto · brindes e encomendas', '#30d158', '🏢'], ebook: ['E-book J.A.R.V.I.S.', '#e9c46a', '📖'] };
+const HORIZ_PROSP = [[3, '3 meses'], [12, '12 meses'], [36, '3 anos']];
+const COR_PROSP = '#2dd4bf';
+const prospEstado = { horiz: 12, cen: 'realista', canal: null, novo: { preco: 35, gramas: 60, horas: 2, canal: 'shopee', vendas: 10 }, publicadoEm: 0 };
+function premissasProsp() { return { ...PROSP_PADRAO, ...(prefs.prosp || {}) }; }
+function reaisK(v) { if (v == null || isNaN(v)) return '—'; const a = Math.abs(v); return a >= 1e6 ? 'R$ ' + (v / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi' : a >= 1e4 ? 'R$ ' + (v / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mil' : reais(Math.round(v)); }
+const somaArr = (a, n) => a.slice(0, n).reduce((s, x) => s + x, 0);
+/** Os dados de partida, lidos dos outros agentes (Central, expositores, Shopee, vendas, e-book, estoque, marketing). */
+function baseProsp() {
+  const pc = primosCentral || {}, par = pc.parametros || {}, hoje = hojeISO(), cp = pc.custoPeca || [], com = par.comissaoExpositor || 0.3;
+  const media = (L, f) => L.length ? L.reduce((s, x) => s + f(x), 0) / L.length : null;
+  // CONSIGNADO (chaveiros nos expositores)
+  const exs = listaExpositores(pc).map(l => expositorPC(pc, l)), ativos = exs.filter(x => x.colocados), itensEx = (pc.expositores || {}).itens || [];
+  const qtdEx = itensEx.reduce((s, i) => s + (i.qtd || 0), 0), vendEx = ativos.reduce((s, x) => s + x.vendidos, 0);
+  const diasEx = (pc.expositores || {}).inicio ? Math.max(1, diasEntre(pc.expositores.inicio, hoje)) : 1;
+  const precoEx = qtdEx ? itensEx.reduce((s, i) => s + (i.qtd || 0) * (i.preco || 0), 0) / qtdEx : 13, custoEx = qtdEx ? itensEx.reduce((s, i) => s + (i.qtd || 0) * (i.custo || 0), 0) / qtdEx : 1.7;
+  const linhaEx = p => cp.find(r => /expositor/i.test(r.produto || '') && Number(r.preco) === p), hEx = p => { const r = linhaEx(p); return r && r.horasLote && r.pecasLote ? r.horasLote / r.pecasLote : p === 15 ? 0.3 : 0.2; }, gEx = p => { const r = linhaEx(p); return r && r.gramasLote && r.pecasLote ? r.gramasLote / r.pecasLote : 5; };
+  const f15 = qtdEx ? itensEx.filter(i => i.preco === 15).reduce((s, i) => s + (i.qtd || 0), 0) / qtdEx : 0.5;
+  const PRIOR = 1 / 7; // conservador: 1 chaveiro por semana em cada ponto, com o peso de 14 dias de dados (2 dias de vendas não viram tendência)
+  const rateEx = ativos.length ? (vendEx + PRIOR * 14 * ativos.length) / ((diasEx + 14) * ativos.length) : PRIOR;
+  const estrutura = Number(((pc.chaveiros || {}).estrutura || {}).custoEstimado) || 34;
+  const ex = { ativos: ativos.length, locais: exs, vendidos: vendEx, colocados: ativos.reduce((s, x) => s + x.colocados, 0), dias: diasEx, rate: rateEx, preco: precoEx, custo: custoEx, com,
+    lucroUn: precoEx * (1 - com) - custoEx, h: f15 * hEx(15) + (1 - f15) * hEx(10), g: f15 * gEx(15) + (1 - f15) * gEx(10), investPonto: estrutura + 112 * custoEx, estrutura,
+    jaDeu: ativos.reduce((s, x) => s + x.voltou, 0), lucroJa: ativos.reduce((s, x) => s + x.lucroVendas, 0), investido: ativos.reduce((s, x) => s + x.investido, 0) };
+  // SHOPEE (anúncios: os rascunhos do agente Shopee; custo/tempo: custoPeca quando há, senão estimativa marcada)
+  const prodSh = [...new Map((pc.shopee || []).filter(s => !/J\.?A\.?R\.?V\.?I\.?S/i.test(s.categoria || '')).map(s => [semAcentoCer(s.produto), s])).values()];
+  const rasc = ((relatorioAgente('shopee') || {}).anuncios) || [], precoSh = media(rasc.filter(a => Number(a.preco) > 0), a => Number(a.preco)) || 39;
+  const cpSh = cp.filter(r => /shopee/i.test(r.canal || '') && Number(r.custo) > 0 && r.pecasLote);
+  const custoSh = media(cpSh, r => Number(r.custo)), hSh = media(cpSh.filter(r => r.horasLote), r => r.horasLote / r.pecasLote), gSh = media(cpSh.filter(r => r.gramasLote), r => r.gramasLote / r.pecasLote);
+  const emb = (par.embalagem || 0.75) + 1.5, taxaSh = par.shopeeComissao || 0.2, fixaSh = par.shopeeFixa || 4;
+  const custoShU = custoSh || precoSh * 0.22, vendSh = (pc.vendas || []).filter(v => /shopee/i.test(v.canal || ''));
+  const sh = { produtos: prodSh.length, prontos: Math.max(1, prodSh.filter(s => s.anuncio > 0).length), rascunhos: rasc.length, preco: precoSh, custo: custoShU, estimado: !custoSh, h: hSh || 2.5, g: gSh || 70,
+    lucroUn: precoSh * (1 - taxaSh) - fixaSh - custoShU - emb, taxa: taxaSh, fixa: fixaSh, emb, jaDeu: vendSh.reduce((s, v) => s + (v.liquido ?? v.bruto ?? 0), 0), vendas: vendSh.length };
+  const ml = { taxa: 0.12, fixa: precoSh < 79 ? 6.5 : 0 }; ml.lucroUn = precoSh * (1 - ml.taxa) - ml.fixa - custoShU - emb;
+  // DIRETO (brindes e encomendas): planilha + pedidos pagos no app (o maior dos dois, para não contar a mesma venda 2 vezes)
+  const vDir = (pc.vendas || []).filter(v => /direto/i.test(v.canal || '')), pagos = orders.filter(o => o.paid && Number(o.price) > 0);
+  const recPlan = vDir.reduce((s, v) => s + (v.liquido ?? v.bruto ?? 0), 0), recApp = pagos.reduce((s, o) => s + Number(o.price), 0);
+  const nPed = Math.max(vDir.length, pagos.length), primeira = [...vDir.map(v => v.data), ...pagos.map(o => o.date)].filter(Boolean).sort()[0];
+  const mesesDir = primeira ? Math.max(1, diasEntre(primeira, hoje) / 30) : 1;
+  const cpDir = cp.filter(r => /direto/i.test(r.canal || '') && Number(r.preco) > 0 && Number(r.custo) > 0);
+  const dir = { pedidos: nPed, pedMes: (nPed + 0.5) / (mesesDir + 1), ticket: nPed ? Math.max(recPlan, recApp) / nPed : 300, margem: media(cpDir, r => (r.preco - r.custo) / r.preco) || 0.55,
+    hReal: media(cpDir.filter(r => r.horasLote && r.pecasLote), r => r.horasLote / r.pecasLote / r.preco) || 0.08, gReal: media(cpDir.filter(r => r.gramasLote && r.pecasLote), r => r.gramasLote / r.pecasLote / r.preco) || 1.1,
+    jaDeu: Math.max(recPlan, recApp), pipeline: ((pc.fila || []).length) + ((pc.aProduzir || []).length) };
+  // E-BOOK (Produto Digital): lança quando os capítulos ficarem prontos; público = visitas ao perfil do TikTok
+  const cs = (ebookDados && ebookDados.capitulos) || [], escritos = cs.filter(c => c.status !== 'ideia').length, totalCap = cs.length || 12;
+  const p7 = (((pc.marketing || {}).tiktok || {}).periodo7d) || {};
+  const eb = { escritos, total: totalCap, lanc: escritos >= totalCap ? 1 : 1 + Math.ceil((totalCap - escritos) / 6), visitas0: (p7.visitasPerfil || 30) * 4.33, views0: (p7.views || 5000) * 4.33, seguidores: ((pc.tiktokPerfil || {}).seguidores) || 0, jaDeu: 0 };
+  // FÁBRICA: máquinas, estoque de filamento e o quanto as máquinas trabalharam nos últimos 14 dias (Bambu)
+  const imp = ((impressoesBambu && impressoesBambu.impressoes) || []).filter(t => String(t.status) === '2' && t.inicio && Date.now() - Date.parse(t.inicio) < 14 * 864e5);
+  const est = calcularEstoque(), custoKg = par.custoMedioPLA || 97;
+  return { pc, ex, sh, ml, dir, eb, maquinas: (pc.maquinas || []).length || 3, estoqueKg: est.total, custoKg, usoBambu14: imp.reduce((s, t) => s + (Number(t.minutos) || 0), 0) / 60, a1s: Math.max(1, ((pc.maquinas || []).filter(m => /bambu/i.test(m.nome || '')).length)) };
+}
+/** Simulação mês a mês (36 meses) de um cenário: 'realista' (o ritmo que já existe, com freio) ou 'escala' (expositores novos,
+ *  Shopee com anúncios pagos, prospecção ativa de empresas, e-book com order bump e mentoria). A capacidade corta primeiro o que
+ *  rende menos por hora do recurso que acabou (máquina ou as horas do Rafael). */
+function simularProsp(cen, P = premissasProsp(), B = baseProsp()) {
+  const esc = cen === 'escala', M = 36, maqH = (B.maquinas + (P.maquinasExtra || 0)) * P.maqHorasDia * 30 * P.eficiencia, rafH = P.horasRafael * 4.33;
+  const R = { cen, maqH, rafH, canais: {}, uso: [], usoRaf: [], kg: [], invest: 0, cortes: {} };
+  Object.keys(CANAIS_PROSP).forEach(k => { R.canais[k] = { lucro: [], receita: [], unid: [] }; R.cortes[k] = 0; });
+  for (let t = 1; t <= M; t++) {
+    const d = {};
+    // consignado: os pontos ativos (+ 1 novo por mês em escala); o 1º mês tem o efeito novidade, depois o giro cai 25%
+    const pontos = B.ex.ativos + (esc ? Math.min(P.novosExpositores, Math.max(0, t - 1)) : 0), inv = esc && t >= 2 && t - 1 <= P.novosExpositores ? B.ex.investPonto : 0;
+    const uEx = pontos * B.ex.rate * 30 * (t === 1 ? 1 : 0.75) * (esc ? 1.15 : 1);
+    d.consignado = { unid: uEx, receita: uEx * B.ex.preco, lucroV: uEx * B.ex.lucroUn, fixo: inv, hMaq: uEx * B.ex.h, hRaf: uEx * 4 / 60 + pontos * 1, kg: uEx * B.ex.g / 1000 };
+    // Shopee: loja nova vende pouco até ter avaliações; os anúncios entram aos poucos (você aprova e sobe)
+    const anun = Math.min(B.sh.produtos + (esc ? 2 * t : 0), B.sh.prontos + (esc ? 6 : 3) * t), taxa = t <= 3 ? (esc ? 1 : 0.4) : t <= 12 ? (esc ? 2.5 : 1) : (esc ? 4 : 1.5);
+    const uSh = anun * taxa, adsSh = esc && P.shopeeAds ? uSh * B.sh.preco * 0.12 : 0;
+    d.shopee = { unid: uSh, receita: uSh * B.sh.preco, lucroV: uSh * B.sh.lucroUn - adsSh, fixo: 0, hMaq: uSh * B.sh.h, hRaf: uSh * 12 / 60, kg: uSh * B.sh.g / 1000 };
+    // Mercado Livre: os mesmos produtos, a partir do mês escolhido, vendendo 30%–70% do ritmo da Shopee no começo
+    const tm = t - P.mlMes + 1, uMl = tm >= 1 ? anun * (tm <= 3 ? 0.3 : tm <= 12 ? 0.7 : 1.1) * (esc ? 1.6 : 1) : 0;
+    d.ml = { unid: uMl, receita: uMl * B.sh.preco, lucroV: uMl * B.ml.lucroUn, fixo: 0, hMaq: uMl * B.sh.h, hRaf: uMl * 12 / 60, kg: uMl * B.sh.g / 1000 };
+    // direto: o ritmo de pedidos que já existe; em escala, prospecção ativa de empresas (até 3× em 8 meses, +8 h/mês de prospecção)
+    const pm = B.dir.pedMes * (esc && P.b2bAtivo ? Math.min(3, 1 + t * 0.25) : 1), rd = pm * B.dir.ticket;
+    d.direto = { unid: pm, receita: rd, lucroV: rd * B.dir.margem, fixo: 0, hMaq: rd * B.dir.hReal, hRaf: pm * 3 + (esc && P.b2bAtivo ? 8 : 0), kg: rd * B.dir.gReal / 1000 };
+    // e-book: vende depois do lançamento; orgânico = 1% das visitas ao perfil (que crescem); anúncio = CPC R$ 0,90 e 1,5% de conversão
+    const te = t - B.eb.lanc + 1;
+    if (te >= 1) {
+      const vis = B.eb.visitas0 * Math.min(esc ? 15 : 5, Math.pow(esc ? 1.15 : 1.08, t - 1)), adsE = P.ebookAds, liq = P.ebookPreco * (1 - 0.0899) - 2.49;
+      const vendas = vis * 0.01 + adsE / 0.9 * 0.015, bump = esc ? 0.3 * (27 * (1 - 0.0899) - 2.49) : 0, mentoria = esc && te > 6 ? 2 * 997 * 0.9 : 0;
+      d.ebook = { unid: vendas, receita: vendas * (P.ebookPreco + (esc ? 0.3 * 27 : 0)) + (mentoria ? 2 * 997 : 0), lucroV: vendas * (liq + bump) + mentoria, fixo: adsE, hMaq: 0, hRaf: 2 * 4.33 + (mentoria ? 8 : 0), kg: 0 };
+    } else d.ebook = { unid: 0, receita: 0, lucroV: 0, fixo: 0, hMaq: 0, hRaf: 2 * 4.33, kg: 0 };
+    // capacidade: máquina e as horas do Rafael (corta primeiro quem rende menos por hora daquele recurso)
+    [['hMaq', maqH], ['hRaf', rafH]].forEach(([res, cap]) => {
+      let resta = cap; Object.keys(d).sort((a, b) => (d[b].lucroV / (d[b][res] || 1e-9)) - (d[a].lucroV / (d[a][res] || 1e-9))).forEach(k => {
+        const x = d[k], need = x[res]; if (!need) return; if (need <= resta) { resta -= need; return; }
+        const f = Math.max(0, resta) / need; resta = 0; R.cortes[k] = Math.max(R.cortes[k], 1 - f); ['unid', 'receita', 'lucroV', 'hMaq', 'hRaf', 'kg'].forEach(c => { x[c] *= f; }); });
+    });
+    Object.keys(d).forEach(k => { const x = d[k], c = R.canais[k]; c.lucro.push(x.lucroV - x.fixo); c.receita.push(x.receita); c.unid.push(x.unid); });
+    R.invest += Object.values(d).reduce((s, x) => s + (x.fixo || 0), 0);
+    R.uso.push(Object.values(d).reduce((s, x) => s + x.hMaq, 0) / maqH); R.usoRaf.push(Object.values(d).reduce((s, x) => s + x.hRaf, 0) / rafH); R.kg.push(Object.values(d).reduce((s, x) => s + x.kg, 0));
+  }
+  R.total = H => Object.values(R.canais).reduce((s, c) => s + somaArr(c.lucro, H), 0);
+  R.receitaTotal = H => Object.values(R.canais).reduce((s, c) => s + somaArr(c.receita, H), 0);
+  return R;
+}
+/** Régua de eficiência: lucro por hora de máquina de cada item (o que dá para medir hoje; estimativa marcada). */
+function itensProsp(B = baseProsp()) {
+  const pc = B.pc, L = [], com = B.ex.com;
+  [15, 10].forEach(p => { const r = (pc.custoPeca || []).find(x => /expositor/i.test(x.produto || '') && Number(x.preco) === p); const h = r && r.horasLote && r.pecasLote ? r.horasLote / r.pecasLote : p === 15 ? 0.3 : 0.2, c = r ? Number(r.custo) || B.ex.custo : B.ex.custo, l = p * (1 - com) - c;
+    L.push({ nome: `Chaveiro de expositor R$ ${p}`, canal: 'consignado', preco: p, lucro: l, h, porH: l / h }); });
+  (pc.custoPeca || []).filter(r => /direto/i.test(r.canal || '') && Number(r.preco) > 0 && Number(r.custo) > 0 && r.horasLote && r.pecasLote).forEach(r => { const h = r.horasLote / r.pecasLote, l = r.preco - r.custo; L.push({ nome: String(r.produto).replace(/\s*\(.*\)\s*$/, ''), canal: 'direto', preco: r.preco, lucro: l, h, porH: l / h }); });
+  (((relatorioAgente('shopee') || {}).anuncios) || []).filter(a => Number(a.preco) > 0).slice(0, 8).forEach(a => { const l = a.preco * (1 - B.sh.taxa) - B.sh.fixa - (B.sh.estimado ? a.preco * 0.22 : B.sh.custo) - B.sh.emb; L.push({ nome: a.produto, canal: 'shopee', preco: a.preco, lucro: l, h: B.sh.h, porH: l / B.sh.h, estimado: true }); });
+  return L.sort((a, b) => b.porH - a.porH);
+}
+/** Tudo junto (o que a página, o painel, o J.A.R.V.I.S. e o agente da nuvem usam). */
+function modeloProsp() {
+  const P = premissasProsp(), chave = JSON.stringify(P), mm = prospEstado.memo; if (mm && mm.k === chave && Date.now() - mm.t < 1500) return mm.m; // o quadro pede várias vezes seguidas
+  const B = baseProsp(), rea = simularProsp('realista', P, B), esc = simularProsp('escala', P, B), itens = itensProsp(B);
+  const jaDeu = { consignado: B.ex.jaDeu, shopee: B.sh.jaDeu, ml: 0, direto: B.dir.jaDeu, ebook: 0 };
+  const mel = itens[0], teto = mel ? rea.maqH * mel.porH : 0;
+  const confianca = { consignado: B.ex.dias >= 30 && B.ex.vendidos >= 20 ? 'média' : 'baixa', shopee: B.sh.vendas >= 10 ? 'média' : 'baixa', ml: 'baixa', direto: B.dir.pedidos >= 5 ? 'média' : 'baixa', ebook: 'baixa' };
+  // o gargalo do cenário em escala: o primeiro recurso que lota nos 36 meses (e em que mês)
+  const tMaq = esc.uso.findIndex(u => u >= 0.98), tRaf = esc.usoRaf.findIndex(u => u >= 0.98), kgMes = rea.kg[2];
+  const gargalo = tMaq >= 0 && (tRaf < 0 || tMaq <= tRaf) ? 'maquinas' : tRaf >= 0 ? 'rafael' : B.estoqueKg && kgMes > B.estoqueKg ? 'filamento' : 'demanda';
+  const gargaloMes = gargalo === 'maquinas' ? tMaq + 1 : gargalo === 'rafael' ? tRaf + 1 : null;
+  const m = { P, B, rea, esc, itens, jaDeu, teto, confianca, gargalo, gargaloMes, kgMes, mesesFilamento: kgMes ? B.estoqueKg / kgMes : null };
+  prospEstado.memo = { k: chave, t: Date.now(), m }; return m;
+}
+const GARGALO_TXT = { maquinas: ['Máquinas', 'As impressoras lotam antes da demanda acabar: mais horas por dia ou outra máquina viram dinheiro direto.'], rafael: ['Suas horas', 'Quem acaba primeiro é o seu tempo: o que libera hora sua (embalagem, atendimento, reposição) vale mais que outra máquina.'], filamento: ['Filamento', 'O consumo passa do estoque: planeje a compra antes de acelerar.'], demanda: ['Demanda', 'Sobra máquina e sobra tempo: o que falta é cliente. Cada venda nova quase não tem custo de capacidade.'] };
+/** Explicação de cada canal: até agora · realista · em escala · como majorar (com os números do modelo). */
+function textoCanalProsp(k, m) {
+  const B = m.B, H = prospEstado.horiz, r = somaArr(m.rea.canais[k].lucro, H), e = somaArr(m.esc.canais[k].lucro, H), hz = (HORIZ_PROSP.find(x => x[0] === H) || [, ''])[1];
+  const porMes = c => c.lucro[Math.min(H, 36) - 1];
+  const base = {
+    consignado: { ate: `${B.ex.ativos} ${B.ex.ativos === 1 ? 'expositor ativo' : 'expositores ativos'}, ${B.ex.vendidos} de ${B.ex.colocados} chaveiros vendidos em ${B.ex.dias} dias · voltaram ${reais(B.ex.jaDeu)} (lucro ${reais(B.ex.lucroJa)} já pagando as peças vendidas).`,
+      rea: `Ritmo conservador de ${(B.ex.rate * 7).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} chaveiro(s) por semana em cada ponto (os poucos dias de venda pesam junto com 1/semana), caindo 25% depois do efeito novidade. Cada chaveiro deixa ${reais(B.ex.lucroUn)} depois da comissão de ${Math.round(B.ex.com * 100)}%.`,
+      esc: `${m.P.novosExpositores} expositores novos (1 por mês), cada um custa ~${reais(B.ex.investPonto)} (estrutura ${reais(B.ex.estrutura)} + 112 chaveiros) e o mix muda para os modelos que mais giram (+15%).`,
+      como: ['Ponha os pontos novos onde passa gente que compra por impulso: barbearia, academia, cantina, autoescola.', 'Andar de cima (R$ 15) rende ~R$ 29 por hora de máquina — é o item mais eficiente da fábrica hoje.', 'Visita de reposição a cada 15 dias com os modelos que mais saíram; troque o que encalhou.'] },
+    shopee: { ate: `${B.sh.produtos} produtos fotografados, ${B.sh.prontos} com material de anúncio, ${B.sh.rascunhos} rascunhos do agente Shopee · ${B.sh.vendas ? B.sh.vendas + ' venda(s)' : 'ainda sem venda'}.`,
+      rea: `Loja nova: 0,4 venda por anúncio por mês até ter avaliações (3 meses), depois 1 a 1,5. Preço médio ${reais(B.sh.preco)} − 20% − R$ ${B.sh.fixa} − embalagem${B.sh.estimado ? ' − custo ESTIMADO em 22% do preço (falta fatiar os produtos)' : ''} = ${reais(B.sh.lucroUn)} por venda.`,
+      esc: `Todos os produtos no ar em 2 meses + 2 produtos novos do Desenvolvedor por mês, vídeo em cada anúncio e Shopee Ads (12% da venda): 1 → 2,5 → 4 vendas por anúncio por mês.`,
+      como: ['Suba os rascunhos aprovados (3 por semana já dobram a vitrine).', 'Religioso puxa 75% das curtidas no TikTok: comece por ele e use o vídeo no anúncio.', 'Fatie os produtos da Shopee para trocar a estimativa de custo pelo número real.'] },
+    ml: { ate: 'Ainda não começou (próximo canal depois da Shopee).',
+      rea: `Começa no ${m.P.mlMes}º mês com os mesmos produtos, vendendo 30% do ritmo da Shopee no começo e 70% depois. Taxa ${Math.round(B.ml.taxa * 100)}% + custo fixo${B.ml.fixa ? ' ~R$ ' + B.ml.fixa.toLocaleString('pt-BR') : ''} abaixo de R$ 79 → ${reais(B.ml.lucroUn)} por venda.`,
+      esc: 'Com anúncio Premium nos campeões da Shopee e Mercado Livre Ads: +60% de vendas sobre o realista.',
+      como: ['Copie para o Mercado Livre só o que já vendeu na Shopee (o anúncio já foi validado).', 'Produto acima de R$ 79 foge do custo fixo: kits e combos rendem mais lá.'] },
+    direto: { ate: `${B.dir.pedidos} pedido(s) pago(s) · ${reais(B.dir.jaDeu)} · ticket médio ${reais(B.dir.ticket)}. Há ${B.dir.pipeline} trabalho(s) na fila/encomendas da Central.`,
+      rea: `${B.dir.pedMes.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} pedido por mês (o ritmo real, com freio), margem de ${Math.round(B.dir.margem * 100)}% pelo custo por peça da Central.`,
+      esc: 'Prospecção ativa de empresas (clínicas, hotéis, escolas, construtoras de Viçosa): até 3× os pedidos em 8 meses, com 8 h/mês suas para prospectar.',
+      como: ['Brinde com logo é o ticket mais alto: ofereça para quem já comprou (clínica, escola, hotel da fila).', 'Mostre o chaveiro do expositor como amostra do brinde com a marca da empresa.', 'Feche lote mínimo (ex.: 50 un.) — o tempo de atendimento se dilui.'] },
+    ebook: { ate: `${B.eb.escritos} de ${B.eb.total} capítulos escritos · ainda sem venda · ${B.eb.seguidores} seguidores e ~${Math.round(B.eb.visitas0)} visitas ao perfil por mês no TikTok.`,
+      rea: `Lança no ${B.eb.lanc}º mês. Orgânico: 1% das visitas ao perfil compram (as visitas crescem 8% ao mês). Anúncio de ${reais(m.P.ebookAds)}/mês: CPC ~R$ 0,90 e 1,5% de conversão ≈ ${(m.P.ebookAds / 0.9 * 0.015).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} vendas. Preço ${reais(m.P.ebookPreco)} − Kiwify (8,99% + R$ 2,49).`,
+      esc: 'Bastidores do J.A.R.V.I.S. no TikTok (público cresce 15% ao mês), order bump de R$ 27 (30% levam) e mentoria a partir do 6º mês de venda (2 alunos/mês a R$ 997).',
+      como: ['Para vender em escala, preço de entrada (R$ 47–67) + order bump + mentoria: o volume vem do preço baixo e o lucro do upsell.', 'Anúncio só se paga quando a página converte: teste com R$ 10/dia antes de subir.', 'Cada fase do J.A.R.V.I.S. vira um vídeo de bastidor: é o público mais barato que existe.'] }
+  }[k];
+  return { ...base, hz, r, e, porMesR: porMes(m.rea.canais[k]), porMesE: porMes(m.esc.canais[k]), corte: Math.max(m.rea.cortes[k], 0) };
+}
+/** Leva o modelo ao cofre (dados/prospeccao.json) para o agente da nuvem — no máximo 1 vez a cada 6 h, sem nomes. */
+async function publicarProspCofre(m) {
+  if (!claudeConfigurado() || !navigator.onLine || Date.now() - prospEstado.publicadoEm < 6 * 3600e3) return;
+  prospEstado.publicadoEm = Date.now();
+  const canal = k => ({ jaDeu: Math.round(m.jaDeu[k]), realista: HORIZ_PROSP.map(([h]) => Math.round(somaArr(m.rea.canais[k].lucro, h))), escala: HORIZ_PROSP.map(([h]) => Math.round(somaArr(m.esc.canais[k].lucro, h))), confianca: m.confianca[k] });
+  const dados = { tipo: 'jarvis-prospeccao', geradoEm: new Date().toISOString().slice(0, 16), horizontesMeses: [3, 12, 36], premissas: m.P,
+    capacidade: { horasMaquinaMes: Math.round(m.rea.maqH), horasRafaelMes: Math.round(m.rea.rafH), usoMaquinaRealistaMes3: +m.rea.uso[2].toFixed(2), usoMaquinaEscalaMes12: +m.esc.uso[11].toFixed(2), usoRafaelEscalaMes12: +m.esc.usoRaf[11].toFixed(2), filamentoKg: +m.B.estoqueKg.toFixed(2), consumoKgMes: +m.kgMes.toFixed(2), gargalo: m.gargalo, horasBambu14dias: Math.round(m.B.usoBambu14) },
+    canais: Object.fromEntries(Object.keys(CANAIS_PROSP).map(k => [k, canal(k)])), itensLucroPorHora: m.itens.slice(0, 10).map(i => ({ nome: i.nome, canal: i.canal, preco: i.preco, lucro: +i.lucro.toFixed(2), horas: +i.h.toFixed(2), lucroPorHora: +i.porH.toFixed(2), estimado: !!i.estimado })), tetoFabricaMes: Math.round(m.teto) };
+  try { await gravarCofreJson('dados/prospeccao.json', () => dados, 'J.A.R.V.I.S.: modelo da Prospecção de vendas'); } catch (e) { prospEstado.publicadoEm = 0; }
+}
+// --- o PALCO: radar (anéis = 3 meses · 12 meses · 3 anos; cada canal é um ponto na distância do retorno realista) ---
+function radarProsp(m) {
+  const ks = Object.keys(CANAIS_PROSP), vals = ks.map(k => Math.max(0, somaArr(m.rea.canais[k].lucro, 36))), mx = Math.max(1, ...vals);
+  const pts = ks.map((k, i) => { const ang = -Math.PI / 2 + i / ks.length * Math.PI * 2, rr = 34 + 112 * Math.sqrt(vals[i] / mx), x = Math.cos(ang) * rr, y = Math.sin(ang) * rr, ve = Math.max(0, somaArr(m.esc.canais[k].lucro, 36)), raio = 5 + 9 * Math.sqrt(ve / Math.max(1, ...ks.map(q => somaArr(m.esc.canais[q].lucro, 36))));
+    return `<g class="pr-ponto" style="--k:${i}; --c:${CANAIS_PROSP[k][1]}; --a:${((ang + Math.PI / 2) / (Math.PI * 2)).toFixed(3)}" onclick="abrirCanalProsp('${k}')"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${raio.toFixed(1)}" class="halo"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" class="miolo"/><text x="${x.toFixed(1)}" y="${(y + raio + 13).toFixed(1)}" text-anchor="middle">${esc(CANAIS_PROSP[k][0].split(' ·')[0])}</text></g>`; }).join('');
+  return `<div class="pr-radar"><svg viewBox="-170 -170 340 340" aria-hidden="true"><defs><radialGradient id="pr-var" cx="0" cy="0" r="1"><stop offset="0" stop-color="${COR_PROSP}" stop-opacity=".0"/><stop offset="1" stop-color="${COR_PROSP}" stop-opacity=".35"/></radialGradient></defs>
+    ${[[50, '3 meses'], [100, '12 meses'], [150, '3 anos']].map(([r, t]) => `<circle r="${r}" class="anel"/><text y="${-r + 12}" text-anchor="middle" class="anel-t">${t}</text>`).join('')}
+    <line x1="-160" y1="0" x2="160" y2="0" class="cruz"/><line x1="0" y1="-160" x2="0" y2="160" class="cruz"/>
+    <g class="pr-varredura"><path d="M0,0 L0,-160 A160,160 0 0,1 ${(160 * Math.sin(Math.PI / 5)).toFixed(1)},${(-160 * Math.cos(Math.PI / 5)).toFixed(1)} Z" fill="url(#pr-var)"/><line x1="0" y1="0" x2="0" y2="-160" class="feixe"/></g>
+    ${pts}<circle r="7" class="nucleo"/></svg></div>`;
+}
+function abrirCanalProsp(k) { prospEstado.canal = prospEstado.canal === k ? null : k; const m = modeloProsp(), el = $j('pr-canais'); if (el) el.innerHTML = htmlCanaisProsp(m); const c = $j('pr-canal-' + k); if (c && prospEstado.canal) c.scrollIntoView({ behavior: reduzMovimento() ? 'auto' : 'smooth', block: 'center' }); }
+function htmlHorizProsp(m) {
+  const H = prospEstado.horiz, S = prospEstado.cen === 'escala' ? m.esc : m.rea, ks = Object.keys(CANAIS_PROSP), vals = ks.map(k => somaArr(S.canais[k].lucro, H)), tot = vals.reduce((a, b) => a + b, 0), mx = Math.max(1, ...vals.map(v => Math.abs(v)));
+  const outro = prospEstado.cen === 'escala' ? m.rea.total(H) : m.esc.total(H);
+  return `<div class="pr-seg">${HORIZ_PROSP.map(([h, t]) => `<button type="button" class="${h === H ? 'on' : ''}" onclick="prospEstado.horiz=${h}; atualizarProsp()">${t}</button>`).join('')}</div>
+    <div class="pr-seg cen">${[['realista', 'Realista'], ['escala', 'Em escala']].map(([c, t]) => `<button type="button" class="${c === prospEstado.cen ? 'on' : ''}" onclick="prospEstado.cen='${c}'; atualizarProsp()">${t}</button>`).join('')}</div>
+    <div class="pr-total"><small>Lucro ${prospEstado.cen === 'escala' ? 'em escala' : 'realista'} em ${esc((HORIZ_PROSP.find(x => x[0] === H) || [, ''])[1])}</small><strong class="ag-conta">${reaisK(tot)}</strong><span>${prospEstado.cen === 'escala' ? 'realista' : 'em escala'}: ${reaisK(outro)} · faturamento ${reaisK(S.receitaTotal(H))}</span></div>
+    <ul class="pr-barras">${ks.map((k, i) => `<li style="--c:${CANAIS_PROSP[k][1]}; --w:${(Math.abs(vals[i]) / mx * 100).toFixed(1)}%; --k:${i}" onclick="abrirCanalProsp('${k}')"><span>${CANAIS_PROSP[k][2]} ${esc(CANAIS_PROSP[k][0])}</span><b>${reaisK(vals[i])}</b><i class="${vals[i] < 0 ? 'neg' : ''}"></i></li>`).join('')}</ul>
+    <p class="cc-nota">Lucro = o que sobra depois de filamento, máquina, taxas, comissões, embalagem e anúncios${prospEstado.cen === 'escala' ? ' (já descontado o investimento nos expositores novos)' : ''}. Não inclui o seu salário nem custos fixos da empresa.</p>`;
+}
+function medidorProsp(rot, v, sub, alerta) { const p = Math.max(0, Math.min(1, v)); return `<div class="pr-med${alerta ? ' alerta' : ''}" style="--p:${p.toFixed(3)}"><svg viewBox="0 0 120 70" aria-hidden="true"><path d="M10,62 A50,50 0 0,1 110,62" class="f"/><path d="M10,62 A50,50 0 0,1 110,62" class="v" pathLength="1"/></svg><strong>${Math.round(v * 100)}%</strong><b>${esc(rot)}</b><small>${esc(sub)}</small></div>`; }
+function htmlCapProsp(m) {
+  const H = Math.min(prospEstado.horiz, 36) - 1, S = prospEstado.cen === 'escala' ? m.esc : m.rea, g = GARGALO_TXT[m.gargalo];
+  const kg = S.kg[H], meses = kg ? m.B.estoqueKg / kg : null;
+  return `<div class="pr-meds">${medidorProsp('Máquinas', S.uso[H], `${Math.round(S.uso[H] * S.maqH)} de ${Math.round(S.maqH)} h/mês`, S.uso[H] > 0.95)}${medidorProsp('Suas horas', S.usoRaf[H], `${Math.round(S.usoRaf[H] * S.rafH)} de ${Math.round(S.rafH)} h/mês`, S.usoRaf[H] > 0.95)}${medidorProsp('Filamento', meses ? Math.min(1, kg / Math.max(0.01, m.B.estoqueKg)) : 0, meses ? `${fmtKg(kg)}/mês · estoque ${fmtKg(m.B.estoqueKg)}` : 'sem consumo', meses !== null && meses < 1)}</div>
+    <div class="pr-garg"><small>Gargalo no cenário em escala${m.gargaloMes ? ` · aparece no ${m.gargaloMes}º mês` : " · nos 3 anos"}</small><b>${esc(g[0])}</b><p>${esc(g[1])}</p></div>
+    <p class="cc-nota">No mês ${H + 1} do cenário ${prospEstado.cen === 'escala' ? 'em escala' : 'realista'}. Máquinas: ${m.B.maquinas + (m.P.maquinasExtra || 0)} × ${m.P.maqHorasDia} h/dia × ${Math.round(m.P.eficiencia * 100)}% de eficiência (falhas, troca de placa, manutenção). ${m.B.usoBambu14 ? `Nos últimos 14 dias as A1 trabalharam ${Math.round(m.B.usoBambu14)} h (Bambu).` : ''} Teto da fábrica cheia com o item mais eficiente: <b>${reaisK(m.teto)}/mês</b> — se existisse demanda para tudo.</p>`;
+}
+function htmlItensProsp(m) {
+  const L = m.itens.slice(0, 10), mx = Math.max(1, ...L.map(i => i.porH));
+  return L.length ? `<ol class="pr-itens">${L.map((i, k) => `<li style="--c:${CANAIS_PROSP[i.canal][1]}; --w:${Math.max(2, i.porH / mx * 100).toFixed(1)}%; --k:${k}"><span><b>${esc(i.nome)}</b><small>${esc(CANAIS_PROSP[i.canal][0])} · ${reais(i.preco)} · sobra ${reais(i.lucro)} em ${i.h.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} h${i.estimado ? ' · custo estimado' : ''}</small></span><strong>${reais(i.porH)}<small>/h</small></strong><i></i></li>`).join('')}</ol>
+    <p class="cc-nota">O e-book não usa máquina: cada venda é lucro sem ocupar impressora — por isso ele cresce sem disputar espaço com as peças.</p>` : '<p class="cc-txt">Sem custo por peça na Central ainda.</p>';
+}
+function htmlCanaisProsp(m) {
+  return Object.keys(CANAIS_PROSP).map((k, i) => {
+    const t = textoCanalProsp(k, m), [nome, cor, ico] = CANAIS_PROSP[k], aberto = prospEstado.canal === k;
+    return `<article class="pr-canal${aberto ? ' aberto' : ''}" id="pr-canal-${k}" style="--c:${cor}; --k:${i}">
+      <button type="button" class="pr-canal-topo" onclick="abrirCanalProsp('${k}')" aria-expanded="${aberto}"><i>${ico}</i><span><b>${esc(nome)}</b><small>confiança ${esc(m.confianca[k])} · ${esc(t.hz)}</small></span><em><b>${reaisK(t.r)}</b><small>realista</small></em></button>
+      ${aberto ? `<div class="pr-canal-corpo">
+        <div class="pr-4">${[['Até agora', reais(m.jaDeu[k]), t.ate], [`Realista · ${t.hz}`, reaisK(t.r), `${reaisK(t.porMesR)}/mês no fim do período. ${t.rea}`], [`Em escala · ${t.hz}`, reaisK(t.e), `${reaisK(t.porMesE)}/mês no fim do período. ${t.esc}`]].map(([a, b, c]) => `<div><small>${esc(a)}</small><strong>${b}</strong><p>${esc(c)}</p></div>`).join('')}
+          <div class="como"><small>Como majorar</small><ul>${t.como.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></div>
+        <table class="pr-tab"><thead><tr><th></th>${HORIZ_PROSP.map(([, h]) => `<th>${h}</th>`).join('')}</tr></thead><tbody><tr><td>Realista</td>${HORIZ_PROSP.map(([h]) => `<td>${reaisK(somaArr(m.rea.canais[k].lucro, h))}</td>`).join('')}</tr><tr><td>Em escala</td>${HORIZ_PROSP.map(([h]) => `<td>${reaisK(somaArr(m.esc.canais[k].lucro, h))}</td>`).join('')}</tr></tbody></table>
+        ${t.corte > 0.01 ? `<p class="cc-alerta">⚠️ A capacidade cortou até ${Math.round(t.corte * 100)}% deste canal no cenário realista (faltou máquina ou hora sua).</p>` : ''}</div>` : ''}</article>`; }).join('');
+}
+function htmlSimProsp() {
+  const P = premissasProsp();
+  return `<div class="pr-sim">${PROSP_SIM.map(([k, rot, a, b, p, f]) => `<label><span>${esc(rot)}<b id="pr-v-${k}">${esc(f(P[k]))}</b></span><input type="range" min="${a}" max="${b}" step="${p}" value="${P[k]}" oninput="mudarPremissaProsp('${k}', Number(this.value))"></label>`).join('')}
+    <label class="pr-chk"><input type="checkbox" ${P.shopeeAds ? 'checked' : ''} onchange="mudarPremissaProsp('shopeeAds', this.checked)"> Shopee Ads no cenário em escala</label>
+    <label class="pr-chk"><input type="checkbox" ${P.b2bAtivo ? 'checked' : ''} onchange="mudarPremissaProsp('b2bAtivo', this.checked)"> Prospecção ativa de empresas no cenário em escala</label>
+    <button type="button" class="cc-btn pr-reset" onclick="voltarPremissasProsp()">Voltar ao cenário de hoje</button></div>`;
+}
+function mudarPremissaProsp(k, v) {
+  prefs.prosp = { ...(prefs.prosp || {}), [k]: v }; salvarPrefsJarvis();
+  const d = PROSP_SIM.find(x => x[0] === k), el = $j('pr-v-' + k); if (d && el) el.textContent = d[5](v);
+  clearTimeout(prospEstado.t); prospEstado.t = setTimeout(atualizarProsp, 60); prospEstado.publicadoEm = 0;
+}
+function voltarPremissasProsp() { delete prefs.prosp; salvarPrefsJarvis(); prospEstado.publicadoEm = 0; const s = $j('pr-sim-caixa'); if (s) s.innerHTML = htmlSimProsp(); atualizarProsp(); }
+/** Produto novo: ele digita preço, gramas, horas, canal e quantas vende por mês → o agente diz se vale (lucro/h × o ranking, capacidade). */
+function htmlNovoProsp(m) {
+  const n = prospEstado.novo, B = m.B, custo = n.gramas / 1000 * B.custoKg + n.horas * 1.45 + ((B.pc.parametros || {}).embalagem || 0.75);
+  const taxa = n.canal === 'shopee' ? n.preco * B.sh.taxa + B.sh.fixa : n.canal === 'ml' ? n.preco * B.ml.taxa + (n.preco < 79 ? 6.5 : 0) : n.canal === 'consignado' ? n.preco * B.ex.com : 0;
+  const lucro = n.preco - custo - taxa, porH = n.horas ? lucro / n.horas : 0, pos = m.itens.filter(i => i.porH > porH).length + 1, hMes = n.vendas * n.horas, uso = hMes / m.rea.maqH;
+  const veredito = lucro <= 0 ? ['Não vale', 'O preço não paga custo e taxas.', '#ff453a'] : porH >= (m.itens[0] || {}).porH * 0.6 ? ['Vale muito', 'Rende tanto por hora quanto os melhores itens da fábrica.', '#30d158'] : porH >= 8 ? ['Vale', 'Paga bem a hora de máquina; cabe na fila sem atrapalhar os campeões.', COR_PROSP] : m.rea.uso[2] < 0.7 ? ['Vale agora', 'Rende pouco por hora, mas hoje sobra máquina: cada venda é lucro. Quando as máquinas lotarem, é o primeiro a sair da fila.', '#ffd60a'] : ['Só com folga', 'Rende pouco por hora e as máquinas já estão cheias: imprima só quando alguma estiver parada.', '#ff9f0a'];
+  return `<div class="pr-novo"><div class="pr-novo-campos">${[['preco', 'Preço (R$)', 1], ['gramas', 'Gramas por peça', 1], ['horas', 'Horas de máquina por peça', 0.1], ['vendas', 'Vendas por mês (estimativa)', 1]].map(([k, r, p]) => `<label><span>${r}</span><input type="number" inputmode="decimal" min="0" step="${p}" value="${n[k]}" onchange="prospEstado.novo.${k}=Number(this.value)||0; $j('pr-novo').innerHTML=htmlNovoProsp(modeloProsp())"></label>`).join('')}
+      <label><span>Canal</span><select onchange="prospEstado.novo.canal=this.value; $j('pr-novo').innerHTML=htmlNovoProsp(modeloProsp())">${[['shopee', 'Shopee'], ['ml', 'Mercado Livre'], ['consignado', 'Consignado'], ['direto', 'Direto']].map(([v, t]) => `<option value="${v}"${v === n.canal ? ' selected' : ''}>${t}</option>`).join('')}</select></label></div>
+    <div class="pr-veredito" style="--c:${veredito[2]}"><b>${veredito[0]}</b><p>${veredito[1]}</p>
+      <ul><li><small>Lucro por peça</small><strong>${reais(lucro)}</strong></li><li><small>Por hora de máquina</small><strong>${reais(porH)}</strong></li><li><small>Por mês</small><strong>${reaisK(lucro * n.vendas)}</strong></li><li><small>Em 12 meses</small><strong>${reaisK(lucro * n.vendas * 12)}</strong></li></ul>
+      <p class="cc-nota">${pos}º no ranking de lucro por hora · usa ${Math.round(uso * 100)}% da capacidade das máquinas · custo = filamento ${reais(n.gramas / 1000 * B.custoKg)} + máquina ${reais(n.horas * 1.45)} + embalagem${taxa ? ` · taxas ${reais(taxa)}` : ''}.</p></div></div>`;
+}
+function htmlAgenteProspeccao(a) {
+  const m = modeloProsp(), H = 12, ks = Object.keys(CANAIS_PROSP), mx = Math.max(1, ...ks.map(k => Math.abs(somaArr(m.esc.canais[k].lucro, H))));
+  publicarProspCofre(m);
+  return cabecalhoAgente(a)
+    + ccNums([[reaisK(Object.values(m.jaDeu).reduce((s, v) => s + v, 0)), 'já entrou'], [reaisK(m.rea.total(H)), 'realista 12 m'], [reaisK(m.esc.total(H)), 'em escala 12 m']])
+    + ccBloco('Os próximos 12 meses por canal', `<ul class="pr-mini">${ks.map(k => { const r = somaArr(m.rea.canais[k].lucro, H), e = somaArr(m.esc.canais[k].lucro, H); return `<li style="--c:${CANAIS_PROSP[k][1]}"><span>${CANAIS_PROSP[k][2]} ${esc(CANAIS_PROSP[k][0])}</span><b>${reaisK(r)} <small>→ ${reaisK(e)}</small></b><i><u style="width:${(Math.max(0, r) / mx * 100).toFixed(1)}%"></u><s style="width:${(Math.max(0, e) / mx * 100).toFixed(1)}%"></s></i></li>`; }).join('')}</ul><p class="cc-nota">Barra cheia = realista · contorno = em escala. Gargalo em escala: <b>${esc(GARGALO_TXT[m.gargalo][0])}</b>${m.gargaloMes ? ` (no ${m.gargaloMes}º mês)` : ""}.</p>`)
+    + htmlRelatorioAgente(a.id) + botaoConversarAgente(a);
+}
+/** A página completa: radar, horizontes, capacidade, ranking por hora, canal por canal, simulador, produto novo e a leitura do agente. */
+function renderPaginaProspeccao() {
+  const el = $j('ag-pag'); if (!el) return; const a = todosAgentes().find(x => x.id === 'prospeccao');
+  if (!primosCentral) { el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div></header><div class="ag-rolo" id="ag-rolo"><section class="ag-sec"><p class="cc-txt">Sem dados da Central ainda. Conecte o computador (Ajustes do J.A.R.V.I.S. → 2).</p></section></div>`; posRenderPagina(); return; }
+  const m = modeloProsp(), r = relatorioAgente('prospeccao') || {}, ja = Object.values(m.jaDeu).reduce((s, v) => s + v, 0);
+  publicarProspCofre(m);
+  const ops = (r.oportunidades || []).slice(0, 5);
+  const manchete = r.manchete ? textoAgente(r.manchete) : `Realista: <b>${reaisK(m.rea.total(12))}</b> de lucro em 12 meses. Em escala: <b>${reaisK(m.esc.total(12))}</b>. ${m.gargaloMes ? `Crescendo, o primeiro limite são <b>${m.gargalo === "maquinas" ? "as máquinas" : "as suas horas"}</b> no ${m.gargaloMes}º mês.` : "Hoje o que falta é <b>cliente</b>: sobra máquina."}`;
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
+      <button type="button" class="ag-falar" onclick="falarComAgente('prospeccao')">🎙 Falar</button></header>
+    <i class="ag-progresso" id="ag-progresso" style="--cor:${COR_PROSP}"></i>
+    <div class="ag-rolo pr" id="ag-rolo" style="--cor:${COR_PROSP}">
+      <section class="ag-heroi"><div class="ag-heroi-txt"><small>Primos 3D · analista</small><h1>Prospecção</h1><p>${manchete}</p></div>
+        <div class="ag-palco">${radarProsp(m)}</div><div class="ag-desca">role para ver tudo<i></i></div></section>
+      <section class="ag-sec ag-nums">${[[reaisK(ja), 'já entrou'], [reaisK(m.rea.total(12)), 'realista · 12 meses'], [reaisK(m.esc.total(12)), 'em escala · 12 meses'], [reaisK(m.esc.total(36)), 'em escala · 3 anos']].map(([v, t], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(v)}</strong><small>${esc(t)}</small></div>`).join('')}</section>
+      <section class="ag-sec ag-corpo">
+        ${ccBloco('Quanto volta, por canal', `<div id="pr-horiz">${htmlHorizProsp(m)}</div>`)}
+        ${ops.length ? ccBloco(`Oportunidades do dia · ${esc(isoParaBR(r.dia || ''))}`, `<ol class="pr-ops">${ops.map((o, k) => `<li style="--c:${(CANAIS_PROSP[o.canal] || [, COR_PROSP])[1]}; --k:${k}"><span class="n">${k + 1}</span><span><b>${textoAgente(o.titulo)}</b><small>${esc((CANAIS_PROSP[o.canal] || [o.canal || ''])[0])} · ${esc(o.prazo || '')} · confiança ${esc(o.confianca || '')}</small><p>${textoAgente(o.porque || '')}</p>${o.primeiroPasso ? `<p class="passo">Primeiro passo: ${textoAgente(o.primeiroPasso)}</p>` : ''}</span><em>${esc(o.retornoMes || '')}</em></li>`).join('')}</ol>${r.escala ? `<p class="cc-txt"><b>Para escalar:</b> ${textoAgente(r.escala)}</p>` : ''}`) : ''}
+        ${ccBloco('Capacidade e gargalo', `<div id="pr-cap">${htmlCapProsp(m)}</div>`)}
+        ${ccBloco('Lucro por hora de máquina', `<div id="pr-itens">${htmlItensProsp(m)}</div>`)}
+        ${ccBloco('Canal por canal', `<p class="cc-nota">Toque num canal: até agora · realista · em escala · como majorar.</p><div id="pr-canais">${htmlCanaisProsp(m)}</div>`)}
+        ${ccBloco('Simulador', `<p class="cc-nota">Mude as premissas e veja tudo se recalcular (fica salvo neste aparelho e vai para o agente).</p><div id="pr-sim-caixa">${htmlSimProsp()}</div>`)}
+        ${ccBloco('Produto novo: vale a pena?', `<div id="pr-novo">${htmlNovoProsp(m)}</div>`)}
+        ${ccBloco('Relatório e comando do agente', `<details class="fin-det"><summary>Abrir o relatório de hoje, o comando e as skills</summary>${htmlPainelAgente('prospeccao').replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<button type="button" class="cc-btn ag-abrir"[^>]*>[^<]*<\/button>/, '')}</details>`)}
+        <p class="cc-nota pr-fontes">Como o agente calcula: ritmo real de cada canal (com freio quando há poucos dias de dados), analogia e faixa conservadora onde ainda não há venda, capacidade de máquina e de horas suas, e taxas de 2026 (Shopee 20% + R$ 4; Mercado Livre 10–14% + custo fixo abaixo de R$ 79; Kiwify 8,99% + R$ 2,49). É estimativa para decidir, não promessa.</p>
+      </section>
+      <footer class="ag-fim">J.A.R.V.I.S. · Prospecção de vendas da Primos 3D</footer>
+    </div>`;
+  animarPaginaAgente();
+}
+/** O simulador e os botões redesenham só o que muda (sem mexer nos controles deslizantes). */
+function atualizarProsp() {
+  const m = modeloProsp();
+  [['pr-horiz', htmlHorizProsp], ['pr-cap', htmlCapProsp], ['pr-canais', htmlCanaisProsp], ['pr-novo', htmlNovoProsp]].forEach(([id, f]) => { const e = $j(id); if (e) { e.innerHTML = f(m); e.querySelectorAll('.ag-conta').forEach(n => { delete n.dataset.contado; contarNumero(n); }); } });
+  const nums = document.querySelectorAll('#ag-pag.ag .ag-nums .ag-conta'), v = [Object.values(m.jaDeu).reduce((s, x) => s + x, 0), m.rea.total(12), m.esc.total(12), m.esc.total(36)];
+  if (cc.pagina === 'prospeccao') nums.forEach((n, i) => { if (v[i] !== undefined) n.textContent = reaisK(v[i]); });
+  const radar = document.querySelector('#ag-pag .pr-radar'); if (radar) radar.outerHTML = radarProsp(m);
 }
 // --- DESENVOLVEDOR (fase 8): abas por nicho; cada projeto segue ideia → imagem (o Rafael aprova) → 3MF editável → feito.
 //     Fonte: cofre dados/dev.json (o PC mantém em .claude/jarvis/dev/projetos.json) → CACHE local lifeos_dev.
@@ -8975,6 +9286,7 @@ function miniFilaHTML(titulo, cor) {
 function ccBloco(titulo, corpo) { return `<section class="cc-bloco"><h4>${titulo}</h4>${corpo}</section>`; }
 function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente('${esc(a.id)}')">Perguntar a este agente</button>`; }
 const VOZ_AGENTES = {
+  prospeccao: { voz: 'Sadaltager', persona: 'Homem, voz serena e precisa de analista de negócios. Fala de retorno com números e com a confiança de cada estimativa (alta, média, baixa); separa o realista do que dá em escala; mede tudo em lucro por hora de máquina e no gargalo (máquinas, horas do Rafael, filamento, demanda). Nunca promete dinheiro: mostra o caminho e o primeiro passo.' },
   digital: { voz: 'Vindemiatrix', persona: 'Mulher, voz calma e clara de editora e professora. Organiza o conhecimento do Rafael e dos agentes em capítulos, aulas e checklists; pergunta o que ele aprendeu, transforma em exemplo prático e sempre propõe o próximo capítulo ou o próximo passo do produto digital. Nunca expõe dado de cliente nem número sigiloso sem autorização.' },
   estoque: { voz: 'Alnilam', persona: 'Homem, voz firme e serena, presença forte. Centrado, confiável, companheiro e PERFECCIONISTA: conhece cada bobina da secadora (cor, marca, gramas, data e preço da compra), não deixa número solto e confere tudo duas vezes. Conduz a contagem de filamentos com calma (uma cor por vez, repete o peso para confirmar) e usa registrar_contagem_estoque; avisa o que está acabando e o que está parado há muito tempo. SABE que o carretel vazio da Voolt 3D pesa 120 g: sempre confirma se o peso é na balança (com carretel — você tira 120 g por carretel) ou só o filamento. Explica que a contagem é o ponto de partida: depois disso as compras da planilha somam e as impressões da Bambu descontam sozinhas, então ele só precisa pesar de vez em quando.' },
   contabil: { voz: 'Rasalgethi', persona: 'Homem, voz clara e segura, analista financeiro direto ao ponto. Fala de caixa, custo, preço, margem, payback e metas sempre com o número na mão, sem jargão. Honesto quando a notícia é ruim e sempre termina com a próxima ação.' },
@@ -8986,7 +9298,7 @@ const VOZ_AGENTES = {
   dev: { voz: 'Achird', persona: 'Homem, voz suave e calma, criativo de verdade — designer de produto que entende de tendência, de moda e de forma, mas com cabeça de engenheiro de impressão 3D (encaixe, folga, camada, cor, AMS). Fala com entusiasmo tranquilo, propõe ideias concretas (placas de profissão, carimbos, chaveiros com logo de comércio, kits empresariais, luminárias, camisa da marca), sempre diz em que etapa cada projeto está (conceito, modelo digital, fatiado, testado) e o que ele precisa do Rafael para seguir. Nunca diz que algo está aprovado sem teste físico.' },
 };
 // fase 9: a cor de cada agente (a bolinha da voz e o destaque da página dele)
-const COR_AGENTE = { contabil: '#30d158', marketing: '#ff375f', estoque: '#ff9f0a', producao: '#0a84ff', vendas: '#ffd60a', consignacao: '#bf5af2', shopee: '#ff6b2c', dev: '#64d2ff', digital: '#e9c46a' };
+const COR_AGENTE = { prospeccao: '#2dd4bf', contabil: '#30d158', marketing: '#ff375f', estoque: '#ff9f0a', producao: '#0a84ff', vendas: '#ffd60a', consignacao: '#bf5af2', shopee: '#ff6b2c', dev: '#64d2ff', digital: '#e9c46a' };
 function falarComAgente(id) { const a = todosAgentes().find(x => x.id === id), v = VOZ_AGENTES[id]; if (!a || !v) return conversarComAgente(id); iniciarConversaVoz(`Central › agente ${a.nome}`, 'primos', { voz: v.voz, persona: v.persona, nomeAgente: a.nome, cor: COR_AGENTE[id], funcao: a.funcao }); }
 function conversarComAgente(id) {
   const a = todosAgentes().find(x => x.id === id); if (!a) return;
@@ -8995,7 +9307,7 @@ function conversarComAgente(id) {
 
 /** Painel do agente + a caixa de COMANDO, o andamento da tarefa e a resposta ao último comando (agentes da nuvem). */
 function htmlPainelAgente(id) {
-  const html = htmlPainelAgenteBase(id); if (!CV_PRIMOS.includes(id)) return html;
+  const html = htmlPainelAgenteBase(id); if (!AGENTES_NUVEM.includes(id)) return html;
   const t = ((cc.execucao || {}).tarefas || {})[id], r = relatorioAgente(id), pausado = ((cc.execucao || {}).pausados || []).includes(id);
   const est = t && (t.status === 'rodando' || t.status === 'fila') ? `<p class="cc-exec rodando"><span class="spin"></span>${t.status === 'fila' ? 'Na fila do GitHub…' : 'Trabalhando agora…'}${t.instrucao ? ` <b>“${esc(t.instrucao)}”</b>` : ''}<button type="button" class="cc-mini sec" onclick="controlarAgente('cancelar', '${id}')">Cancelar</button></p>`
     : pausado ? `<p class="cc-exec">⏸ Pausado: fora da rodada das 7h. <button type="button" class="cc-mini" onclick="controlarAgente('retomar', '${id}')">Retomar</button></p>` : '';
@@ -9026,6 +9338,7 @@ function htmlPainelAgenteBase(id) {
   if (a.id === 'estoque') return htmlAgenteEstoque(a);
   if (a.id === 'producao') return htmlAgenteProducao(a);
   if (a.id === 'digital') return htmlAgenteDigital(a);
+  if (a.id === 'prospeccao') return htmlAgenteProspeccao(a);
   if (a.aba) return cabecalhoAgente(a) + htmlRelatorioAgente(a.id) + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('${a.aba}')">Abrir ${esc(a.nome)} na Primos</button>` + botaoConversarAgente(a);
   if (a.id === 'mercado') return cabecalhoAgente(a) + `<div class="cc-embed">${typeof htmlMercado === 'function' ? htmlMercado(true) : ''}</div>` + botaoConversarAgente(a);
   if (a.id === 'treino') {
