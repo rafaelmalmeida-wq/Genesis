@@ -4924,7 +4924,8 @@ function avisosJarvis() {
   const hoje = hojeISO(), L = [], nomeArea = id => (AREAS_CEREBRO.find(a => a.id === id) || {}).nome || '';
   const ra = relatoriosAgentes;
   const rt = radarTikTok(); if (rt) L.push({ area: 'primos', rot: `Radar do TikTok · ${rt.lido}`, txt: rt.txt, sub: rt.sub, acao: 'abrirRadarTikTok()' }); // fase 8: o último vídeo primeiro
-  destaquesAtivos().forEach((d, i) => { const dm = String(d.titulo + ' ' + (d.resumo || '')).match(/\b(\d{1,2})\/(\d{1,2})\b/); // a data DO EVENTO (ex.: 12/10) vale mais que o prazo do destaque
+  const vistos = prefs.destaquesVistos || []; // fase 9: depois de aberto uma vez, o destaque sai daqui (o Rafael não quer ouvir a mesma coisa sempre)
+  destaquesAtivos().forEach((d, i) => { if (d.id && vistos.includes(d.id)) return; const dm = String(d.titulo + ' ' + (d.resumo || '')).match(/\b(\d{1,2})\/(\d{1,2})\b/); // a data DO EVENTO (ex.: 12/10) vale mais que o prazo do destaque
     const alvo = dm ? isoDe(new Date(Number(hoje.slice(0, 4)), Number(dm[2]) - 1, Number(dm[1]))) : d.ate; const dias = alvo && alvo >= hoje ? diasEntre(hoje, alvo) : d.ate ? diasEntre(hoje, d.ate) : null;
     L.push({ area: d.area || 'primos', rot: `${nomeArea(d.area) || 'Destaque'}${dias !== null ? ` · ${dias <= 0 ? 'é hoje' : dias === 1 ? 'falta 1 dia' : `faltam ${dias} dias`}` : ''}`, txt: d.titulo, sub: d.resumo, acao: `abrirDestaque(${i})` }); });
   const atras = tasks.filter(t => !t.done && t.due && t.due < hoje).length, deHoje = tasks.filter(t => !t.done && t.due === hoje).length, ev = events.filter(e => e.date === hoje && !e.done).length;
@@ -4964,6 +4965,7 @@ function renderDestaquesJarvis() {
 }
 function abrirDestaque(i) {
   const d = destaquesAtivos()[i], el = $j('jv-destaque'); if (!d || !el) return;
+  if (d.id && !(prefs.destaquesVistos || []).includes(d.id)) { prefs.destaquesVistos = [...(prefs.destaquesVistos || []), d.id].slice(-40); salvarPrefsJarvis(); }
   const a = AREAS_CEREBRO.find(x => x.id === d.area), cor = a ? a.cor : '#c2682c';
   el.innerHTML = `<div class="jvp-janela jvm-janela entrando" style="--area:${cor}">
     <header class="jvp-topo jvm-topo"><span class="jvm-ico jvd-ico">✦</span><div class="jvp-marca"><strong>${esc(d.titulo)}</strong><small>Destaque do J.A.R.V.I.S.${d.ate ? ` · até ${isoParaBR(d.ate).slice(0, 5)}` : ''}</small></div><button type="button" class="jv-x" onclick="fecharDestaque()" aria-label="Fechar">✕</button></header>
@@ -5697,7 +5699,8 @@ async function carregarBriefingPrimos(forcar) {
   if (!forcar && b && b.dia === hojeISO() && b.base === pc.geradoEm) return;
   jv.gerandoBriefing = true; const el = $j('jvp-briefing'); if (el && forcar) el.innerHTML = `<div class="jvp-brief-topo"><small>Briefing de hoje</small></div><div class="jvc-digitando"><i></i><i></i><i></i></div>`;
   try {
-    const r = await gerarGemini({ sistema: sistemaJarvis('Primos 3D › briefing do dia'), conteudos: [{ role: 'user', parts: [{ text: 'Faça o meu briefing de hoje da Primos 3D, em até 110 palavras e sem introdução: uma linha com a situação e o número mais importante; depois "Hoje:" com 3 prioridades curtas e acionáveis (bullets); por fim "Atenção:" com 1 alerta. Use **negrito** nos números.' }] }], busca: false,
+    const antes = b && b.texto ? `\n\nNO BRIEFING ANTERIOR (${isoParaBR(b.dia || '')}) VOCÊ DISSE:\n${String(b.texto).slice(0, 700)}\nNão repita as mesmas prioridades nem a mesma ideia sem novidade.` : ''; // fase 9: variar
+    const r = await gerarGemini({ sistema: sistemaJarvis('Primos 3D › briefing do dia'), conteudos: [{ role: 'user', parts: [{ text: 'Faça o meu briefing de hoje da Primos 3D, em até 110 palavras e sem introdução: uma linha com a situação e o número mais importante; depois "Hoje:" com 3 prioridades curtas e acionáveis (bullets); por fim "Ideia do dia:" com 1 ideia nova e criativa, pelo ângulo de hoje. Só se houver algo urgente de verdade, acrescente "Atenção:" com 1 frase. Use **negrito** nos números.' + antes }] }], busca: false,
       aoEscrever: t => { const e = $j('jvp-briefing'); if (e) e.innerHTML = `<div class="jvp-brief-topo"><small>Briefing de hoje</small></div><div class="jvc-texto">${mdJarvis(desanonimizar(t.replace(/⟦[^⟧]*(⟧|$)/g, '')))}</div>`; } });
     localStorage.setItem('lifeos_jarvis_briefing', JSON.stringify({ dia: hojeISO(), base: pc.geradoEm, texto: r.texto.replace(/⟦[^⟧]*⟧/g, '').trim() }));
   } catch (e) { const el2 = $j('jvp-briefing'); if (el2) el2.innerHTML = `<p>${negritoSeguro((pc.analise || {}).manchete || '')}</p><p class="jvp-brief-dica">Não consegui gerar o briefing agora (${esc(e.amigavel || e.message)}).</p>`; jv.gerandoBriefing = false; return; }
@@ -6470,7 +6473,7 @@ function dadosPrimosIA() {
   if (!pc) return 'Ainda não chegaram os dados da Primos 3D Central neste aparelho (falta conectar o app ao computador em Ajustes do J.A.R.V.I.S.).';
   const cx = pc.caixa || {}, par = pc.parametros || {}, ct = contabilidadePrimos(pc);
   L.push(`Fonte: planilha "Primos 3D - Gestão Financeira" e pastas da Primos 3D Central, lidas em ${isoParaBR(pc.geradoEm.slice(0, 10))} ${pc.geradoEm.slice(11, 16)}. Empresa MEI aberta ~ago/2026.`);
-  if (metasPrimos.length) L.push(`METAS (fase 7, definidas pelo Rafael — guie o caminho até elas): ${metasPrimos.map(m => `${QUEM_META[m.quem] || 'Primos 3D'}: ${m.titulo}${m.prazo ? ` (até ${isoParaBR(m.prazo)})` : ''}${m.obs ? ` — ${m.obs}` : ''}`).join(' · ')}`);
+  if (metasPrimos.length) L.push(`METAS (definidas pelo Rafael — traga ideias para chegar lá, sem cobrar): ${metasPrimos.map(m => `${QUEM_META[m.quem] || 'Primos 3D'}: ${m.titulo}${m.prazo ? ` (até ${isoParaBR(m.prazo)})` : ''}${m.obs ? ` — ${m.obs}` : ''}`).join(' · ')}`);
   const recs = recadosAgentes.slice(0, 8); if (recs.length) L.push(`RECADOS RECENTES QUE VOCÊ PASSOU AOS AGENTES: ${recs.map(r => `${r.quando.slice(0, 10)} → ${r.agentes.join(',')}: ${r.texto}`).join(' · ')}`);
   const cal = calendarioComercial(60); if (cal.length) L.push(`DATAS COMERCIAIS (60 dias; pesquisa do Gemini + prazos de produção; preços = estimativas): ${cal.map(c => `${isoParaBR(c.data).slice(0, 5)} ${c.nome} [${c.nichos.join('/')}]: ${c.ideias.join('; ')}${c.preco ? ` (${c.preco})` : ''}${c.produzirAte ? ` — produzir até ${isoParaBR(c.produzirAte).slice(0, 5)}` : ''}`).join(' · ')}`);
   L.push(`CAIXA: aportes do sócio ${R$(cx.aportes)} (3 PIX); total gasto ${R$(cx.totalGasto)} (filamento ${R$(cx.gastoFilamento)}, outras despesas ${R$(cx.outrasDespesas)}); caixa estimado ${R$(cx.saldo)} (negativo = parte foi paga pelo CPF do Rafael e pela conta do MEI, ainda não registrada como aporte); contas a pagar já contratadas ${R$(cx.contasPagar)}; faturamento registrado em 2026 ${R$(ct.receitaBruta)}.`);
@@ -6553,6 +6556,19 @@ function dadosCompletosIA() {
     + (jvConfig.iaTudo === false ? `\n--- AGENDA (só contagens) ---\n${agendaIA()}` : `\n--- O RESTO DO APP ---\n${dadosAppIA()}`)
     + `\n--- CARTILHA DA ENGENHARIA CIVIL (resumos, sem nomes de clientes) ---\n${dadosEngenhariaIA()}`;
 }
+// --- TOM E VARIEDADE (fase 9, pedido do Rafael 03/10/2026): o J.A.R.V.I.S. não cobra resultado — traz o COMO, com ideias
+//     criativas e variadas. O ÂNGULO DE HOJE gira todo dia; JÁ FALEI = o que ele disse no chat nos últimos 7 dias (não repetir).
+//     A mesma lista está no cofre (agentes/manuais.mjs, ANGULOS): mudou aqui, mude lá.
+const ANGULOS_IDEIAS = ['um produto novo que ninguém vende em Viçosa', 'um formato de vídeo para viralizar no TikTok (bastidor, timelapse, antes e depois, desafio, série)', 'um cliente que compre todo mês (empresas, clínicas, escolas, agro, lojas)', 'um canal de venda novo na internet (Shopee, Mercado Livre, Elo7, Instagram, site)', 'o público universitário da UFV (atléticas, repúblicas, formaturas, empresas juniores)', 'personalização que aumenta o preço (nome, logo, foto, cor)', 'um kit, combo ou coleção que aumente o valor de cada venda', 'máquina parada é dinheiro parado: o que imprimir nas horas vagas para vender depois', 'o caminho para as 10 máquinas: o que vender para pagar a próxima impressora', 'preparar o galpão desde já (processos, organização, o que muda com mais máquinas)', 'uma parceria local (lojas, cafés, academias, influenciadores de Viçosa)', 'o que está bombando lá fora (Etsy, TikTok dos EUA e da China) e dá para trazer', 'engenharia + impressão 3D (maquetes, peças técnicas, brindes para escritórios e construtoras)', 'uma ideia ousada, tamanho 10x, mesmo que pareça maluca', 'reaproveitar o que já existe (modelos, fotos, vídeos, sobras de filamento)', 'uma experiência do cliente que gere indicação (embalagem, cartão, brinde, pós-venda)'];
+function anguloDoDiaIA() { const [y, m, d] = hojeISO().split('-').map(Number), n = Math.floor(Date.UTC(y, m - 1, d) / 864e5); return ANGULOS_IDEIAS[n % ANGULOS_IDEIAS.length]; }
+function jeitoIdeiasIA() {
+  const desde = isoDe(new Date(Date.now() - 7 * 864e5));
+  const ja = jarvisChat.filter(m => m.de === 'jv' && m.t && !m.pensando && (m.q || '') >= desde).slice(-12)
+    .map(m => anonimizar(String(m.t).replace(/⟦[^⟧]*⟧/g, '').replace(/[*_#`>]/g, '').replace(/\s+/g, ' ').trim().slice(0, 140))).filter(s => s.length > 4);
+  return `TOM COM AS METAS (pedido do Rafael): você NÃO cobra resultado nem pressiona por dinheiro. Você é o parceiro criativo que traz o COMO: ideias concretas, novas e variadas para chegar às METAS (estão nos DADOS).
+VARIEDADE: não repita ideia, data ou conselho que você já deu (veja JÁ FALEI); só volte a um tema se ele puxar ou se houver novidade, e diga qual é. As DATAS COMERCIAIS são contexto, não roteiro: cite no máximo uma por conversa, e só se ainda não falou dela. Quando for sugerir algo por conta própria, parta do ÂNGULO DE HOJE: ${anguloDoDiaIA()}.
+${ja.length ? `JÁ FALEI (últimos 7 dias, não repita):\n${ja.map(s => '- ' + s).join('\n')}\n` : ''}`;
+}
 function sistemaJarvis(ctx) {
   const nome = String(profile.name || 'Rafael').trim().split(/\s+/)[0] || 'Rafael';
   const agora = new Date(), dia = agora.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }), hora = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
@@ -6568,7 +6584,7 @@ NAVEGAR: se ajudar, termine com ⟦ABRIR: destino⟧, destino entre: primos, pri
 BUSCA: para fatos atuais, preços, concorrentes, tendências, datas comemorativas e normas, use a busca do Google e diga de onde veio.
 DESABAFO: acolha primeiro, sem julgar; no máximo uma pergunta; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); use os códigos como estão. Nunca peça senhas ou dados bancários.
-${perfilIA(nome)}AGORA: ${dia}, ${hora}. Tela do app: ${ctx || 'página inicial'}.
+${jeitoIdeiasIA()}${perfilIA(nome)}AGORA: ${dia}, ${hora}. Tela do app: ${ctx || 'página inicial'}.
 === DADOS ===
 ${dadosCompletosIA()}`;
 }
@@ -7064,7 +7080,7 @@ function sistemaVoz() {
 PERSONALIDADE: ${vz.persona}
 COMO FALAR: português do Brasil, frases curtas feitas para ouvir (1 a 4), sem listas nem símbolos; números arredondados. Uma pergunta por vez. Nunca invente números: use o bloco DADOS.
 LIMITES: você não envia mensagens, não posta, não compra e não paga nada; isso é com ele.
-FERRAMENTAS: adicionar_fila_impressao quando ele quiser imprimir algo; registrar_contagem_estoque quando ele disser o peso dos filamentos; registrar_compra_filamento quando comprou filamento; avisar_agentes para passar um recado a outro agente; abrir_tela para mostrar algo no app.
+${jeitoIdeiasIA()}FERRAMENTAS: adicionar_fila_impressao quando ele quiser imprimir algo; registrar_contagem_estoque quando ele disser o peso dos filamentos; registrar_compra_filamento quando comprou filamento; avisar_agentes para passar um recado a outro agente; abrir_tela para mostrar algo no app.
 AGORA: ${dia}, ${hora}.
 === DADOS ===
 ${dadosCompletosIA()}`;
@@ -7077,7 +7093,7 @@ ${vz.nivelSetup >= 2 ? `COMPUTADOR: nesta conversa você não tem ferramentas. $
 FILTRO (o mais importante): você é o comando dos agentes da Primos 3D. Tudo o que ele contar passa pelo seu filtro: se importa a um agente, registre o recado ${vz.nivelSetup >= 2 ? '(nesta conversa sem ferramentas: diga "anotado para o agente X" — o chat guarda)' : '(avisar_agentes; compra de filamento = registrar_compra_filamento)'} e diga em poucas palavras quem avisou ("anotei e passei pro Financeiro"). Coisa solta da vida não precisa de recado.
 LIMITES: você não envia e-mails, não posta, não compra e não paga nada. Nunca peça senhas nem dados bancários. Em desabafo, acolha primeiro; se houver sinal de risco, indique com carinho o CVV (188, 24 h, grátis).
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); diga "um cliente" ou o código, sem inventar nomes.
-${perfilIA(nome)}AGORA: ${dia}, ${hora}. Tela aberta no app: ${vz.contexto || 'página inicial'}.${vz.saudar ? '\nCOMECE você: cumprimente em uma frase curta, com a sua voz, e pergunte por onde ele quer começar.' : ''}
+${jeitoIdeiasIA()}${perfilIA(nome)}AGORA: ${dia}, ${hora}. Tela aberta no app: ${vz.contexto || 'página inicial'}.${vz.saudar ? '\nCOMECE você: cumprimente em uma frase curta, com a sua voz, e pergunte por onde ele quer começar.' : ''}
 ${recentes ? `=== ÚLTIMAS MENSAGENS (para continuar o assunto) ===\n${recentes}\n` : ''}=== DADOS ===
 ${dadosCompletosIA()}`;
 }
@@ -8019,9 +8035,10 @@ function renderPaginaFinanceiro() {
 
 // --- METAS (módulo `metasprimos`, sincroniza): da empresa, do Rafael e do sócio. O Financeiro lê (cofre) e guia o caminho. ---
 const QUEM_META = { empresa: 'Primos 3D', rafael: 'Rafael', socio: 'Sócio' };
-const TIPO_META = { faturamento: 'Faturar por mês (R$)', lucro: 'Lucro por mês (R$)', vendas: 'Peças vendidas por mês', retorno: 'Recuperar o investimento até', outro: 'Outra meta' };
+const TIPO_META = { faturamento: 'Faturar por mês (R$)', lucro: 'Lucro por mês (R$)', vendas: 'Peças vendidas por mês', retorno: 'Recuperar o investimento até', maquinas: 'Máquinas funcionando', outro: 'Outra meta' };
 function progressoMeta(m) {
   const pc = primosCentral || {}, mes = hojeISO().slice(0, 7), vMes = (pc.vendas || []).filter(v => (v.data || '').startsWith(mes));
+  if (m.tipo === 'maquinas' && m.valor) { const at = (pc.maquinas || []).length; return { at, txt: `${at} de ${m.valor} máquinas (pela planilha)`, f: at / m.valor }; } // fase 9
   if (m.tipo === 'faturamento' && m.valor) { const at = vMes.reduce((s, v) => s + (v.bruto || 0), 0); return { at, txt: `${reais(at)} de ${reais(m.valor)} neste mês`, f: at / m.valor }; }
   if (m.tipo === 'vendas' && m.valor) { const at = vMes.reduce((s, v) => s + (v.qtd || 1), 0); return { at, txt: `${at} de ${m.valor} peças neste mês`, f: at / m.valor }; }
   if (m.tipo === 'retorno' && pc.caixa) { const vl = vendasLiquidasPrimos(pc), inv = pc.caixa.totalGasto || 1; return { txt: `${pctFr(vl.total / inv)} recuperado`, f: vl.total / inv }; }
@@ -8029,7 +8046,7 @@ function progressoMeta(m) {
 }
 function htmlMetasFin() {
   const L = metasPrimos.slice().sort((a, b) => (a.prazo || '9').localeCompare(b.prazo || '9'));
-  const lista = L.length ? `<ul class="fin-metas">${L.map(m => { const p = progressoMeta(m); return `<li><div><small>${esc(QUEM_META[m.quem] || 'Primos 3D')} · ${esc(TIPO_META[m.tipo] || 'Meta')}${m.prazo ? ` · até ${esc(isoParaBR(m.prazo))}` : ''}</small><b>${esc(m.titulo)}</b>${p ? `<div class="fin-barra fina"><i style="--w:${Math.min(100, Math.max(0, p.f * 100)).toFixed(1)}%"></i></div><small>${esc(p.txt)}</small>` : ''}${m.obs ? `<p>${esc(m.obs)}</p>` : ''}</div><button type="button" class="cc-mini sec" onclick="removerMeta('${m.id}')" aria-label="Apagar meta">✕</button></li>`; }).join('')}</ul>`
+  const lista = L.length ? `<ul class="fin-metas">${L.map(m => { const p = progressoMeta(m); return `<li><div><small>${esc(QUEM_META[m.quem] || 'Primos 3D')} · ${esc(TIPO_META[m.tipo] || 'Meta')}${m.prazo ? ` · até ${esc(isoParaBR(m.prazo))}` : ''}</small><b>${esc(m.titulo)}</b>${p ? `<div class="fin-barra fina"><i style="--w:${Math.min(100, Math.max(0, p.f * 100)).toFixed(1)}%"></i></div><small>${esc(p.txt)}</small>` : ''}${m.obs ? `<p>${esc(m.obs)}</p>` : ''}</div><button type="button" class="cc-mini sec" onclick="removerMetaPrimos('${m.id}')" aria-label="Apagar meta">✕</button></li>`; }).join('')}</ul>`
     : '<p class="cc-txt">Ainda sem metas. Conte para o J.A.R.V.I.S. a sua realidade, a do seu sócio e onde vocês querem chegar — ou anote aqui. O Financeiro lê as metas todo dia e monta o caminho.</p>';
   return `${lista}
     <form class="fin-meta-form" onsubmit="salvarMeta(event)">
@@ -8054,7 +8071,7 @@ function adicionarMeta(m, origem) {
   if (origem !== 'recado') registrarRecado(['contabil'], `Meta nova (${QUEM_META[meta.quem]}): ${meta.titulo}${meta.prazo ? ' até ' + isoParaBR(meta.prazo) : ''}${meta.obs ? ' — ' + meta.obs : ''}`, 'meta', origem);
   return meta;
 }
-function removerMeta(id) { metasPrimos = metasPrimos.filter(m => m.id !== id); salvar('metasprimos', metasPrimos); publicarRecadosCofre(); const el = $j('fin-metas'); if (el) el.innerHTML = htmlMetasFin(); }
+function removerMetaPrimos(id) { metasPrimos = metasPrimos.filter(m => String(m.id) !== String(id)); salvar('metasprimos', metasPrimos); publicarRecadosCofre(); const el = $j('fin-metas'); if (el) el.innerHTML = htmlMetasFin(); }
 
 // --- CALCULADORA com 3 cenários: o custo real da peça (parâmetros da planilha) + o rateio dos custos fixos ---
 const CENARIOS_FIN = [['conservador', 'Conservador', 'margem folgada: cobre falhas, retrabalho e desconto'], ['realista', 'Realista', 'a margem-alvo da sua planilha'], ['volume', 'Volume', 'preço para vender muito (margem menor)']];
