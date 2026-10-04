@@ -2435,6 +2435,7 @@ body.cc-aberta { overflow: hidden; }
 .cc-lista li span { flex: 1; min-width: 0; }
 .cc-lista b { display: block; font-size: 0.88rem; font-weight: 500; }
 .cc-lista small { color: #8e8e93; font-size: 0.74rem; }
+.cc-lista small.cc-sub { display: block; margin-top: 3px; color: #636366; }
 .cc-lista em { font-style: normal; color: #636366; }
 .cc-pct { color: #f2f2f7 !important; font-variant-numeric: tabular-nums; }
 .cc-regras li { padding: 6px 0 6px 18px; position: relative; font-size: 0.86rem; color: #d1d1d6; }

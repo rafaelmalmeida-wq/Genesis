@@ -5483,11 +5483,30 @@ function alertasPrimos(pc) {
   return a;
 }
 
+/** Calendário comercial (fase 9): vem do PC (.claude/jarvis/calendario-comercial.json → pc.calendario = pesquisa do Gemini +
+ *  dias das profissões das placas + prazo de produção). Sem ele, a lista fixa de antes. Entra quem acontece em `janela` dias
+ *  ou tem o prazo de produção nessa janela; ordem = o que precisa ir para a impressora primeiro. */
+function calendarioComercial(janela) {
+  const hoje = hojeISO(), y = Number(hoje.slice(0, 4)), pc = primosCentral;
+  const base = pc && (pc.calendario || []).length ? pc.calendario : [
+    { data: `${y}-10-12`, nome: 'Dia das Crianças e N. Sra. Aparecida', ideias: ['destaque a linha religiosa e brinquedos'] },
+    { data: `${y}-10-15`, nome: 'Dia do Professor', ideias: ['brindes para escolas e cursos'] },
+    { data: `${y}-11-27`, nome: 'Black Friday', ideias: ['kits e combos rendem mais que desconto'] },
+    { data: `${y}-12-25`, nome: 'Natal', ideias: ['Feliz Natal e porta-guardanapo', 'brindes de empresas fecham em novembro'], produzirAte: `${y}-11-10` }];
+  const urg = c => c.diasProd !== null && c.diasProd >= 0 ? c.diasProd : c.dias;
+  return base.filter(c => c && c.data).map(c => ({ ...c, nichos: c.nichos || [], ideias: c.ideias || [], dias: diasEntre(hoje, c.data), diasProd: c.produzirAte ? diasEntre(hoje, c.produzirAte) : null }))
+    .filter(c => c.dias >= 0 && (c.dias <= janela || (c.diasProd !== null && c.diasProd <= janela)))
+    .sort((a, b) => urg(a) - urg(b) || a.dias - b.dias);
+}
+function prazoProducaoTxt(c) {
+  if (c.diasProd === null) return '';
+  if (c.diasProd < 0) return 'o prazo de produção passou: só peças rápidas';
+  return c.diasProd === 0 ? 'produzir até hoje' : `produzir até ${isoParaBR(c.produzirAte).slice(0, 5)} (${plural(c.diasProd, 'dia', 'dias')})`;
+}
 /** Datas comerciais dos próximos 45 dias (vão para o cartão "Para crescer"): [dias, texto]. */
 function datasComerciaisPrimos() {
-  const hoje = hojeISO(), y = Number(hoje.slice(0, 4));
-  const datas = [[`${y}-10-12`, 'Dia das Crianças e N. Sra. Aparecida (12/10): destaque a linha religiosa e brinquedos.'], [`${y}-10-15`, 'Dia do Professor (15/10): brindes para escolas e cursos.'], [`${y}-11-27`, 'Black Friday (27/11): kits e combos rendem mais que desconto.'], [`${y}-12-25`, 'Natal: anuncie Feliz Natal e porta-guardanapo até o fim de outubro; brindes corporativos fecham em novembro.']];
-  return datas.map(([d, t]) => [diasEntre(hoje, d), t]).filter(([f]) => f >= 0 && f <= 45);
+  return calendarioComercial(45).map(c => { const pz = prazoProducaoTxt(c);
+    return [c.dias, `${c.nome} (${isoParaBR(c.data).slice(0, 5)}): ${c.ideias.slice(0, 2).join('; ')}${c.preco ? ` · ${c.preco}` : ''}${pz ? ` · ${pz}` : ''}.`]; });
 }
 
 const ABAS_PRIMOS = [['jarvis', 'J.A.R.V.I.S.'], ['analise', 'Análise'], ['contabil', 'Contabilidade'], ['vendas', 'Vendas'], ['chaveiros', 'Chaveiros'], ['producao', 'Produção'], ['marketing', 'Marketing'], ['central', 'Central']];
@@ -6453,6 +6472,7 @@ function dadosPrimosIA() {
   L.push(`Fonte: planilha "Primos 3D - Gestão Financeira" e pastas da Primos 3D Central, lidas em ${isoParaBR(pc.geradoEm.slice(0, 10))} ${pc.geradoEm.slice(11, 16)}. Empresa MEI aberta ~ago/2026.`);
   if (metasPrimos.length) L.push(`METAS (fase 7, definidas pelo Rafael — guie o caminho até elas): ${metasPrimos.map(m => `${QUEM_META[m.quem] || 'Primos 3D'}: ${m.titulo}${m.prazo ? ` (até ${isoParaBR(m.prazo)})` : ''}${m.obs ? ` — ${m.obs}` : ''}`).join(' · ')}`);
   const recs = recadosAgentes.slice(0, 8); if (recs.length) L.push(`RECADOS RECENTES QUE VOCÊ PASSOU AOS AGENTES: ${recs.map(r => `${r.quando.slice(0, 10)} → ${r.agentes.join(',')}: ${r.texto}`).join(' · ')}`);
+  const cal = calendarioComercial(60); if (cal.length) L.push(`DATAS COMERCIAIS (60 dias; pesquisa do Gemini + prazos de produção; preços = estimativas): ${cal.map(c => `${isoParaBR(c.data).slice(0, 5)} ${c.nome} [${c.nichos.join('/')}]: ${c.ideias.join('; ')}${c.preco ? ` (${c.preco})` : ''}${c.produzirAte ? ` — produzir até ${isoParaBR(c.produzirAte).slice(0, 5)}` : ''}`).join(' · ')}`);
   L.push(`CAIXA: aportes do sócio ${R$(cx.aportes)} (3 PIX); total gasto ${R$(cx.totalGasto)} (filamento ${R$(cx.gastoFilamento)}, outras despesas ${R$(cx.outrasDespesas)}); caixa estimado ${R$(cx.saldo)} (negativo = parte foi paga pelo CPF do Rafael e pela conta do MEI, ainda não registrada como aporte); contas a pagar já contratadas ${R$(cx.contasPagar)}; faturamento registrado em 2026 ${R$(ct.receitaBruta)}.`);
   L.push(`ONDE ESTÁ O DINHEIRO: imobilizado (máquinas, ferramentas, estrutura, elétrica) ${R$(ct.imobilizado)}; estoques (filamento, insumos, embalagens) ${R$(ct.estoques)}; despesas já realizadas (marketing/site, serviços, fretes, a conferir) ${R$(ct.despesasRealizadas)}. Depreciação estimada (linear 5 anos) até hoje ${R$(ct.depreciacao)}. Resultado acumulado estimado ${R$(ct.resultado)}.`);
   L.push('GASTOS POR CATEGORIA: ' + (pc.categorias || []).filter(c => c.valor).sort((a, b) => b.valor - a.valor).map(c => `${c.nome} ${R$(c.valor)}`).join('; ') + '.');
@@ -8333,8 +8353,16 @@ function htmlAgenteDev(a) {
     + ccBloco(`${esc((ABAS_DEV.find(x => x[0] === aba) || [, ''])[1])} · ${plural(lista.length, 'projeto', 'projetos')}`, lista.length ? `<ul class="dev-lista">${lista.map(p => { const e = ETAPAS_DEV[p.status || 'ideia'] || ETAPAS_DEV.ideia;
         return `<li class="dev-item" onclick="abrirProjetoDev('${esc(p.codigo)}')">${previaDevHTML(p, e)}<div class="dev-info"><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b>${p.personaliza ? `<small>Personaliza: ${esc(p.personaliza)}</small>` : ''}<small>${esc(p.codigo)} ${esc(p.versao || '')} · falta: ${esc(p.falta || '—')}</small>${(p.arquivos || []).length ? `<em class="dev-arqs">⬇ ${plural(p.arquivos.length, 'arquivo', 'arquivos')}</em>` : ''}</div></li>`; }).join('')}</ul>`
       : '<p class="cc-txt">Nenhum projeto neste nicho ainda. Peça uma ideia ao Desenvolvedor.</p>')
+    + htmlDatasDev(aba)
     + ccBloco('Como ele trabalha', `<p class="cc-txt">${esc((devDados && devDados.fluxo) || 'ideia → imagem (você aprova) → 3MF editável → feito')}. Ele monta a imagem de apresentação (com o Estúdio de fotos), espera o seu “pode seguir” e só então faz o 3MF com o texto editável no Bambu Studio.</p>`)
     + botaoConversarAgente(a);
+}
+// Datas comerciais do nicho (calendário do PC, fase 9): ideias para o Rafael escolher o que vira projeto.
+function htmlDatasDev(aba) {
+  const ds = calendarioComercial(90).filter(c => c.nichos.includes(aba) || c.nichos.includes('todos')); if (!ds.length) return '';
+  return ccBloco('Datas que vêm aí · ideias', `<ul class="cc-lista">${ds.map(c => { const pz = prazoProducaoTxt(c);
+    return `<li><span><b>${esc(c.nome)} · ${esc(isoParaBR(c.data).slice(0, 5))}</b><small>${esc(c.ideias.join(' · '))}</small><small class="cc-sub">${c.dias === 0 ? 'hoje' : 'em ' + plural(c.dias, 'dia', 'dias')}${pz ? ' · ' + esc(pz) : ''}${c.preco ? ' · ' + esc(c.preco) : ''}</small></span></li>`; }).join('')}</ul>
+    <p class="cc-txt">Gostou de uma? Peça ao Desenvolvedor (botão abaixo) para ela virar projeto.</p>`);
 }
 // Prévia do projeto: o PC (giros.ps1) renderiza o 3MF girando (WebP animado) ou usa a imagem — fica no cofre em midia/dev/.
 function previaDevHTML(p, e) {
