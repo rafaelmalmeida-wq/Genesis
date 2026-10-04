@@ -3315,3 +3315,22 @@ body.ag-aberta { overflow: hidden; }
 .jvd-linha p { margin: 4px 0 0; color: #e5e5ea; line-height: 1.45; font-size: .92rem; } .jvd-linha .jvd-cam { color: #fff; font-weight: 600; }
 .jvd-env { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
 .jvd-env li { display: grid; gap: 2px; padding: 10px 14px; border-radius: 14px; background: rgba(255,255,255,.06); } .jvd-env small { color: #8e8e93; font-size: .72rem; } .jvd-env span { color: #c7c7cc; font-size: .86rem; }
+/* ===== FASE 9: agente SHOPEE (rascunhos de anúncio) + Desenvolvedor (seta do projeto) ===== */
+.shp-est { margin: 4px 0 2px; }
+.shp-lista { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.shp-item { padding: 14px; border-radius: 16px; background: rgba(255,255,255,0.045); border: 0.5px solid rgba(255,255,255,0.07); display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.shp-item.ok { border-color: rgba(48,209,88,0.45); }
+.shp-item > small { color: #8e8e93; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.shp-item > b { font-size: 0.95rem; font-weight: 600; line-height: 1.3; color: #f2f2f7; overflow-wrap: anywhere; }
+.shp-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.shp-nums span { padding: 8px 10px; border-radius: 12px; background: rgba(255,255,255,0.05); min-width: 0; }
+.shp-nums em { display: block; font-style: normal; font-weight: 600; font-variant-numeric: tabular-nums; color: #f2f2f7; font-size: 0.92rem; overflow-wrap: anywhere; }
+.shp-nums small { color: #8e8e93; font-size: 0.68rem; }
+.shp-det summary { cursor: pointer; color: #0a84ff; font-size: 0.82rem; }
+.shp-desc { white-space: pre-line; font-size: 0.85rem; line-height: 1.5; color: #e5e5ea; margin: 8px 0 4px; }
+.shp-pend { margin: 0; font-size: 0.78rem; color: #ff9f0a; line-height: 1.4; }
+.shp-acoes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.shp-selo { font-size: 0.78rem; color: #30d158; }
+@media (max-width: 380px) { .shp-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.dev-lista .dev-item { cursor: pointer; }
+.dev-abrir { margin-left: auto; align-self: center; font-style: normal; color: #636366; font-size: 1.2rem; padding-left: 6px; }

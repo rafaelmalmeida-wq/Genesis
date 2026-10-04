@@ -4934,6 +4934,9 @@ function destaquesAtivos() { const hoje = hojeISO(); return [].concat((primosCen
 function avisosJarvis() {
   const hoje = hojeISO(), L = [], nomeArea = id => (AREAS_CEREBRO.find(a => a.id === id) || {}).nome || '';
   const ra = relatoriosAgentes;
+  { const ds = lerDiagSync(); // fase 9: aparelho fora de sincronia aparece PRIMEIRO (é o que faz os 3 aparelhos ficarem iguais)
+    if (!syncConfigurado()) L.push({ area: 'dia', rot: 'Sincronização', txt: 'Este aparelho não está sincronizando com os outros', sub: 'Ajustes → Sincronização: cole a mesma URL e o mesmo token dos outros aparelhos.', acao: "changeTab('settings')" });
+    else if (ds.erro && (!ds.ultimoOk || Date.now() - ds.ultimoOk > 10 * 60000)) L.push({ area: 'dia', rot: 'Sincronização com erro', txt: 'Este aparelho não está conseguindo sincronizar', sub: ds.erro, acao: "changeTab('settings')" }); }
   const rt = radarTikTok(); if (rt) L.push({ area: 'primos', rot: `Radar do TikTok · ${rt.lido}`, txt: rt.txt, sub: rt.sub, acao: 'abrirRadarTikTok()' }); // fase 8: o último vídeo primeiro
   const vistos = prefs.destaquesVistos || []; // fase 9: depois de aberto uma vez, o destaque sai daqui (o Rafael não quer ouvir a mesma coisa sempre)
   destaquesAtivos().forEach((d, i) => { if (d.id && vistos.includes(d.id)) return; const dm = String(d.titulo + ' ' + (d.resumo || '')).match(/\b(\d{1,2})\/(\d{1,2})\b/); // a data DO EVENTO (ex.: 12/10) vale mais que o prazo do destaque
@@ -6191,8 +6194,32 @@ async function sincronizarCofre(forcar) {
     try { const g = await (await cofreBruto('dados/giros.json')).json(); if (g && g.tipo === 'jarvis-giros' && (!girosDados || g.atualizadoEm !== girosDados.atualizadoEm)) { girosDados = g; try { localStorage.setItem('lifeos_giros', JSON.stringify(g)); } catch (e) { } if (cc.agente === 'producao') { renderCentral(); renderPaginaAgente(); } } } catch (e) { } // miniaturas 3D da fila
     try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
     try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } renderCentral(); renderDestaquesJarvis(); } } catch (e) { } // ainda sem relatório: tudo bem
+    autoRodadasNuvem(); // fase 9: se o relógio do GitHub falhou, o app pede (plano C)
   } catch (e) { if (forcar) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
   jv.sincronizando = false; renderAreasJarvis(); renderPrimosPagina(); renderAjustesJarvis(); setTimeout(renderAreasJarvis, 91000);
+}
+/** fase 9 (04/10/2026) — PLANO C para os agentes trabalharem todo dia: o relógio do GitHub às vezes não dispara e o PC pode estar
+ *  desligado. Ao abrir o app (qualquer aparelho conectado ao cofre): (1) depois das 6h45, se algum agente da Primos não trabalhou
+ *  hoje, pede a rodada — ela só faz quem falta (pedido "auto"); (2) das 8h às 21h, se o J.A.R.V.I.S. do dia está parado há mais de
+ *  80 min, pede uma rodada. No máximo 1 pedido de cada a cada 90 min por aparelho. */
+async function autoRodadasNuvem() {
+  if (!claudeConfigurado()) return;
+  const agora = new Date(), h = agora.getHours() + agora.getMinutes() / 60, hoje = hojeISO(), quando = k => Number(localStorage.getItem(k)) || 0;
+  if (h >= 6.75 && h <= 21.5 && Date.now() - quando('lifeos_auto_agentes') > 90 * 60000) {
+    const ags = (relatoriosAgentes && relatoriosAgentes.agentes) || {};
+    const faltam = agentesCentral().filter(a => a.id !== 'jarvis' && (!ags[a.id] || ags[a.id].dia !== hoje || ags[a.id].velho)).map(a => a.id);
+    if (faltam.length) {
+      let rodando = false; try { const ex = await (await cofreBruto('dados/execucao.json')).json(); rodando = !!(ex && ex.inicio && Date.now() - Date.parse(ex.inicio) < 40 * 60000); } catch (e) { }
+      if (!rodando) {
+        try { localStorage.setItem('lifeos_auto_agentes', String(Date.now())); } catch (e) { }
+        try { await gravarControleCofre(d => { d.pedidos = (d.pedidos || []).filter(p => !p.auto).concat({ id: 'p' + novoId(), agente: 'todos', instrucao: '', quando: new Date().toISOString(), auto: true, de: 'app' }); }, `App: agentes sem relatório de hoje (${faltam.join(', ')})`); } catch (e) { }
+      }
+    }
+  }
+  if (h >= 8 && h <= 21 && Date.now() - quando('lifeos_auto_dia') > 90 * 60000) {
+    const ult = diarioJarvis && diarioJarvis.rodouEm ? Date.parse(diarioJarvis.rodouEm) : 0;
+    if (ult && Date.now() - ult > 80 * 60000) { try { localStorage.setItem('lifeos_auto_dia', String(Date.now())); } catch (e) { } pedirRodadaDia('rodada'); }
+  }
 }
 /** Plano B: importar o primos-jarvis.json gerado no PC (fica só neste aparelho). */
 function importarCentral(input) {
@@ -8371,20 +8398,35 @@ function ccNums(lista) { return `<div class="cc-nums">${lista.map(([v, r, cor]) 
 let devDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_dev')); } catch (e) { return null; } })();
 const ABAS_DEV = [['agro', 'Agro'], ['empresas', 'Empresas'], ['religioso', 'Religioso'], ['esportes', 'Esportes'], ['kids', 'Kids'], ['pet', 'Pet']];
 const ETAPAS_DEV = { ideia: ['Ideia', '#8e8e93'], imagem: ['Imagem para aprovar', '#ff9f0a'], aprovado: ['Aprovado', '#0a84ff'], '3mf': ['3MF pronto', '#bf5af2'], feito: ['Feito', '#30d158'] };
-function abaDev(k) { cc.devAba = k; renderCentral(); renderPaginaAgente(); }
+// fase 9: trocar de nicho NÃO redesenha a página (o Rafael reclamou do "pisca"): só a parte do nicho muda, no painel e na página.
+function abaDev(k) {
+  cc.devAba = k;
+  document.querySelectorAll('.dev-abas button[data-nicho]').forEach(b => b.classList.toggle('on', b.dataset.nicho === k));
+  document.querySelectorAll('.dev-nicho').forEach(el => { el.innerHTML = htmlDevNicho(k); carregarMidiasCofre(el); });
+}
 function htmlAgenteDev(a) {
-  const ps = (devDados && devDados.projetos) || [], aba = cc.devAba || 'agro', doNicho = ps.filter(p => (p.categoria || 'empresas') === aba);
-  const ordem = ['imagem', 'aprovado', '3mf', 'ideia', 'feito'], lista = doNicho.slice().sort((x, y) => ordem.indexOf(x.status || 'ideia') - ordem.indexOf(y.status || 'ideia'));
+  const ps = (devDados && devDados.projetos) || [], aba = cc.devAba || 'agro', r = relatorioAgente('dev') || {};
   const conta = k => ps.filter(p => (p.categoria || 'empresas') === k).length;
+  const tarefa = r.paraOClaude && r.paraOClaude.tarefa ? ccBloco('Tarefa de hoje no PC', `<div class="cc-relatorio"><p class="cc-txt">${r.paraOClaude.codigo ? `<b>${esc(r.paraOClaude.codigo)}</b> — ` : ''}${esc(r.paraOClaude.tarefa)}</p><p class="cc-nota">O Claude faz no Blender e no Bambu Studio nas rodadas do PC (10h e 15h) e publica as prévias e os arquivos aqui.</p></div>`) : '';
   return cabecalhoAgente(a)
-    + ccNums([[ps.filter(p => p.status === 'imagem').length, 'para você aprovar'], [ps.filter(p => p.status === '3mf').length, '3MF prontos'], [ps.length, 'projetos']])
-    + `<nav class="dev-abas">${ABAS_DEV.map(([k, n]) => `<button type="button" class="${aba === k ? 'on' : ''}" onclick="abaDev('${k}')">${esc(n)}<small>${conta(k)}</small></button>`).join('')}</nav>`
-    + ccBloco(`${esc((ABAS_DEV.find(x => x[0] === aba) || [, ''])[1])} · ${plural(lista.length, 'projeto', 'projetos')}`, lista.length ? `<ul class="dev-lista">${lista.map(p => { const e = ETAPAS_DEV[p.status || 'ideia'] || ETAPAS_DEV.ideia;
-        return `<li class="dev-item" onclick="abrirProjetoDev('${esc(p.codigo)}')">${previaDevHTML(p, e)}<div class="dev-info"><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b>${p.personaliza ? `<small>Personaliza: ${esc(p.personaliza)}</small>` : ''}<small>${esc(p.codigo)} ${esc(p.versao || '')} · falta: ${esc(p.falta || '—')}</small>${(p.arquivos || []).length ? `<em class="dev-arqs">⬇ ${plural(p.arquivos.length, 'arquivo', 'arquivos')}</em>` : ''}</div></li>`; }).join('')}</ul>`
-      : '<p class="cc-txt">Nenhum projeto neste nicho ainda. Peça uma ideia ao Desenvolvedor.</p>')
-    + htmlDatasDev(aba)
-    + ccBloco('Como ele trabalha', `<p class="cc-txt">${esc((devDados && devDados.fluxo) || 'ideia → imagem (você aprova) → 3MF editável → feito')}. Ele monta a imagem de apresentação (com o Estúdio de fotos), espera o seu “pode seguir” e só então faz o 3MF com o texto editável no Bambu Studio.</p>`)
+    + ccNums([[ps.filter(p => p.status === 'imagem').length, 'para você aprovar'], [ps.filter(p => p.status === '3mf').length, '3MF prontos'], [ps.length, 'projetos'], [(r.ideias || []).length, 'ideias']])
+    + tarefa
+    + `<nav class="dev-abas">${ABAS_DEV.map(([k, n]) => `<button type="button" data-nicho="${k}" class="${aba === k ? 'on' : ''}" onclick="abaDev('${k}')">${esc(n)}<small>${conta(k)}</small></button>`).join('')}</nav>`
+    + `<div class="dev-nicho">${htmlDevNicho(aba)}</div>`
+    + htmlRelatorioAgente('dev')
+    + ccBloco('Como ele trabalha', `<p class="cc-txt">${esc((devDados && devDados.fluxo) || 'ideia → imagem (você aprova) → 3MF editável → feito')}. Todo dia de manhã ele traz 3 ideias novas e escolhe a tarefa do PC; o Claude modela, gera o 3MF e as prévias. Toque num projeto para girar o modelo, dar zoom e baixar o arquivo.</p>`)
     + botaoConversarAgente(a);
+}
+/** O que muda com a aba do nicho: projetos + ideias do agente + datas comerciais. */
+function htmlDevNicho(aba) {
+  const ps = (devDados && devDados.projetos) || [], r = relatorioAgente('dev') || {}, nomeAba = esc((ABAS_DEV.find(x => x[0] === aba) || [, ''])[1]);
+  const ordem = ['imagem', 'aprovado', '3mf', 'ideia', 'feito'], lista = ps.filter(p => (p.categoria || 'empresas') === aba).sort((x, y) => ordem.indexOf(x.status || 'ideia') - ordem.indexOf(y.status || 'ideia'));
+  const ideias = (r.ideias || []).filter(i => semAcentoCer(i.nicho || '') === aba);
+  return ccBloco(`${nomeAba} · ${plural(lista.length, 'projeto', 'projetos')}`, lista.length ? `<ul class="dev-lista">${lista.map(p => { const e = ETAPAS_DEV[p.status || 'ideia'] || ETAPAS_DEV.ideia;
+        return `<li class="dev-item" onclick="abrirProjetoDev('${esc(p.codigo)}')">${previaDevHTML(p, e)}<div class="dev-info"><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b>${p.personaliza ? `<small>Personaliza: ${esc(p.personaliza)}</small>` : ''}<small>${esc(p.codigo)} ${esc(p.versao || '')} · falta: ${esc(p.falta || '—')}</small>${(p.arquivos || []).length ? `<em class="dev-arqs">⬇ ${plural(p.arquivos.length, 'arquivo', 'arquivos')}</em>` : ''}</div><em class="dev-abrir" aria-hidden="true">›</em></li>`; }).join('')}</ul>`
+      : '<p class="cc-txt">Nenhum projeto neste nicho ainda. Peça uma ideia ao Desenvolvedor.</p>')
+    + (ideias.length ? ccBloco(`Ideias do Desenvolvedor · ${nomeAba}`, `<ul class="cc-lista">${ideias.map(i => `<li><span><b>${esc(i.titulo)}</b><small>${esc(i.porque || '')}</small><small class="cc-sub">${i.personaliza ? 'Personaliza: ' + esc(i.personaliza) + ' · ' : ''}${esc(i.complexidade || '')} · ${esc(isoParaBR(i.dia || '').slice(0, 5))}</small></span></li>`).join('')}</ul>`) : '')
+    + htmlDatasDev(aba);
 }
 // Datas comerciais do nicho (calendário do PC, fase 9): ideias para o Rafael escolher o que vira projeto.
 function htmlDatasDev(aba) {
@@ -8392,6 +8434,40 @@ function htmlDatasDev(aba) {
   return ccBloco('Datas que vêm aí · ideias', `<ul class="cc-lista">${ds.map(c => { const pz = prazoProducaoTxt(c);
     return `<li><span><b>${esc(c.nome)} · ${esc(isoParaBR(c.data).slice(0, 5))}</b><small>${esc(c.ideias.join(' · '))}</small><small class="cc-sub">${c.dias === 0 ? 'hoje' : 'em ' + plural(c.dias, 'dia', 'dias')}${pz ? ' · ' + esc(pz) : ''}${c.preco ? ' · ' + esc(c.preco) : ''}</small></span></li>`; }).join('')}</ul>
     <p class="cc-txt">Gostou de uma? Peça ao Desenvolvedor (botão abaixo) para ela virar projeto.</p>`);
+}
+// --- agente SHOPEE (fase 9): a nuvem escreve 3 rascunhos de anúncio por dia (acumulam até cobrir os produtos fotografados);
+//     o Rafael aprova aqui → pedido ao Claude no PC para subir na Shopee como SALVO E OCULTO (nunca publica).
+//     As aprovações ficam no módulo `shopeeaprov` (sincroniza): { id, produto, titulo, preco, dia, status: aprovado|subido }.
+let shopeeAprov = JSON.parse(localStorage.getItem('lifeos_shopeeaprov')) || [];
+function htmlAgenteShopee(a) {
+  const r = relatorioAgente('shopee') || {}, L = r.anuncios || [], fotos = ((primosCentral || {}).shopee || []).length, ap = p => shopeeAprov.find(x => x.produto === p);
+  return cabecalhoAgente(a)
+    + ccNums([[fotos, 'produtos fotografados'], [L.length, 'rascunhos prontos'], [shopeeAprov.length, 'aprovados']])
+    + (r.estimativa ? `<p class="cc-nota shp-est">${textoAgente(r.estimativa)}</p>` : '')
+    + ccBloco(`Rascunhos de anúncio${L.length ? ' · ' + L.length : ''}`, L.length ? `<ul class="shp-lista">${L.map((x, i) => { const ok = ap(x.produto); return `<li class="shp-item${ok ? ' ok' : ''}">
+        <small>${esc(x.produto)} · ${esc(isoParaBR(x.dia || '').slice(0, 5))}${x.categoria ? ' · ' + esc(x.categoria) : ''}</small><b>${esc(x.titulo)}</b>
+        <div class="shp-nums"><span><em>${x.preco ? reais(x.preco) : '—'}</em><small>preço sugerido</small></span><span><em>${x.precoMinimo ? reais(x.precoMinimo) : '—'}</em><small>mínimo (com taxas)</small></span><span><em>${x.pesoG ? x.pesoG + ' g' : '—'}</em><small>${esc(x.embalagem || 'pacote')}</small></span></div>
+        <details class="shp-det"><summary>Ver a descrição completa</summary><p class="shp-desc">${esc(x.descricao || '')}</p>${(x.palavras || []).length ? `<p class="cc-nota">Palavras-chave: ${esc(x.palavras.join(', '))}</p>` : ''}</details>
+        ${(x.pendencias || []).length ? `<p class="shp-pend">Falta confirmar: ${esc(x.pendencias.join(' · '))}</p>` : ''}
+        <div class="shp-acoes"><button type="button" class="cc-mini sec" onclick="copiarAnuncioShopee(${i})">Copiar texto</button>${ok ? `<span class="shp-selo">✓ Aprovado em ${esc(isoParaBR(ok.dia).slice(0, 5))} · ${ok.status === 'subido' ? 'subido como oculto' : 'o Claude sobe como oculto'}</span>` : `<button type="button" class="cc-mini" onclick="aprovarAnuncioShopee(${i})">✓ Aprovar para subir (oculto)</button>`}</div></li>`; }).join('')}</ul>`
+      : '<p class="cc-txt">Os primeiros rascunhos saem na próxima rodada da manhã. Ele faz 3 por dia até cobrir todos os produtos fotografados.</p>')
+    + htmlRelatorioAgente('shopee')
+    + ccBloco('Como funciona', '<p class="cc-txt">Todo dia de manhã o agente escreve 3 anúncios novos: título, descrição, preço sugerido, preço mínimo com as taxas da Shopee, peso e embalagem. Você confere e aprova aqui. O Claude sobe na Shopee como <b>salvo e oculto</b>: nada é publicado sem você.</p>')
+    + botaoConversarAgente(a);
+}
+function copiarAnuncioShopee(i) {
+  const x = ((relatorioAgente('shopee') || {}).anuncios || [])[i]; if (!x) return;
+  const t = `${x.titulo}\n\n${x.descricao || ''}\n\nPreço sugerido: ${x.preco ? reais(x.preco) : '—'} · Peso: ${x.pesoG || '—'} g\nPalavras-chave: ${(x.palavras || []).join(', ')}`;
+  (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Anúncio copiado.'), () => toast('Não consegui copiar.'));
+}
+async function aprovarAnuncioShopee(i) {
+  const x = ((relatorioAgente('shopee') || {}).anuncios || [])[i]; if (!x || shopeeAprov.some(a => a.produto === x.produto)) return;
+  if (!confirm(`Aprovar "${x.titulo}" por ${x.preco ? reais(x.preco) : 'preço a definir'}?\n\nO Claude sobe na Shopee como SALVO E OCULTO (não publica).`)) return;
+  shopeeAprov = shopeeAprov.concat({ id: novoId(), produto: x.produto, titulo: x.titulo, preco: x.preco || null, dia: hojeISO(), status: 'aprovado' });
+  if (!salvar('shopeeaprov', shopeeAprov)) { shopeeAprov = shopeeAprov.slice(0, -1); return; }
+  await enviarAoComputador(`Shopee — SALVAR E OCULTAR (não publicar) o anúncio aprovado pelo Rafael no app:\nProduto: ${x.produto}\nTítulo: ${x.titulo}\nPreço: ${x.preco ? reais(x.preco) : 'a definir'} (mínimo ${x.precoMinimo ? reais(x.precoMinimo) : '—'})\nPeso: ${x.pesoG || '—'} g · ${x.embalagem || ''}\nCategoria: ${x.categoria || ''}\nPalavras-chave: ${(x.palavras || []).join(', ')}\nPendências: ${(x.pendencias || []).join('; ') || 'nenhuma'}\nDescrição:\n${x.descricao || ''}\nFotos: 06 Shopee - Produtos → pasta do produto → "Fotos para anúncio".`, [], 'Primos 3D › Shopee', 'primos', `Shopee: subir oculto "${x.produto}"`, 'rafael');
+  toast('Aprovado. O pedido foi para o Claude, que sobe como oculto e responde no chat.', 5000);
+  renderCentral(); if (typeof renderPaginaAgente === 'function') renderPaginaAgente();
 }
 // Prévia do projeto: o PC (giros.ps1) renderiza o 3MF girando (WebP animado) ou usa a imagem — fica no cofre em midia/dev/.
 function previaDevHTML(p, e) {
@@ -8504,7 +8580,7 @@ function htmlPainelAgenteBase(id) {
       + ccBloco('Próximo passo', `<p class="cc-txt">O plano semanal e a dieta entram aqui assim que você me disser como quer montar. Por enquanto, registre os treinos na aba Saúde.</p><button type="button" class="cc-btn sec" onclick="fecharCentral(); changeTab('health')">Abrir Saúde</button>`) + botaoConversarAgente(a);
   }
   if (a.id === 'dev') return htmlAgenteDev(a);
-  if (a.id === 'shopee') return cabecalhoAgente(a) + ccBloco('Aguardando as skills', '<p class="cc-txt">O agente ' + esc(a.nome) + ' já tem o lugar dele na Central. Assim que você me disser as skills, eu monto o manual dele, os painéis e a rodada automática na nuvem.</p>') + botaoConversarAgente(a);
+  if (a.id === 'shopee') return htmlAgenteShopee(a);
   return cabecalhoAgente(a) + ccBloco('Missão', `<p class="cc-txt">${esc(a.missao || 'Sem missão definida.')}</p>`)
     + ccBloco('Situação', `<p class="cc-txt">Este agente já existe e conversa pelo chat com as skills acima. Os painéis próprios dele (números e rotinas) eu monto quando você pedir.</p>`)
     + botaoConversarAgente(a) + (a.proprio ? `<button type="button" class="cc-btn perigo" onclick="removerAgente('${esc(a.id)}')">Remover agente</button>` : '');
@@ -9069,7 +9145,7 @@ function migrarEntregasDePedidos() {
 
 // Config/Backup
 /** O que vai no backup (e o formato de cada módulo, que a importação confere). */
-function dadosBackup() { return { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, recadosagentes: recadosAgentes, metasprimos: metasPrimos, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; }
+function dadosBackup() { return { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, recadosagentes: recadosAgentes, metasprimos: metasPrimos, shopeeaprov: shopeeAprov, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; }
 function exportData() { const data = dadosBackup(); const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
 /** Confere o backup INTEIRO antes de gravar qualquer coisa (auditoria do Codex, achado 5): cada módulo tem que vir no mesmo formato
  *  do que já está no aparelho (lista continua lista, objeto continua objeto). Devolve a lista de problemas (vazia = pode importar). */
@@ -9087,7 +9163,7 @@ function validarBackup(data) {
   });
   return erros;
 }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { let data; try { data = JSON.parse(e.target.result); } catch (error) { alert('Erro ao ler o arquivo: não é um backup do app.'); return; } const erros = validarBackup(data); if (erros.length) { alert('Backup NÃO importado (nada foi alterado):\n• ' + erros.slice(0, 6).join('\n• ')); return; } try { tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length || !data.orders.length) salvar('orders', ped); /* lista vazia no backup = sem pedidos (achado 6); backup antigo só com entregas não mexe nos pedidos */ } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.metasprimos) salvar('metasprimos', data.metasprimos); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { let data; try { data = JSON.parse(e.target.result); } catch (error) { alert('Erro ao ler o arquivo: não é um backup do app.'); return; } const erros = validarBackup(data); if (erros.length) { alert('Backup NÃO importado (nada foi alterado):\n• ' + erros.slice(0, 6).join('\n• ')); return; } try { tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length || !data.orders.length) salvar('orders', ped); /* lista vazia no backup = sem pedidos (achado 6); backup antigo só com entregas não mexe nos pedidos */ } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.metasprimos) salvar('metasprimos', data.metasprimos); if (data.shopeeaprov) salvar('shopeeaprov', data.shopeeaprov); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); snapPausado = false; location.reload(); } catch (error) { snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -11300,7 +11376,7 @@ if (_vndProd) _vndProd.addEventListener('change', previaVenda);
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'agentes', 'estoqueprimos', 'filaimpressao', 'recadosagentes', 'metasprimos', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'primosplano', 'agentes', 'estoqueprimos', 'filaimpressao', 'recadosagentes', 'metasprimos', 'shopeeaprov', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -11357,16 +11433,22 @@ function agendarSync() {
 function syncConfigurado() { return !!(syncConfig.url && syncConfig.token); }
 
 async function sincronizar() {
-  if (!syncConfigurado()) { setSyncStatus('naoconfig'); verificarNovoDia(); return; }
+  if (!syncConfigurado()) { setSyncStatus('naoconfig'); registrarDiagSync({ ok: false, erro: 'a sincronização não está configurada neste aparelho' }); verificarNovoDia(); return; }
   if (syncEmAndamento) return;
   if (!navigator.onLine) { setSyncStatus('offline'); verificarNovoDia(); return; }
 
   syncEmAndamento = true; syncEditouDurante = false; setSyncStatus('andamento');
+  const controle = typeof AbortController !== 'undefined' ? new AbortController() : null, limite = setTimeout(() => controle && controle.abort(), 25000); // fase 9: não fica preso
   try {
-    const dados = {};
+    // fase 9 (04/10/2026): a planilha aceita até 50 mil letras por célula — e UM módulo grande derrubava o envio de TODOS daquele
+    // aparelho. Módulo grande vai em pedaços ("modulo#1", "modulo#2"…, mesmo carimbo); quem recebe junta (valorRemoto).
+    const dados = {}, PEDACO = 22000;
     SYNC_MODULOS.forEach(m => {
-      const bruto = localStorage.getItem('lifeos_' + m);
-      if (bruto !== null) dados[m] = { updatedAt: syncMeta[m] || 0, valor: JSON.parse(bruto) };
+      const bruto = localStorage.getItem('lifeos_' + m); if (bruto === null) return;
+      const quando = syncMeta[m] || 0;
+      if (bruto.length <= PEDACO) { dados[m] = { updatedAt: quando, valor: JSON.parse(bruto) }; return; }
+      const n = Math.ceil(bruto.length / PEDACO); dados[m] = { updatedAt: quando, valor: { __partes: n } };
+      for (let i = 0; i < n; i++) dados[`${m}#${i + 1}`] = { updatedAt: quando, valor: bruto.slice(i * PEDACO, (i + 1) * PEDACO) };
     });
 
     // Google Calendar: só pede o espelhamento quando plantões/compromissos mudaram desde o último envio
@@ -11377,14 +11459,20 @@ async function sincronizar() {
 
     // Content-Type text/plain de propósito: evita o "preflight" CORS que o Apps Script não responde.
     const resp = await fetch(syncConfig.url, {
-      method: 'POST',
+      method: 'POST', ...(controle ? { signal: controle.signal } : {}),
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ token: syncConfig.token, acao: 'push', dados, agenda: precisaAgenda })
     });
+    if (!resp.ok) throw new Error('a planilha respondeu HTTP ' + resp.status);
     const r = await resp.json();
     if (!r.ok) throw new Error(r.erro || 'resposta inválida do servidor');
+    if (!r.dados || typeof r.dados !== 'object') throw new Error('a planilha não devolveu os dados');
 
-    const mudou = aplicarRemoto(r.dados || {});
+    const mudou = aplicarRemoto(r.dados);
+    // fase 9 (ideia do Codex): só diz "sincronizado" se a planilha guardou TUDO o que este aparelho mandou
+    const naoGuardou = Object.keys(dados).filter(k => !r.dados[k] || (Number(r.dados[k].updatedAt) || 0) < (dados[k].updatedAt || 0)).filter(k => !k.includes('#'));
+    registrarDiagSync({ ok: !naoGuardou.length, erro: naoGuardou.length ? 'a planilha não guardou: ' + naoGuardou.join(', ') : '', aqui: Object.keys(dados).filter(k => !k.includes('#')).length, planilha: Object.keys(r.dados).filter(k => !k.includes('#')).length, grandes: Object.keys(dados).filter(k => k.endsWith('#1')).map(k => k.slice(0, -2)) });
+    if (naoGuardou.length) { if (mudou) redesenharTudo(); throw new Error('a planilha não guardou: ' + naoGuardou.join(', ')); }
     if (precisaAgenda) {
       if (r.agenda && r.agenda.ok) {
         localStorage.setItem('lifeos_agenda_stamp', String(agendaEnviada)); // edição feita durante o envio continua pendente para a agenda
@@ -11401,9 +11489,12 @@ async function sincronizar() {
     if (editouDurante) agendarSync();
   } catch (err) {
     console.error('Sync:', err);
-    setSyncStatus(navigator.onLine ? 'erro' : 'offline', String(err.message || err));
+    const msg = err && err.name === 'AbortError' ? 'a planilha demorou demais para responder (vou tentar de novo)' : String(err.message || err);
+    if (!/não guardou/.test(msg)) registrarDiagSync({ ok: false, erro: msg });
+    marcarPendente(true);
+    setSyncStatus(navigator.onLine ? 'erro' : 'offline', msg);
   } finally {
-    syncEmAndamento = false;
+    clearTimeout(limite); syncEmAndamento = false;
     // Só depois de saber o estado mais novo é que fechamos o dia anterior
     // (evita que um aparelho zere hábitos que o outro já marcou hoje).
     verificarNovoDia();
@@ -11414,18 +11505,49 @@ async function sincronizar() {
 function aplicarRemoto(remoto) {
   let mudou = false;
   SYNC_MODULOS.forEach(m => {
-    const r = remoto[m];
-    if (!r || r.valor === null || r.valor === undefined) return;
+    const r = valorRemoto(remoto, m);
+    if (!r || !Number.isFinite(Number(r.updatedAt))) return;
     const local = syncMeta[m] || 0;
     if (r.updatedAt < local) return;
-    const texto = JSON.stringify(r.valor);
-    if (r.updatedAt === local && texto === localStorage.getItem('lifeos_' + m)) return;
-    localStorage.setItem('lifeos_' + m, texto);
+    if (r.updatedAt === local && r.texto === localStorage.getItem('lifeos_' + m)) return;
+    try { localStorage.setItem('lifeos_' + m, r.texto); } catch (e) { console.error('sync: sem espaço para', m); return; }
     syncMeta[m] = r.updatedAt; // sem carimbar hora nova: isso não é edição local
     mudou = true;
   });
-  localStorage.setItem('lifeos_sync_meta', JSON.stringify(syncMeta));
+  try { localStorage.setItem('lifeos_sync_meta', JSON.stringify(syncMeta)); } catch (e) { }
   return mudou;
+}
+/** O módulo como veio da planilha — juntando os pedaços de um módulo grande (fase 9). null = não veio inteiro (fica o daqui). */
+function valorRemoto(remoto, m) {
+  const r = remoto[m]; if (!r || r.valor === null || r.valor === undefined) return null;
+  if (typeof r.valor === 'object' && !Array.isArray(r.valor) && r.valor.__partes) {
+    let txt = '';
+    for (let i = 1; i <= r.valor.__partes; i++) { const p = remoto[`${m}#${i}`]; if (!p || p.updatedAt !== r.updatedAt || typeof p.valor !== 'string') return null; txt += p.valor; }
+    try { JSON.parse(txt); } catch (e) { return null; }
+    return { updatedAt: r.updatedAt, texto: txt };
+  }
+  return { updatedAt: r.updatedAt, texto: JSON.stringify(r.valor) };
+}
+/** Saúde da sincronização deste aparelho (aparece em Ajustes, no aviso da página inicial e no cofre para o Claude ver). */
+function lerDiagSync() { try { return JSON.parse(localStorage.getItem('lifeos_sync_diag')) || {}; } catch (e) { return {}; } }
+function registrarDiagSync(d) {
+  const antes = lerDiagSync(), agora = { ...antes, ...d, quando: Date.now(), ...(d.ok ? { ultimoOk: Date.now(), erro: '' } : {}) };
+  try { localStorage.setItem('lifeos_sync_diag', JSON.stringify(agora)); } catch (e) { }
+  publicarSaudeAparelho(agora, antes.ok !== agora.ok);
+}
+function idPlanilha() { const m = String(syncConfig.url || '').match(/\/macros\/s\/([^/]+)\//); return m ? '…' + m[1].slice(-6) : 'nenhuma'; }
+function nomeAparelho() {
+  const u = navigator.userAgent, so = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Windows/.test(u) ? 'Windows' : /Mac OS X/.test(u) ? 'Mac' : 'Outro';
+  const nav = /Edg\//.test(u) ? 'Edge' : /CriOS|Chrome\//.test(u) ? 'Chrome' : /Firefox|FxiOS/.test(u) ? 'Firefox' : /Safari/.test(u) ? 'Safari' : '';
+  return so + (nav ? ' · ' + nav : '') + (appInstalado() ? ' (app)' : '');
+}
+function idAparelho() { let id = localStorage.getItem('lifeos_aparelho_id'); if (!id) { id = 'ap' + novoId(); try { localStorage.setItem('lifeos_aparelho_id', id); } catch (e) { } } return id; }
+/** No cofre (dados/aparelhos.json): planilha, última sincronização e erro de cada aparelho — no máximo 1×/hora ou quando muda ok↔erro. */
+async function publicarSaudeAparelho(d, mudouEstado) {
+  if (!claudeConfigurado()) return;
+  const ult = Number(localStorage.getItem('lifeos_saude_pub')) || 0; if (!mudouEstado && Date.now() - ult < 60 * 60000) return;
+  try { localStorage.setItem('lifeos_saude_pub', String(Date.now())); } catch (e) { }
+  try { await gravarCofreJson('dados/aparelhos.json', x => { x = x && x.aparelhos ? x : { tipo: 'jarvis-aparelhos', aparelhos: {} }; x.aparelhos[idAparelho()] = { nome: nomeAparelho(), planilha: idPlanilha(), sincroniza: syncConfigurado(), ok: !!d.ok, erro: String(d.erro || '').slice(0, 200), ultimoOk: d.ultimoOk ? new Date(d.ultimoOk).toISOString() : null, quando: new Date().toISOString(), modulosAqui: d.aqui || 0, modulosPlanilha: d.planilha || 0, grandes: d.grandes || [], versao: (typeof CACHE_VERSAO !== 'undefined' ? CACHE_VERSAO : '') }; return x; }, `Saúde da sincronização: ${nomeAparelho()}`); } catch (e) { }
 }
 
 /** Recarrega as variáveis a partir do localStorage e redesenha todas as abas. */
@@ -11445,7 +11567,7 @@ function redesenharTudo() {
   entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || [];
   orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
   claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || [];
-  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; recadosAgentes = JSON.parse(localStorage.getItem('lifeos_recadosagentes')) || []; metasPrimos = JSON.parse(localStorage.getItem('lifeos_metasprimos')) || []; setTimeout(renderCentral, 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
+  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; recadosAgentes = JSON.parse(localStorage.getItem('lifeos_recadosagentes')) || []; metasPrimos = JSON.parse(localStorage.getItem('lifeos_metasprimos')) || []; shopeeAprov = JSON.parse(localStorage.getItem('lifeos_shopeeaprov')) || []; setTimeout(renderCentral, 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
   media = JSON.parse(localStorage.getItem('lifeos_media')) || []; playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || [];
   trips = JSON.parse(localStorage.getItem('lifeos_trips')) || []; contacts = JSON.parse(localStorage.getItem('lifeos_contacts')) || [];
   devnotes = JSON.parse(localStorage.getItem('lifeos_devnotes')) || {};
@@ -11489,6 +11611,8 @@ function setSyncStatus(estado, detalhe) {
   const [icone, texto, cor] = mapa[estado] || mapa.naoconfig;
   if (el) { el.innerText = icone + ' ' + texto; el.style.color = cor; }
   if (dot) { dot.style.background = cor; dot.title = texto; }
+  const dg = document.getElementById('sync-diag'); // fase 9: para conferir que os 3 aparelhos falam com a MESMA planilha
+  if (dg) { const d = lerDiagSync(); dg.innerText = `Este aparelho: ${nomeAparelho()} · planilha ${idPlanilha()}${d.aqui ? ` · ${d.aqui} módulos aqui, ${d.planilha || 0} na planilha` : ''}${(d.grandes || []).length ? ` · em pedaços: ${d.grandes.join(', ')}` : ''}. O final da planilha tem que ser o MESMO no celular, no notebook e no computador.`; }
 }
 
 /** Botão "Salvar e testar" da aba Config. */
