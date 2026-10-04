@@ -10029,7 +10029,8 @@ function renderAjustesJarvis() {
   h += `<section class="jva-sec" id="jva-tema"><h4>3 · Aparência</h4><p class="jva-txt">Escolha o tema do J.A.R.V.I.S. Muda na hora (a esfera, a página inicial e o chat).</p>
     <div class="jva-temas">${Object.entries(TEMAS_JARVIS).map(([k, t]) => `<button type="button" class="jva-tema${k === tema ? ' on' : ''}${t.escuro ? ' esc' : ''}" onclick="escolherTemaJarvis('${k}')" style="--fundo:${t.fundo}; --luz:${t.luz}"><span class="jva-bola" style="background:${t.bola}"></span><b>${t.nome}</b><small>${t.desc}</small></button>`).join('')}</div>
     <label class="jva-linha"><input type="checkbox" ${prefs.jvSemAbertura ? '' : 'checked'} onchange="prefs.jvSemAbertura = !this.checked; salvarPrefsJarvis()"> <span>Vinheta de abertura (o feixe de luz ao abrir o app)</span></label>
-    <label class="jva-linha"><input type="checkbox" ${prefs.jvSemSomAbertura ? '' : 'checked'} onchange="prefs.jvSemSomAbertura = !this.checked; salvarPrefsJarvis()"> <span>Som da abertura (2 s, corte seco · no iPhone, só fora do modo silencioso)</span></label></section>`;
+    <label class="jva-linha"><input type="checkbox" ${prefs.jvSemSomAbertura ? '' : 'checked'} onchange="prefs.jvSemSomAbertura = !this.checked; salvarPrefsJarvis()"> <span>Som da abertura (2 s, corte seco · no iPhone a vinheta espera o seu toque para tocar)</span></label>
+    <label class="jva-linha"><input type="checkbox" ${prefs.jvSomRespeitaSilencioso ? 'checked' : ''} onchange="prefs.jvSomRespeitaSilencioso = this.checked; salvarPrefsJarvis()"> <span>Respeitar o modo silencioso do iPhone (sem som quando a chave estiver no silencioso)</span></label></section>`;
   // voz
   const mv = jvConfig.iaModeloVoz;
   h += `<section class="jva-sec" id="jva-voz"><h4>4 · Voz</h4>
@@ -10145,7 +10146,7 @@ function sessaoAudioGravar() { try { if (navigator.audioSession) navigator.audio
 function somAbertura() {
   if (prefs.jvSemSomAbertura) return;
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-  try { if (navigator.audioSession && !vz.ativo) navigator.audioSession.type = 'ambient'; } catch (e) { }
+  try { if (navigator.audioSession && !vz.ativo) navigator.audioSession.type = prefs.jvSomRespeitaSilencioso ? 'ambient' : 'transient'; } catch (e) { }
   let ctx; try { ctx = new AC(); } catch (e) { sessaoAudioNormal(); return; }
   const fechar = () => { try { if (ctx.state !== 'closed') ctx.close(); } catch (e) { } sessaoAudioNormal(); };
   const tocar = () => {
@@ -10179,15 +10180,30 @@ function somAbertura() {
   const tentar = () => ctx.resume().then(() => ctx.state === 'running');
   tentar().then(ok => {
     if (ok) return tocar();
-    const limite = Date.now() + 2000, toque = () => { tirar(); if (Date.now() < limite) tentar().then(o => { if (o) tocar(); else fechar(); }); else fechar(); }; // sem toque: não insiste
-    const tirar = () => ['pointerdown', 'keydown', 'touchend'].forEach(ev => document.removeEventListener(ev, toque, true));
-    ['pointerdown', 'keydown', 'touchend'].forEach(ev => document.addEventListener(ev, toque, true));
-    setTimeout(() => { tirar(); if (ctx.state !== 'running') fechar(); }, 2300);
+    esperarToqueAbertura(() => { tentar().then(o => { if (o) tocar(); else fechar(); }).catch(fechar); }, fechar);
   }).catch(fechar);
+}
+/** iPhone (fase 10, pedido do Rafael): o som só pode nascer de um TOQUE — tocar no ícone da tela de início não conta. Então a vinheta
+ *  ESPERA pausada ("toque para entrar") até 8 s; o toque solta a luz e o som juntos. Sem toque, segue sem som (não prende o app). */
+function esperarToqueAbertura(aoTocar, desistir) {
+  const el = $j('jv-abertura'); if (!el) { desistir(); return; }
+  clearTimeout(jv.abTimer1); clearTimeout(jv.abTimer2);
+  el.classList.add('espera'); if (!el.querySelector('.jv-ab-toque')) el.insertAdjacentHTML('beforeend', '<span class="jv-ab-toque">toque para entrar</span>');
+  let feito = false, t = 0;
+  const evs = ['touchend', 'pointerup', 'click'];
+  const seguir = comSom => { if (feito) return; feito = true; clearTimeout(t); evs.forEach(ev => el.removeEventListener(ev, toque, true)); document.removeEventListener('keydown', toque, true);
+    if (comSom) aoTocar(); else desistir(); // o resume() do áudio tem que acontecer AQUI dentro do toque (regra do iPhone)
+    el.classList.remove('espera'); agendarFimAbertura(); };
+  const toque = e => { if (e && e.cancelable) e.preventDefault(); seguir(true); };
+  evs.forEach(ev => el.addEventListener(ev, toque, true)); document.addEventListener('keydown', toque, true);
+  t = setTimeout(() => seguir(false), 8000);
 }function iniciarAbertura() {
   const el = $j('jv-abertura'); if (!el) return;
   if (prefs.jvSemAbertura) { el.remove(); document.documentElement.classList.remove('jv-abrindo'); atualizarCasaJarvis(abaAtual()); return; }
-  clearTimeout(jv.abTimer1); clearTimeout(jv.abTimer2); somAbertura();
+  clearTimeout(jv.abTimer1); clearTimeout(jv.abTimer2); agendarFimAbertura(); somAbertura();
+}
+function agendarFimAbertura() {
+  clearTimeout(jv.abTimer1); clearTimeout(jv.abTimer2);
   jv.abTimer1 = setTimeout(() => { if (window.JarvisBrain && jv.modo === '3d' && abaAtual() === 'cerebro') JarvisBrain.entrada(); else jv.entradaPendente = true; }, 1150);
   jv.abTimer2 = setTimeout(() => { const a = $j('jv-abertura'); if (a) a.remove(); document.documentElement.classList.remove('jv-abrindo'); atualizarCasaJarvis(abaAtual()); }, 2200);
 }

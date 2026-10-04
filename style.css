@@ -3803,3 +3803,12 @@ body.eb-aberto { overflow: hidden; }
 .cp-msg.aberta .cp-bolha p { -webkit-line-clamp: unset; display: block; }
 .cp-bolha p.ex { color: #9be7b0; font-size: 0.8rem; }
 @media (max-width: 520px) { .cp-placar li { grid-template-columns: 26px minmax(0, 1fr) auto; padding: 10px; } .cp-placar strong { font-size: 1.3rem; } .cp-pos { width: 26px; height: 26px; } .cp-matriz { grid-template-columns: 40px repeat(var(--n), minmax(24px, 1fr)); } }
+
+/* abertura no iPhone (fase 10): a vinheta espera o toque para luz e som saírem juntos */
+.jv-abertura.espera { pointer-events: auto; cursor: pointer; }
+.jv-abertura.espera, .jv-abertura.espera * { animation-play-state: paused !important; }
+.jv-abertura.espera::before { content: ""; position: absolute; left: 50%; top: 0; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px 3px #fff, 0 0 26px 8px rgba(170, 200, 255, 0.6); animation: jvAbPisca 1.6s ease-in-out infinite; }
+.jv-ab-toque { position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 72px); transform: translateX(-50%); white-space: nowrap; font: 600 0.7rem/1 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif; letter-spacing: 0.32em; text-transform: uppercase; color: rgba(220, 232, 255, 0.8); opacity: 0; }
+.jv-abertura.espera .jv-ab-toque { animation: jvAbPisca 1.6s ease-in-out infinite !important; animation-play-state: running !important; }
+.jv-abertura.espera::before { animation-play-state: running !important; }
+@keyframes jvAbPisca { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
