@@ -7593,10 +7593,10 @@ function nomeConv(id) { if (NOMES_CONV[id]) return NOMES_CONV[id]; const a = tod
 function corConv(id, claro) { return id === 'jarvis' || id === 'todos' ? (claro ? '#1c1c1e' : '#ffffff') : COR_AGENTE[id] || '#8e8e93'; }
 const semNegrito = s => String(s || '').replace(/<\/?b>/g, '');
 function quandoLocal(iso) { const d = new Date(iso); if (isNaN(d)) return null; return `${isoDe(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
-function conversaAgentes(horas = 48) {
+function conversaAgentes(horas = 48, max = 80) {
   const L = [], add = (quando, de, para, texto, tipo, extra) => { if (!quando || !texto || !de || !para) return; L.push({ id: `${tipo}|${de}|${para}|${quando}|${String(texto).slice(0, 30)}`, quando: String(quando), de, para, texto: String(texto), tipo, extra: extra || '' }); };
   const D = (diarioJarvis && diarioJarvis.dias) || {};
-  Object.keys(D).sort().slice(-3).forEach(dia => ((D[dia] || {}).conversas || []).forEach(c => {
+  Object.keys(D).sort().slice(-(Math.ceil(horas / 24) + 1)).forEach(dia => ((D[dia] || {}).conversas || []).forEach(c => {
     const q = `${dia}T${c.hora || '00:00'}`, perg = /chegaram dados novos/i.test(c.pergunta || '') ? 'O que mudou na sua área e qual é o próximo passo concreto?' : c.pergunta;
     add(q, 'jarvis', c.agente, perg, 'conversa'); add(q + ':01', c.agente, 'jarvis', c.resposta, 'conversa', c.caminho ? 'Próximo passo: ' + c.caminho : ''); }));
   const R = relatoriosAgentes || {}, qR = R.geradoEm ? quandoLocal(R.geradoEm) : null;
@@ -7609,7 +7609,7 @@ function conversaAgentes(horas = 48) {
   ((pedidosDev && pedidosDev.pedidos) || []).slice(0, 15).forEach(p => { add(p.quando, 'jarvis', 'dev', 'Pedido: ' + p.texto, 'pedido'); if (p.resposta) add((p.atualizadoEm || p.quando) + ':05', 'dev', 'jarvis', p.resposta, 'pedido'); });
   Object.entries((cc.execucao || {}).tarefas || {}).forEach(([id, t]) => { if (t && (t.status === 'rodando' || t.status === 'fila') && id !== 'consenso') add(quandoLocal(new Date().toISOString()) + ':59', id, 'jarvis', t.status === 'fila' ? 'Na fila para trabalhar…' : 'Trabalhando agora…', 'aovivo'); });
   const lim = quandoLocal(new Date(Date.now() - horas * 3600e3).toISOString()), vistos = new Set();
-  return L.filter(m => m.quando >= lim && !vistos.has(m.id) && vistos.add(m.id)).sort((a, b) => b.quando.localeCompare(a.quando)).slice(0, 80);
+  return L.filter(m => m.quando >= lim && !vistos.has(m.id) && vistos.add(m.id)).sort((a, b) => b.quando.localeCompare(a.quando)).slice(0, max);
 }
 function conversaAberta() { return celCanvas() ? !!cc.convCel : prefs.ccConvPC !== 'fechada'; }
 function alternarConversa() {
@@ -7648,11 +7648,143 @@ function renderConversa() {
   });
   const filtros = [['todos', 'Tudo'], ['conversa', 'Conversas'], ['consenso', 'Item da vez'], ['relatorio', 'Relatórios'], ['recado', 'Recados'], ['pedido', 'Pedidos']].filter(([k]) => k === 'todos' || L.some(m => m.tipo === k || (k === 'conversa' && m.tipo === 'aovivo')));
   const rolagem = el.querySelector('.cvs-lista') ? el.querySelector('.cvs-lista').scrollTop : 0;
-  el.innerHTML = `<header class="cvs-topo"><div><b>Conversa dos agentes</b><small><i class="cvs-vivo"></i>últimas 48 h · ${plural(L.length, 'mensagem', 'mensagens')}</small></div><button type="button" onclick="alternarConversa()" aria-label="Fechar a conversa">✕</button></header>
+  el.innerHTML = `<header class="cvs-topo"><div><b>Conversa dos agentes</b><small><i class="cvs-vivo"></i>últimas 48 h · ${plural(L.length, 'mensagem', 'mensagens')}</small></div><button type="button" class="cvs-pag" onclick="abrirPaginaConversas()">Página ›</button><button type="button" onclick="alternarConversa()" aria-label="Fechar a conversa">✕</button></header>
     <div class="cvs-filtros">${filtros.map(([k, t]) => `<button type="button" class="${k === f ? 'on' : ''}" onclick="filtrarConversa('${k}')">${t}</button>`).join('')}</div>
     <ol class="cvs-lista">${h || '<li class="cvs-vazio">Ainda não há conversa nas últimas 48 h. O J.A.R.V.I.S. do dia conversa com um agente por hora (8h–21h) e a rodada dos agentes é às 7h.</li>'}</ol>`;
   const nl = el.querySelector('.cvs-lista'); if (nl) nl.scrollTop = rolagem;
   novas.forEach(m => cc.convVistos.add(m.id));
+}
+// =====================================================================================================================
+// PÁGINA DAS CONVERSAS DOS AGENTES (fase 10, pedido do Rafael 04/10/2026): só as conversas — o que foi trocado, entre quem, como, e o
+// DESEMPENHO de cada agente (para avaliar quem está trabalhando bem). Mesmo esqueleto das páginas dos agentes (#ag-pag, rolagem que
+// comanda). Abertura = a REDE (J.A.R.V.I.S. no meio, cada agente em volta; fio mais grosso = mais mensagens; bolinhas correndo = a
+// informação indo). Período 24 h · 48 h · 7 dias; tocar num agente (na rede ou no placar) filtra a página inteira.
+// Índice de participação (0–100), transparente: relatório em dia (30) · conversas com o J.A.R.V.I.S. do dia (até 25) · respostas com
+// números (até 20) · traz o próximo passo concreto (até 15) · recebe/atende recados e pedidos (até 10) · erro na última rodada (−10).
+// =====================================================================================================================
+const cpEst = { horas: 48, agente: null, tipo: 'todos', palavra: null, aberta: null };
+const PARADAS_CONV = new Set('mudou concreto pedido pedidos conversa conversas recado relatorios chegaram novos agora sobre entre ainda muito mais menos tambem quando porque para pelo pela pelos pelas como esta este essa esse isso isto voces nossa nosso nossas nossos rafael agente agentes jarvis relatorio proximo passo hoje semana dias tempo fazer feito temos estamos estao seria sendo ficar fica primeiro primeira outra outro outros todas todos cada qual quais onde mesmo depois antes desde ainda apenas sobre maior menor melhor pode podem deve devem vamos vale valor total dados area sua seus suas tudo nada '.split(' '));
+function abrirPaginaConversas(agente) {
+  let el = $j('ag-pag'); if (!el) { el = document.createElement('div'); el.id = 'ag-pag'; el.className = 'ag'; el.hidden = true; document.body.appendChild(el); }
+  if (typeof fecharPainelCentral === 'function' && $j('jv-central') && !$j('jv-central').hidden) { cc.agente = null; cc.novo = false; }
+  cc.pagina = 'conversas'; cc.vistoBase = null; cc.puxarStatus = ''; cpEst.agente = agente || null; cpEst.palavra = null;
+  if (el.hidden) empilharCamada('pagina', fecharPaginaAgente);
+  el.hidden = false; document.body.classList.add('ag-aberta'); renderPaginaConversas();
+}
+function idsConversa() { return ['jarvis', ...agentesCentral().map(a => a.id)]; }
+function msgsConversa() {
+  let L = conversaAgentes(cpEst.horas, 400);
+  if (cpEst.agente) L = L.filter(m => m.de === cpEst.agente || m.para === cpEst.agente);
+  return L;
+}
+/** O placar de cada agente no período (o que ele falou, o que recebeu, como falou). */
+function desempenhoAgentes(Ltodas) {
+  const D = (diarioJarvis && diarioJarvis.dias) || {}, lim = quandoLocal(new Date(Date.now() - cpEst.horas * 3600e3).toISOString()).slice(0, 10), hoje = hojeISO();
+  const conversasDiario = Object.entries(D).filter(([dia]) => dia >= lim).flatMap(([dia, d]) => (d.conversas || []).map(c => ({ ...c, dia })));
+  return agentesCentral().map(a => {
+    const env = Ltodas.filter(m => m.de === a.id), rec = Ltodas.filter(m => m.para === a.id || (m.para === 'todos' && m.de === 'jarvis'));
+    const conv = conversasDiario.filter(c => c.agente === a.id), rel = relatorioAgente(a.id), ex = ((cc.execucao || {}).tarefas || {})[a.id];
+    const comNum = env.filter(m => /\d/.test(m.texto)).length, comPasso = conv.filter(c => c.caminho).length;
+    const pedidos = a.id === 'dev' ? ((pedidosDev && pedidosDev.pedidos) || []) : [], feitos = pedidos.filter(p => p.status === 'feito').length;
+    let nota = 0; const motivos = [];
+    if (a.semNuvem && a.id === 'digital') { const cs = (ebookDados && ebookDados.capitulos) || []; const esc2 = cs.filter(c => c.status !== 'ideia').length; nota += Math.min(30, esc2 * 4); motivos.push(`${esc2} capítulo(s) escritos (trabalha no PC)`); }
+    else if (rel && rel.dia === hoje && !rel.velho) { nota += 30; motivos.push('relatório de hoje entregue'); } else if (rel) { nota += 10; motivos.push(`relatório de ${isoParaBR(rel.dia || '').slice(0, 5)}${rel.velho ? ' (a rodada de hoje falhou)' : ''}`); } else motivos.push('ainda sem relatório');
+    if (conv.length) { nota += Math.min(25, conv.length * 6); motivos.push(`${plural(conv.length, 'conversa', 'conversas')} com o J.A.R.V.I.S. do dia`); }
+    if (env.length) { nota += Math.round(20 * comNum / env.length); if (comNum) motivos.push(`${Math.round(comNum / env.length * 100)}% das falas com números`); }
+    if (conv.length) { nota += Math.round(15 * comPasso / conv.length); if (comPasso) motivos.push(`trouxe ${plural(comPasso, 'próximo passo', 'próximos passos')}`); }
+    if (pedidos.length) { nota += Math.round(10 * feitos / pedidos.length); motivos.push(`${feitos} de ${pedidos.length} pedidos atendidos`); } else if (rec.length) nota += Math.min(10, rec.length * 2);
+    if (ex && ex.status === 'erro') { nota -= 10; motivos.push('erro na última rodada'); }
+    const urg = { hoje: conv.filter(c => c.urgencia === 'hoje').length, semana: conv.filter(c => c.urgencia === 'semana').length, mes: conv.filter(c => c.urgencia === 'mes').length };
+    return { a, cor: corConv(a.id), env: env.length, rec: rec.length, conv: conv.length, comNum, comPasso, urg, nota: Math.max(0, Math.min(100, nota)), motivos, ultima: env[0] || null, consenso: env.filter(m => m.tipo === 'consenso').length };
+  }).sort((x, y) => y.nota - x.nota);
+}
+/** A rede da abertura: J.A.R.V.I.S. no centro, agentes em volta, fio = volume de mensagens entre os dois. */
+function redeConversas(L) {
+  const ids = agentesCentral().map(a => a.id), N = ids.length, R = 150, pos = { jarvis: { x: 0, y: 0 } };
+  ids.forEach((id, i) => { const ang = -Math.PI / 2 + i / N * Math.PI * 2; pos[id] = { x: Math.cos(ang) * R, y: Math.sin(ang) * R * 0.86 }; });
+  const pares = {}; L.forEach(m => { const d = m.para === 'todos' ? null : m.para; if (!d || !pos[m.de] || !pos[d] || m.de === d) return; const k = [m.de, d].sort().join('|'); pares[k] = pares[k] || { a: m.de, b: d, n: 0, de: m.de }; pares[k].n++; });
+  const mx = Math.max(1, ...Object.values(pares).map(p => p.n)), vol = id => L.filter(m => m.de === id || m.para === id).length, vmx = Math.max(1, ...ids.map(vol));
+  const fios = Object.values(pares).map((p, i) => { const A = pos[p.a], B = pos[p.b], ag = p.a === 'jarvis' ? p.b : p.a, cor = corConv(ag), w = 1 + 5 * p.n / mx, dim = cpEst.agente && p.a !== cpEst.agente && p.b !== cpEst.agente;
+    const mxp = (A.x + B.x) / 2, myp = (A.y + B.y) / 2, cx = mxp - (B.y - A.y) * 0.12, cy = myp + (B.x - A.x) * 0.12;
+    return `<g class="cp-fio${dim ? ' dim' : ''}"><path id="cpf${i}" d="M${A.x.toFixed(1)},${A.y.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${B.x.toFixed(1)},${B.y.toFixed(1)}" stroke="${cor}" stroke-width="${w.toFixed(1)}"/>${Array.from({ length: Math.min(3, Math.ceil(p.n / Math.max(1, mx / 3))) }, (_, k) => `<circle r="${(2 + w / 3).toFixed(1)}" fill="${cor}"><animateMotion dur="${(2.6 + k * 0.7 + i * 0.13).toFixed(2)}s" begin="${(k * 0.9).toFixed(1)}s" repeatCount="indefinite"${k % 2 ? ' keyPoints="1;0" keyTimes="0;1" calcMode="linear"' : ''}><mpath href="#cpf${i}"/></animateMotion></circle>`).join('')}</g>`; }).join('');
+  const nos = ids.map(id => { const p = pos[id], v = vol(id), r = 14 + 12 * v / vmx, a = agentesCentral().find(x => x.id === id), sel = cpEst.agente === id, dim = cpEst.agente && !sel;
+    return `<g class="cp-no${sel ? ' sel' : ''}${dim ? ' dim' : ''}" style="--c:${corConv(id)}" onclick="filtrarAgenteConversas('${esc(id)}')" role="button" tabindex="0" aria-label="${esc(a ? a.nome : id)}"><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}" class="halo"/><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(r * 0.62).toFixed(1)}" class="miolo"/><text x="${p.x.toFixed(1)}" y="${(p.y + 4).toFixed(1)}" text-anchor="middle" class="ini">${esc((a ? a.nome : id).slice(0, 2))}</text><text x="${p.x.toFixed(1)}" y="${(p.y + r + 13).toFixed(1)}" text-anchor="middle" class="nm">${esc((a ? a.nome : id).split(' ')[0])}${v ? ` · ${v}` : ''}</text></g>`; }).join('');
+  return `<div class="cp-rede"><svg viewBox="-215 -205 430 420" aria-hidden="false">${fios}${nos}<g class="cp-no cp-j" onclick="filtrarAgenteConversas(null)" role="button" tabindex="0" aria-label="Todos"><circle r="30" class="halo"/><circle r="17" class="miolo"/><text y="4" text-anchor="middle" class="ini">J</text></g></svg></div>`;
+}
+function filtrarAgenteConversas(id) { cpEst.agente = cpEst.agente === id ? null : id; cpEst.palavra = null; renderPaginaConversas(true); }
+function periodoConversas(h) { cpEst.horas = h; renderPaginaConversas(true); }
+function tipoConversas(t) { cpEst.tipo = t; const el = $j('cp-linha'); if (el) el.innerHTML = htmlLinhaConversas(msgsConversa()); }
+function palavraConversas(p) { cpEst.palavra = cpEst.palavra === p ? null : p; const el = $j('cp-linha'), as = $j('cp-assuntos'), L = msgsConversa(); if (el) el.innerHTML = htmlLinhaConversas(L); if (as) as.innerHTML = htmlAssuntosConversas(L); }
+function abrirMsgConversa(i) { cpEst.aberta = cpEst.aberta === i ? null : i; document.querySelectorAll('#cp-linha .cp-msg').forEach((li, k) => li.classList.toggle('aberta', k === cpEst.aberta)); }
+function htmlPlacarConversas(P) {
+  return `<ol class="cp-placar">${P.map((d, k) => `<li style="--c:${d.cor}; --w:${d.nota}%; --k:${k}" class="${cpEst.agente === d.a.id ? 'sel' : ''}" onclick="filtrarAgenteConversas('${esc(d.a.id)}')">
+    <span class="cp-pos">${k + 1}</span><div class="cp-pl-txt"><b>${esc(d.a.nome)}</b><small>${esc(d.motivos.join(' · ') || 'sem atividade no período')}</small>
+    <i class="cp-barra"><u></u></i><span class="cp-chips"><em>↗ ${d.env} enviadas</em><em>↘ ${d.rec} recebidas</em>${d.conv ? `<em>💬 ${d.conv} c/ J.A.R.V.I.S.</em>` : ''}${d.consenso ? `<em>🔥 ${d.consenso} no consenso</em>` : ''}${d.urg.hoje ? `<em class="u">${d.urg.hoje} urgente(s)</em>` : ''}</span>
+    ${d.ultima ? `<p>“${esc(d.ultima.texto.slice(0, 150))}${d.ultima.texto.length > 150 ? '…' : ''}”</p>` : ''}</div><strong class="ag-conta">${d.nota}</strong></li>`).join('')}</ol>
+    <p class="cc-nota">Índice de participação (0–100): relatório em dia (30) · conversas com o J.A.R.V.I.S. do dia (até 25) · falas com números (até 20) · traz o próximo passo (até 15) · atende recados e pedidos (até 10) · erro na rodada (−10). Serve para comparar os agentes entre si, não é nota de verdade.</p>`;
+}
+function htmlMatrizConversas(L) {
+  const ids = idsConversa().filter(id => L.some(m => m.de === id || m.para === id)); if (ids.length < 2) return '<p class="cc-txt">Ainda pouca troca no período.</p>';
+  const n = (a, b) => L.filter(m => m.de === a && m.para === b).length, mx = Math.max(1, ...ids.flatMap(a => ids.map(b => n(a, b))));
+  const ini = id => esc(id === 'jarvis' ? 'J.A.' : nomeConv(id).slice(0, 4));
+  return `<div class="cp-matriz" style="--n:${ids.length}"><span class="cp-mz-c">de ↓ · para →</span>${ids.map(b => `<span class="cp-mz-h" style="--c:${corConv(b)}">${ini(b)}</span>`).join('')}
+    ${ids.map(a => `<span class="cp-mz-h lin" style="--c:${corConv(a)}">${ini(a)}</span>${ids.map(b => { const v = n(a, b); return `<span class="cp-mz-v${v ? '' : ' z'}" style="--c:${corConv(a === 'jarvis' ? b : a)}; --a:${(0.12 + 0.88 * v / mx).toFixed(2)}" title="${esc(nomeConv(a))} → ${esc(nomeConv(b))}: ${v}">${v || ''}</span>`; }).join('')}`).join('')}</div>
+    <p class="cc-nota">Cada célula: quantas mensagens a linha mandou para a coluna. Cor forte = troca intensa.</p>`;
+}
+function htmlAssuntosConversas(L) {
+  const cont = {}; L.forEach(m => semAcentoCer(m.texto + ' ' + m.extra).split(/[^a-z0-9]+/).forEach(w => { if (w.length >= 5 && !PARADAS_CONV.has(w) && !/^\d+$/.test(w)) cont[w] = (cont[w] || 0) + 1; }));
+  const top = Object.entries(cont).sort((a, b) => b[1] - a[1]).slice(0, 16), mx = Math.max(1, ...top.map(t => t[1]));
+  return top.length ? `<div class="cp-assuntos">${top.map(([w, n]) => `<button type="button" class="${cpEst.palavra === w ? 'on' : ''}" style="--s:${(0.78 + 0.5 * n / mx).toFixed(2)}" onclick="palavraConversas('${esc(w)}')">${esc(w)} <small>${n}</small></button>`).join('')}</div><p class="cc-nota">Toque num assunto para ver só as mensagens dele.</p>` : '<p class="cc-txt">Sem assuntos no período.</p>';
+}
+function htmlLinhaConversas(L) {
+  let lista = L; if (cpEst.tipo !== 'todos') lista = lista.filter(m => m.tipo === cpEst.tipo || (cpEst.tipo === 'conversa' && m.tipo === 'aovivo'));
+  if (cpEst.palavra) lista = lista.filter(m => semAcentoCer(m.texto + ' ' + m.extra).includes(cpEst.palavra));
+  const tipos = [['todos', 'Tudo'], ...Object.entries(TIPOS_CONV).filter(([k]) => k !== 'aovivo' && L.some(m => m.tipo === k))];
+  let dia = '', h = '';
+  lista.slice(0, 200).forEach((m, i) => { const d = m.quando.slice(0, 10); if (d !== dia) { dia = d; h += `<li class="cp-dia">${d === hojeISO() ? 'Hoje' : esc(isoParaBR(d))}</li>`; }
+    const j = m.de === 'jarvis';
+    h += `<li class="cp-msg ${esc(m.tipo)}${j ? ' j' : ''}${cpEst.aberta === i ? ' aberta' : ''}" style="--de:${corConv(m.de)}; --para:${corConv(m.para)}" onclick="abrirMsgConversa(${i})"><span class="cp-av">${m.de === 'jarvis' ? 'J' : esc(nomeConv(m.de).slice(0, 2))}</span>
+      <div class="cp-bolha"><header><b>${esc(nomeConv(m.de))}</b><i>→</i><b class="p">${esc(nomeConv(m.para))}</b><em>${esc(TIPOS_CONV[m.tipo] || m.tipo)}</em><time>${esc(m.quando.slice(11, 16))}</time></header><p>${esc(m.texto)}</p>${m.extra ? `<p class="ex">${esc(m.extra)}</p>` : ''}</div></li>`; });
+  return `<div class="cvs-filtros cp-tipos">${tipos.map(([k, t]) => `<button type="button" class="${cpEst.tipo === k ? 'on' : ''}" onclick="tipoConversas('${k}')">${esc(t)}</button>`).join('')}</div>
+    ${cpEst.palavra ? `<p class="cc-nota">Assunto: <b>${esc(cpEst.palavra)}</b> · <a href="#" onclick="palavraConversas('${esc(cpEst.palavra)}'); return false">limpar</a></p>` : ''}
+    <ol class="cp-linha">${h || '<li class="cvs-vazio">Nada neste filtro.</li>'}</ol>`;
+}
+/** Como a troca acontece: de onde vêm as mensagens (tipo) e o ritmo por hora do dia. */
+function htmlComoConversas(L) {
+  const t = {}; L.forEach(m => { t[m.tipo] = (t[m.tipo] || 0) + 1; }); const tot = L.length || 1, ent = Object.entries(t).sort((a, b) => b[1] - a[1]);
+  const cores = { conversa: '#0a84ff', relatorio: '#30d158', filtro: '#ffffff', consenso: '#ff9f0a', recado: '#bf5af2', pedido: '#64d2ff', aovivo: '#ff375f' };
+  const horas = Array.from({ length: 24 }, (_, h) => L.filter(m => Number(m.quando.slice(11, 13)) === h).length), hmx = Math.max(1, ...horas);
+  return `<div class="cp-tiposbar">${ent.map(([k, n]) => `<i style="--w:${(n / tot * 100).toFixed(1)}%; background:${cores[k] || '#8e8e93'}" title="${esc(TIPOS_CONV[k] || k)}: ${n}"></i>`).join('')}</div>
+    <ul class="cp-legenda">${ent.map(([k, n]) => `<li><i style="background:${cores[k] || '#8e8e93'}"></i>${esc(TIPOS_CONV[k] || k)} <b>${n}</b></li>`).join('')}</ul>
+    <div class="cp-horas">${horas.map((n, h) => `<span style="--h:${(n / hmx * 100).toFixed(0)}%; --k:${h}" title="${h}h: ${n}"><i></i>${h % 3 === 0 ? `<small>${h}h</small>` : ''}</span>`).join('')}</div>
+    <p class="cc-nota">Conversa = o J.A.R.V.I.S. do dia pergunta a um agente por hora (8h–21h) · relatório = a rodada das 7h · consenso = os 3 agentes votando o item da vez · recado = o que você contou e o filtro passou adiante · pedido = o que vai ao Desenvolvedor.</p>`;
+}
+function renderPaginaConversas(manterRolagem) {
+  const el = $j('ag-pag'); if (!el || el.hidden || cc.pagina !== 'conversas') return;
+  const r0 = $j('ag-rolo'), y = manterRolagem && r0 ? r0.scrollTop : 0;
+  const Ltodas = conversaAgentes(cpEst.horas, 400), L = msgsConversa(), P = desempenhoAgentes(Ltodas);
+  const entreAgentes = Ltodas.filter(m => m.de !== 'jarvis' && m.para !== 'jarvis' && m.para !== 'todos').length, comJ = Ltodas.filter(m => m.tipo === 'conversa').length;
+  const ag = cpEst.agente ? agentesCentral().find(a => a.id === cpEst.agente) : null, melhor = P[0], atencao = P.filter(d => d.nota < 35);
+  const fala = ag ? `Mostrando só o que passou por <b>${esc(ag.nome)}</b>. Toque de novo para ver todos.` : Ltodas.length ? `<b>${Ltodas.length}</b> mensagens em ${cpEst.horas >= 168 ? '7 dias' : cpEst.horas + ' h'}. Quem mais participou: <b>${esc(melhor.a.nome)}</b> (${melhor.nota}).${atencao.length ? ` Pedem atenção: ${atencao.slice(0, 3).map(d => `<b>${esc(d.a.nome)}</b>`).join(', ')}.` : ''}` : 'Ainda sem conversas no período.';
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Central de Comando</small><strong>Conversa dos agentes</strong></div>
+      <button type="button" class="ag-falar" onclick="abrirChatJarvis({ contexto: 'Página das conversas dos agentes (avaliar o desempenho de cada agente)' })">💬 Perguntar</button></header>
+    <i class="ag-progresso" id="ag-progresso" style="--cor:#64d2ff"></i>
+    <div class="ag-rolo cp" id="ag-rolo" style="--cor:#64d2ff">
+      <section class="ag-heroi"><div class="ag-heroi-txt"><small>Central de Comando · rede</small><h1>Conversas</h1><p>${fala}</p>
+        <div class="pr-seg cp-periodo">${[[24, '24 h'], [48, '48 h'], [168, '7 dias']].map(([h, t]) => `<button type="button" class="${cpEst.horas === h ? 'on' : ''}" onclick="periodoConversas(${h})">${t}</button>`).join('')}</div></div>
+        <div class="ag-palco">${redeConversas(Ltodas)}</div><div class="ag-desca">role para ver tudo<i></i></div></section>
+      <section class="ag-sec ag-nums">${[[Ltodas.length, 'mensagens'], [comJ, 'com o J.A.R.V.I.S.'], [entreAgentes, 'entre agentes'], [P.filter(d => d.env).length + ' de ' + P.length, 'agentes falaram']].map(([v, t], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(t)}</small></div>`).join('')}</section>
+      <section class="ag-sec ag-corpo">
+        ${ccBloco('Desempenho de cada agente', htmlPlacarConversas(P))}
+        ${ccBloco('Como a troca acontece', htmlComoConversas(L))}
+        ${ccBloco('Quem fala com quem', htmlMatrizConversas(Ltodas))}
+        ${ccBloco('Assuntos mais falados', `<div id="cp-assuntos">${htmlAssuntosConversas(L)}</div>`)}
+        ${ccBloco(ag ? `Tudo o que passou por ${esc(ag.nome)}` : 'A conversa inteira', `<div id="cp-linha">${htmlLinhaConversas(L)}</div>`)}
+      </section>
+      <footer class="ag-fim">J.A.R.V.I.S. · Conversa dos agentes</footer>
+    </div>`;
+  animarPaginaAgente();
+  const r = $j('ag-rolo'); if (r && y) { r.scrollTop = y; r.querySelectorAll('.ag-rev').forEach(x => x.classList.add('vis')); }
 }
 /** Resumo curto para a etiqueta do fio de quem conversou. */
 function rotuloConversa(m) { const hh = m.quando.slice(11, 16); return ({ consenso: 'item da vez', conversa: 'conversaram ' + hh, recado: 'recado ' + hh, relatorio: 'relatório ' + hh, pedido: 'pedido', filtro: 'filtro do dia', aovivo: 'trabalhando agora' })[m.tipo] || m.tipo; }
@@ -8044,7 +8176,7 @@ function fecharPaginaAgente(daVolta) {
   el.hidden = true; document.body.classList.remove('ag-aberta'); cc.pagina = null; if (cc.obsPag) cc.obsPag.disconnect();
   if (cc.seca3d) cc.seca3d.renderer.domElement.remove(); if (cc.fab3d) cc.fab3d.renderer.domElement.remove(); if (jv.expo3d) jv.expo3d.renderer.domElement.remove();
   if (!daVolta) desempilharCamada('pagina');
-  if (id && !$j('jv-central').hidden) abrirAgenteCentral(id); // volta para o painel do agente na Central
+  if (id && id !== 'conversas' && !$j('jv-central').hidden) abrirAgenteCentral(id); // volta para o painel do agente na Central
 }
 // =====================================================================================================================
 // PÁGINA DO J.A.R.V.I.S. (fase 7, pedido do Rafael 03/10/2026): a página CENTRAL dele — a mais trabalhada e a mais limpa.
@@ -8476,6 +8608,7 @@ function renderPaginaAgente() {
   if (id === 'marketing') return renderPaginaMarketing();
   if (id === 'estoque') return renderPaginaEstoque();
   if (id === 'prospeccao') return renderPaginaProspeccao();
+  if (id === 'conversas') return renderPaginaConversas();
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -9442,6 +9575,7 @@ function htmlPainelAgenteBase(id) {
     const ag = todosAgentes();
     return `<header class="cc-p-topo"><button type="button" class="cc-x" onclick="fecharPainelCentral()" aria-label="Fechar">✕</button><small>comando · mastermind da Primos 3D</small><h3><i class="cc-luz ok"></i>J.A.R.V.I.S.</h3><p>Lê o relatório de todos os agentes e te entrega só o que importa. Nenhum agente compra, paga, envia mensagem ou posta.</p></header>`
       + '<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaJarvis()">Abrir a página do J.A.R.V.I.S. ›</button>'
+      + '<button type="button" class="cc-btn" onclick="abrirPaginaConversas()">💬 Conversa dos agentes (desempenho de cada um) ›</button>'
       + htmlMastermind()
       + ccBloco('Situação dos agentes', `<ul class="cc-lista">${ag.map(a => { const st = estadoAgente(a); return `<li onclick="cc.setor='${a.setor}'; abrirAgenteCentral('${esc(a.id)}')"><i class="cc-luz ${st.nivel}"></i><span><b>${esc(a.nome)}</b><small>${esc(setorCentral(a.setor).nome)} · ${esc(st.metrica)}</small></span><em>›</em></li>`; }).join('')}</ul>`)
       + ccBloco('🛡️ Regras de segurança', `<ul class="cc-regras"><li>Ler e analisar: automático</li><li>Gravar ou alterar: só com o seu OK</li><li>Compras, pagamentos, Pix, e-mails, mensagens e posts: nunca</li></ul>`);
