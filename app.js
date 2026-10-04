@@ -7568,16 +7568,91 @@ function abrirCentral(setor) {
   if (setor) cc.setor = setor;
   if (el.hidden) empilharCamada('central', fecharCentral);
   el.hidden = false; document.body.classList.add('cc-aberta'); renderCentral(); sincronizarCofre(); acompanharExecucao(true);
+  clearInterval(cc.convTimer); cc.convTimer = setInterval(() => { if ($j('jv-central').hidden) return clearInterval(cc.convTimer); sincronizarCofre(false, true); renderConversa(); desenharFiosCanvas(); }, 30000);
 }
 function fecharCentral(daVolta) {
   const el = $j('jv-central'); if (!el || el.hidden) return;
-  el.hidden = true; document.body.classList.remove('cc-aberta'); cc.agente = null; cc.novo = false; cc.ultimoQuadro = null;
+  el.hidden = true; document.body.classList.remove('cc-aberta'); cc.agente = null; cc.novo = false; cc.ultimoQuadro = null; clearInterval(cc.convTimer); cc.fioConv = null; cc.convSel = null;
   if (cc.seca3d) cc.seca3d.renderer.domElement.remove(); if (cc.fab3d) cc.fab3d.renderer.domElement.remove();
   if (!daVolta) desempilharCamada('central');
 }
 function escolherSetorCentral(id) { cc.setor = id; cc.agente = null; cc.novo = false; renderCentral(); }
 function abrirAgenteCentral(id) { cc.agente = id; cc.novo = false; renderCentral(); }
 function fecharPainelCentral() { cc.agente = null; cc.novo = false; renderCentral(); }
+// --- CONVERSA DOS AGENTES (fase 10, pedido do Rafael 04/10/2026): barra lateral da Central com o que os agentes conversaram entre si
+//     nas últimas 48 h — o J.A.R.V.I.S. do dia (pergunta/resposta de hora em hora, dados/diario.json), os relatórios da rodada, o
+//     filtro do J.A.R.V.I.S., os votos do consenso do item da vez (agente ↔ agente), os recados que o filtro passou, os pedidos ao
+//     Desenvolvedor e quem está trabalhando agora. Tocar numa mensagem acende o fio entre os dois no quadro e centraliza os dois.
+//     Se atualiza sozinha (a cada 30 s com a Central aberta; os dados chegam pela sincronização do cofre).
+const NOMES_CONV = { jarvis: 'J.A.R.V.I.S.', todos: 'Equipe', consenso: 'Consenso' };
+const TIPOS_CONV = { conversa: 'conversa', relatorio: 'relatório', filtro: 'filtro do dia', consenso: 'item da vez', recado: 'recado', pedido: 'pedido', aovivo: 'ao vivo' };
+function nomeConv(id) { if (NOMES_CONV[id]) return NOMES_CONV[id]; const a = todosAgentes().find(x => x.id === id); return a ? a.nome : String(id || ''); }
+function corConv(id, claro) { return id === 'jarvis' || id === 'todos' ? (claro ? '#1c1c1e' : '#ffffff') : COR_AGENTE[id] || '#8e8e93'; }
+const semNegrito = s => String(s || '').replace(/<\/?b>/g, '');
+function quandoLocal(iso) { const d = new Date(iso); if (isNaN(d)) return null; return `${isoDe(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
+function conversaAgentes(horas = 48) {
+  const L = [], add = (quando, de, para, texto, tipo, extra) => { if (!quando || !texto || !de || !para) return; L.push({ id: `${tipo}|${de}|${para}|${quando}|${String(texto).slice(0, 30)}`, quando: String(quando), de, para, texto: String(texto), tipo, extra: extra || '' }); };
+  const D = (diarioJarvis && diarioJarvis.dias) || {};
+  Object.keys(D).sort().slice(-3).forEach(dia => ((D[dia] || {}).conversas || []).forEach(c => {
+    const q = `${dia}T${c.hora || '00:00'}`, perg = /chegaram dados novos/i.test(c.pergunta || '') ? 'O que mudou na sua área e qual é o próximo passo concreto?' : c.pergunta;
+    add(q, 'jarvis', c.agente, perg, 'conversa'); add(q + ':01', c.agente, 'jarvis', c.resposta, 'conversa', c.caminho ? 'Próximo passo: ' + c.caminho : ''); }));
+  const R = relatoriosAgentes || {}, qR = R.geradoEm ? quandoLocal(R.geradoEm) : null;
+  Object.entries(R.agentes || {}).forEach(([id, a]) => { if (!a || !a.manchete || !a.dia) return; add(a.dia === R.dia && qR ? qR : `${a.dia}T07:00`, id, 'jarvis', 'Relatório do dia: ' + semNegrito(a.manchete), 'relatorio', a.comando && a.resposta ? `Você pediu “${a.comando}” → ${semNegrito(a.resposta)}` : (a.acoes || [])[0] ? 'Ação: ' + semNegrito(a.acoes[0]) : ''); });
+  if (R.jarvis && R.jarvis.manchete && R.jarvis.dia) add((R.jarvis.dia === R.dia && qR ? qR : `${R.jarvis.dia}T07:05`) + ':02', 'jarvis', 'todos', semNegrito(R.jarvis.manchete), 'filtro', (R.jarvis.prioridades || []).map(p => `${nomeConv(p.agente)}: ${semNegrito(p.texto)}`).join(' · '));
+  const C = R.consenso; if (C && C.item && C.dia) { const q = C.dia === R.dia && qR ? qR : `${C.dia}T07:10`, roda = { marketing: 'producao', producao: 'prospeccao', prospeccao: 'marketing' };
+    Object.entries(C.votos || {}).forEach(([k, v], i) => { if (v) add(`${q}:0${i + 3}`, k, roda[k] || 'jarvis', v, 'consenso'); });
+    add(q + ':09', 'prospeccao', 'producao', `Decidido em consenso: ${C.item}${C.qtd ? ` — ${C.qtd} peças` : ''}${C.dias ? `, ${C.dias}` : ''}.`, 'consenso', (C.marketing || []).length ? `Marketing: ${C.marketing.length} posts prontos (o 1º: “${C.marketing[0].gancho}”).` : ''); }
+  (recadosAgentes || []).slice(0, 40).forEach(r => (r.agentes || []).forEach(id => add(quandoLocal(r.quando) || r.quando, 'jarvis', id, 'Recado: ' + r.texto, 'recado')));
+  ((pedidosDev && pedidosDev.pedidos) || []).slice(0, 15).forEach(p => { add(p.quando, 'jarvis', 'dev', 'Pedido: ' + p.texto, 'pedido'); if (p.resposta) add((p.atualizadoEm || p.quando) + ':05', 'dev', 'jarvis', p.resposta, 'pedido'); });
+  Object.entries((cc.execucao || {}).tarefas || {}).forEach(([id, t]) => { if (t && (t.status === 'rodando' || t.status === 'fila') && id !== 'consenso') add(quandoLocal(new Date().toISOString()) + ':59', id, 'jarvis', t.status === 'fila' ? 'Na fila para trabalhar…' : 'Trabalhando agora…', 'aovivo'); });
+  const lim = quandoLocal(new Date(Date.now() - horas * 3600e3).toISOString()), vistos = new Set();
+  return L.filter(m => m.quando >= lim && !vistos.has(m.id) && vistos.add(m.id)).sort((a, b) => b.quando.localeCompare(a.quando)).slice(0, 80);
+}
+function conversaAberta() { return celCanvas() ? !!cc.convCel : prefs.ccConvPC !== 'fechada'; }
+function alternarConversa() {
+  if (celCanvas()) cc.convCel = !cc.convCel; else { prefs.ccConvPC = conversaAberta() ? 'fechada' : 'aberta'; salvarPrefsJarvis(); }
+  if (conversaAberta()) cc.convNovas = 0; renderConversa(); setTimeout(() => { desenharFiosCanvas(); }, 320);
+}
+function filtrarConversa(f) { cc.convFiltro = f; renderConversa(); }
+function destacarConversa(i) {
+  const m = (cc.convLista || [])[i]; if (!m) return; const id = m.id;
+  cc.convSel = cc.convSel === id ? null : id; cc.fioConv = cc.convSel ? { de: m.de, para: m.para } : null;
+  renderConversa(); desenharFiosCanvas();
+  if (!cc.convSel || m.para === 'todos') return;
+  const q = $j('cc-quadro'), a = posCanvas(m.de), b = posCanvas(m.para); if (!q || !CV.cam) return;
+  const k = CV.cam.k, alvo = { k, x: q.clientWidth / 2 - (a.x + b.x) / 2 * k, y: q.clientHeight * (celCanvas() ? 0.24 : 0.5) - (a.y + b.y) / 2 * k }, de = { ...CV.cam }, t0 = performance.now();
+  const passo = t => { const u = Math.min(1, (t - t0) / 500), e = 1 - Math.pow(1 - u, 3); CV.cam = { k, x: de.x + (alvo.x - de.x) * e, y: de.y + (alvo.y - de.y) * e }; aplicarCamCanvas(); if (u < 1) requestAnimationFrame(passo); };
+  requestAnimationFrame(passo);
+}
+function renderConversa() {
+  const el = $j('cc-conversa'), raiz = $j('jv-central'); if (!el || !raiz || raiz.hidden) return;
+  const aberta = conversaAberta(), L = conversaAgentes(), f = cc.convFiltro || 'todos';
+  if (!cc.convVistos) cc.convVistos = new Set(L.map(m => m.id)); // na 1ª abertura nada é "novo"
+  const novas = L.filter(m => !cc.convVistos.has(m.id));
+  if (!aberta) cc.convNovas = (cc.convNovas || 0) + novas.length;
+  raiz.classList.toggle('conv-aberta', aberta);
+  const n = $j('cc-conv-n'); if (n) { n.hidden = aberta || !cc.convNovas; n.textContent = cc.convNovas > 9 ? '9+' : String(cc.convNovas || ''); }
+  if (!aberta) { el.innerHTML = ''; novas.forEach(m => cc.convVistos.add(m.id)); return; }
+  const lista = L.filter(m => f === 'todos' || m.tipo === f || (f === 'conversa' && m.tipo === 'aovivo')), hoje = hojeISO(), ontem = isoDe(new Date(Date.now() - 864e5));
+  let dia = '', h = '';
+  cc.convLista = lista;
+  lista.forEach((m, i) => {
+    const d = m.quando.slice(0, 10); if (d !== dia) { dia = d; h += `<li class="cvs-dia">${d === hoje ? 'Hoje' : d === ontem ? 'Ontem' : esc(isoParaBR(d))}</li>`; }
+    const ini = x => x === 'jarvis' ? 'J' : x === 'todos' ? '∗' : esc(nomeConv(x).slice(0, 2));
+    h += `<li class="cvs-msg ${esc(m.tipo)}${novas.includes(m) ? ' novo' : ''}${cc.convSel === m.id ? ' sel' : ''}" style="--de:${corConv(m.de)}; --para:${corConv(m.para)}" onclick="destacarConversa(${i})">
+      <span class="cvs-av">${ini(m.de)}</span><div class="cvs-txt"><header><b>${esc(nomeConv(m.de))}</b><i>→</i><b class="p">${esc(nomeConv(m.para))}</b><time>${esc(m.quando.slice(11, 16))}</time></header>
+      <p>${esc(m.texto)}</p>${m.extra ? `<p class="ex">${esc(m.extra)}</p>` : ''}<em>${esc(TIPOS_CONV[m.tipo] || m.tipo)}</em></div></li>`;
+  });
+  const filtros = [['todos', 'Tudo'], ['conversa', 'Conversas'], ['consenso', 'Item da vez'], ['relatorio', 'Relatórios'], ['recado', 'Recados'], ['pedido', 'Pedidos']].filter(([k]) => k === 'todos' || L.some(m => m.tipo === k || (k === 'conversa' && m.tipo === 'aovivo')));
+  const rolagem = el.querySelector('.cvs-lista') ? el.querySelector('.cvs-lista').scrollTop : 0;
+  el.innerHTML = `<header class="cvs-topo"><div><b>Conversa dos agentes</b><small><i class="cvs-vivo"></i>últimas 48 h · ${plural(L.length, 'mensagem', 'mensagens')}</small></div><button type="button" onclick="alternarConversa()" aria-label="Fechar a conversa">✕</button></header>
+    <div class="cvs-filtros">${filtros.map(([k, t]) => `<button type="button" class="${k === f ? 'on' : ''}" onclick="filtrarConversa('${k}')">${t}</button>`).join('')}</div>
+    <ol class="cvs-lista">${h || '<li class="cvs-vazio">Ainda não há conversa nas últimas 48 h. O J.A.R.V.I.S. do dia conversa com um agente por hora (8h–21h) e a rodada dos agentes é às 7h.</li>'}</ol>`;
+  const nl = el.querySelector('.cvs-lista'); if (nl) nl.scrollTop = rolagem;
+  novas.forEach(m => cc.convVistos.add(m.id));
+}
+/** Resumo curto para a etiqueta do fio de quem conversou. */
+function rotuloConversa(m) { const hh = m.quando.slice(11, 16); return ({ consenso: 'item da vez', conversa: 'conversaram ' + hh, recado: 'recado ' + hh, relatorio: 'relatório ' + hh, pedido: 'pedido', filtro: 'filtro do dia', aovivo: 'trabalhando agora' })[m.tipo] || m.tipo; }
 
 /** Situação de cada agente: nível (ok | atencao | sem) + o número que aparece no cartão. */
 function estadoAgente(a) {
@@ -7618,7 +7693,7 @@ function renderCentral() {
   const el = $j('jv-central'); if (!el || el.hidden) return;
   const pc = primosCentral, ag = todosAgentes();
   $j('cc-sub').textContent = pc && pc.geradoEm ? `Dados da Central lidos em ${isoParaBR(String(pc.geradoEm).slice(0, 10))} · agentes só leem` : 'Agentes só leem · gravar sempre pede o seu OK';
-  renderCanvasCentral();
+  renderCanvasCentral(); renderConversa();
   const p = $j('cc-painel');
   if (cc.novo) { p.hidden = false; p.innerHTML = htmlNovoAgente(); }
   else if (cc.agente) { p.hidden = false; p.innerHTML = htmlPainelAgente(cc.agente); p.scrollTop = 0; carregarMidiasCofre(p); }
@@ -7655,18 +7730,18 @@ const CV = { cam: null, arrasto: null, ptrs: new Map(), pinca: null };
 const CV_PRIMOS = ['contabil', 'marketing', 'estoque', 'producao', 'vendas', 'consignacao', 'shopee', 'dev'];
 const AGENTES_NUVEM = [...CV_PRIMOS, 'prospeccao']; // fase 10: os que trabalham na rodada da nuvem (comando, ▶, pausar); a Prospecção fica FORA do círculo
 const celCanvas = () => window.innerWidth < 700;
-const chavePosCanvas = () => celCanvas() ? 'ccPosCel' : 'ccPos'; // celular e PC guardam arranjos diferentes
+const chavePosCanvas = () => celCanvas() ? 'ccPosCel2' : 'ccPos2'; // celular e PC guardam arranjos diferentes (fase 10: '2' = o arranjo novo, mais espaçado)
 function posPadraoCanvas() {
-  const p = { jarvis: { x: 0, y: 0 } }, ag = agentesCentral(), R1 = 300;
+  const p = { jarvis: { x: 0, y: 0 } }, ag = agentesCentral(), R1 = 420; // fase 10: círculo maior = fios mais longos e legíveis
   if (celCanvas()) { // celular em pé: 2 colunas, o J.A.R.V.I.S. no meio
-    [['contabil', -138, -310], ['marketing', 138, -310], ['estoque', -138, 300], ['producao', 138, 300], ['vendas', -138, 560], ['consignacao', 138, 560]].forEach(([id, x, y]) => { p[id] = { x, y }; });
-    p.shopee = { x: -138, y: 820 }; p.dev = { x: 138, y: 820 }; // fase 10: no celular eles não tinham lugar (ficavam no meio)
-    ag.filter(a => !CV_PRIMOS.includes(a.id)).forEach((a, i) => { p[a.id] = { x: (i % 2 ? 138 : -138), y: 1080 + Math.floor(i / 2) * 260 }; });
+    [['contabil', -150, -400], ['marketing', 150, -400], ['estoque', -150, 380], ['producao', 150, 380], ['vendas', -150, 700], ['consignacao', 150, 700]].forEach(([id, x, y]) => { p[id] = { x, y }; });
+    p.shopee = { x: -150, y: 1020 }; p.dev = { x: 150, y: 1020 }; p.prospeccao = { x: 0, y: -720 }; // fase 10: no celular eles não tinham lugar (ficavam no meio)
+    ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'prospeccao').forEach((a, i) => { p[a.id] = { x: (i % 2 ? 150 : -150), y: 1340 + Math.floor(i / 2) * 320 }; });
     return p;
   }
-  CV_PRIMOS.forEach((id, i) => { const a = -Math.PI / 2 + i / CV_PRIMOS.length * Math.PI * 2; p[id] = { x: Math.round(Math.cos(a) * R1 * 1.25), y: Math.round(Math.sin(a) * R1) }; });
-  p.shopee = { x: -300, y: 600 }; p.dev = { x: 300, y: 600 }; p.digital = { x: 0, y: 820 }; // Shopee, Desenvolvedor e Produto Digital embaixo, fora do círculo da operação
-  p.prospeccao = { x: 0, y: -640 }; // fase 10: o analista em cima do círculo, lendo todos
+  CV_PRIMOS.forEach((id, i) => { const a = -Math.PI / 2 + i / CV_PRIMOS.length * Math.PI * 2; p[id] = { x: Math.round(Math.cos(a) * R1 * 1.35), y: Math.round(Math.sin(a) * R1) }; });
+  p.shopee = { x: -460, y: 820 }; p.dev = { x: 460, y: 820 }; p.digital = { x: 0, y: 1080 }; // Shopee, Desenvolvedor e Produto Digital embaixo, fora do círculo da operação
+  p.prospeccao = { x: 0, y: -860 }; // fase 10: o analista em cima do círculo, lendo todos
   const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee' && a.id !== 'digital' && a.id !== 'prospeccao'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
   return p;
 }
@@ -7686,6 +7761,11 @@ function fiosCanvas() {
   F.push({ de: 'producao', para: 'digital', rot: 'saber de impressão', lateral: true });
   // fase 10: a Prospecção lê os outros (capacidade, custos, giro, anúncios, e-book)
   [['producao', 'capacidade'], ['contabil', 'custos e margens'], ['consignacao', 'giro dos expositores'], ['shopee', 'anúncios e preços'], ['digital', 'e-book']].forEach(([de, rot]) => F.push({ de, para: 'prospeccao', rot, lateral: true }));
+  // fase 10: a CONVERSA dos agentes no quadro (últimas 24 h)
+  const noQuadro = new Set(['jarvis', ...agentesCentral().map(a => a.id)]);
+  conversaAgentes(24).forEach(m => { if (!noQuadro.has(m.de) || !noQuadro.has(m.para) || m.de === m.para) return;
+    const f = F.find(x => (x.de === m.de && x.para === m.para) || (x.de === m.para && x.para === m.de));
+    if (f) { if (!f.conversa) { f.conversa = m.de; f.rot = rotuloConversa(m); } } else F.push({ de: m.de, para: m.para, rot: rotuloConversa(m), lateral: true, conversa: m.de }); });
   return F;
 }
 const ESTADOS_CV = { rodando: ['Rodando', '#0a84ff'], pausado: ['Pausado', '#8e8e93'], atencao: ['Atenção', '#ff9f0a'], ok: ['Ativo', '#30d158'], sem: ['Sem dados', '#8e8e93'], fila: ['Na fila', '#bf5af2'] };
@@ -8588,9 +8668,10 @@ function desenharFiosCanvas() {
     const a = borda(A, B), b = borda(B, A), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, curva = f.lateral ? 0.18 : 0.08, nx = -(b.y - a.y) * curva, ny = (b.x - a.x) * curva;
     const d = `M${a.x.toFixed(1)},${a.y.toFixed(1)} Q${(mx + nx).toFixed(1)},${(my + ny).toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
     const ativo = cc.agente && (cc.agente === f.de || cc.agente === f.para), rodando = estadoCanvas({ id: f.de, ...(agentesCentral().find(x => x.id === f.de) || {}) }) === 'rodando';
-    h += `<path id="cvf${i}" class="cv-fio${f.lateral ? ' lateral' : ''}${ativo ? ' ativo' : ''}${rodando ? ' rodando' : ''}" d="${d}"/>`;
-    h += `<circle class="cv-pulso${f.lateral ? ' lateral' : ''}" r="${rodando ? 5 : 3.2}"><animateMotion dur="${rodando ? 1.4 : f.lateral ? 4.6 : 3.4}s" begin="${(i * 0.37) % 3}s" repeatCount="indefinite" rotate="auto"><mpath href="#cvf${i}"/></animateMotion></circle>`;
-    rot += `<span class="cv-rot${f.lateral ? ' lateral' : ''}${ativo ? ' ativo' : ''}" style="left:${(mx + nx / 2).toFixed(0)}px; top:${(my + ny / 2).toFixed(0)}px">${esc(f.rot)}</span>`;
+    const falando = cc.fioConv && ((cc.fioConv.de === f.de && cc.fioConv.para === f.para) || (cc.fioConv.de === f.para && cc.fioConv.para === f.de)), corF = f.conversa ? corConv(f.conversa, true) : '';
+    h += `<path id="cvf${i}" class="cv-fio${f.lateral ? ' lateral' : ''}${ativo ? ' ativo' : ''}${rodando ? ' rodando' : ''}${f.conversa ? ' conversa' : ''}${falando ? ' falando' : ''}"${corF ? ` style="--c:${corF}"` : ''} d="${d}"/>`;
+    h += `<circle class="cv-pulso${f.lateral ? ' lateral' : ''}${f.conversa ? ' conversa' : ''}${falando ? ' falando' : ''}"${corF ? ` style="--c:${corF}"` : ''} r="${rodando || falando ? 6.5 : f.conversa ? 5 : 4.2}"><animateMotion dur="${rodando ? 1.4 : f.lateral ? 4.6 : 3.4}s" begin="${(i * 0.37) % 3}s" repeatCount="indefinite" rotate="auto"><mpath href="#cvf${i}"/></animateMotion></circle>`;
+    rot += `<span class="cv-rot${f.lateral ? ' lateral' : ''}${ativo || falando ? ' ativo' : ''}${f.conversa ? ' conversa' : ''}"${corF ? ` data-c="1"` : ''} style="${corF ? `--c:${corF}; ` : ''}left:${(mx + nx / 2).toFixed(0)}px; top:${(my + ny / 2).toFixed(0)}px">${esc(f.rot)}</span>`;
   });
   svg.innerHTML = h;
   let r = $j('cv-rots'); if (!r) { r = document.createElement('div'); r.id = 'cv-rots'; r.className = 'cv-rots'; $j('cv-mundo').insertBefore(r, $j('cv-nos')); } // etiquetas por baixo dos blocos
@@ -9066,7 +9147,7 @@ function htmlConsenso(modo) {
   const chips = [[c.qtd ? `${c.qtd} peças` : '', ''], [c.maquina || '', ''], [horas ? `${horas.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} h de máquina` : '', ''], [c.preco ? `vende a ${reais(c.preco)}` : '', ''], [c.lucroPorPeca ? `sobra ${reais(c.lucroPorPeca)}/peça` : '', 'ok'], [c.dias ? `imprimir ${c.dias}` : '', '']].filter(x => x[0]);
   const cores = (c.cores || []).map(cor => { const f = corFilamento(cor); return `<span class="cs-cor"><i style="background:${f.cor}"></i>${esc(cor)}</span>`; }).join('');
   const avisos = [!c.estoqueOk && (c.faltam || []).length ? `⚠️ Pode faltar filamento: ${esc(c.faltam.join(', '))}.` : '', c.licenca && c.licenca !== 'ok' ? `⚠️ Licença: ${c.licenca === 'nao' ? 'esse modelo não pode ser vendido — o Desenvolvedor cria um próprio' : 'confira antes de vender'}.` : ''].filter(Boolean);
-  const corpo = `<div class="cs"><small class="cs-tag">consenso · Marketing + Produção + Prospecção · ${esc(isoParaBR(c.dia || '').slice(0, 5))}${c.velho ? ' (anterior)' : ''}</small>
+  const corpo = `<div class="cs"><small class="cs-tag">${esc(c.origem ? 'consenso · ' + c.origem : 'consenso · Marketing + Produção + Prospecção')} · ${esc(isoParaBR(c.dia || '').slice(0, 5))}${c.velho ? ' (anterior)' : ''}</small>
     <h3>${esc(c.item)}</h3><p class="cs-pq">${esc(c.porque || '')}${c.fonte ? ` <em class="cs-fonte">${esc(c.fonte)}</em>` : ''}</p>
     <div class="cs-cores">${cores}</div><div class="cs-chips">${chips.map(([t, k]) => `<span class="${k}">${esc(t)}</span>`).join('')}</div>
     ${avisos.map(a => `<p class="cc-alerta">${a}</p>`).join('')}
