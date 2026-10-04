@@ -3423,3 +3423,31 @@ body.ag-aberta { overflow: hidden; }
 /* #2 formulários da aba Produção: no celular, 2 colunas (e 1 no muito estreito), campos legíveis */
 @media (max-width: 600px) { #prod form [style*="grid-template-columns"], #prod [style*="grid-template-columns: repeat(5"], #prod [style*="grid-template-columns: repeat(6"] { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
 @media (max-width: 360px) { #prod form [style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; } }
+/* ============================================================================
+   FASE 10 — foco da área ORGANIZADO (pedido do Rafael, 04/10): no computador a coluna tem a MESMA largura e o mesmo
+   centro da barra "Como vamos atuar hoje?" (simétrico) e o "Abrir o menu" vai para a ponta direita do cabeçalho (não
+   encosta mais no nome). No celular a lista termina ACIMA dos botões da Base e da Central (eles ficam sempre acessíveis),
+   rola só por dentro e some em degradê em cima e embaixo, sem cortar cartão no meio.
+   ============================================================================ */
+#cerebro .jv-ag-foco { display: flex; flex-direction: column; align-items: stretch; left: 50%; right: auto; width: min(620px, calc(100% - 28px)); transform: translateX(-50%);
+  top: calc(env(safe-area-inset-top) + 84px); bottom: calc(env(safe-area-inset-bottom) + 92px); padding: 0; overflow: hidden; pointer-events: auto; }
+#cerebro .jv-ag-foco[hidden] { display: none; }
+#cerebro .jv-ag-foco .jvf-topo { flex: none; display: grid; grid-template-columns: 46px minmax(0, 1fr) auto; grid-template-areas: "ico tit menu"; align-items: center; column-gap: 14px; margin: 0 0 16px; max-width: none; }
+#cerebro .jv-ag-foco .jvf-area { grid-area: ico; }
+#cerebro .jv-ag-foco .jvf-tit { grid-area: tit; min-width: 0; animation: jvfEntra .5s .45s cubic-bezier(.2,.9,.25,1) both; }
+#cerebro .jv-ag-foco .jvf-tit strong { display: block; line-height: 1.15; overflow-wrap: anywhere; }
+#cerebro .jv-ag-foco .jvf-menu { grid-area: menu; justify-self: end; margin: 0; padding: 8px 16px; white-space: nowrap; animation: jvfEntra .5s .55s cubic-bezier(.2,.9,.25,1) both; }
+#cerebro .jv-ag-foco .jvf-corpo { flex: 1; min-height: 0; max-width: none; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; padding: 4px 0 28px;
+  -webkit-mask-image: linear-gradient(transparent 0, #000 14px, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(transparent 0, #000 14px, #000 calc(100% - 36px), transparent); }
+#cerebro .jv-ag-foco .jvf-corpo::-webkit-scrollbar { display: none; }
+#cerebro .jv-ag-foco .jvf-sub { margin: 4px 0 10px 4px; }
+#cerebro .jv-ag-foco .ag-barras { overflow: visible; max-height: none; }
+@media (max-width: 800px) {
+  #cerebro .jv-ag-foco { left: 16px; right: 16px; width: auto; transform: none; top: calc(env(safe-area-inset-top) + 92px); bottom: calc(env(safe-area-inset-bottom) + 130px); }
+  #cerebro .jv-ag-foco .jvf-topo { grid-template-columns: 46px minmax(0, 1fr); grid-template-areas: "ico tit" "ico menu"; row-gap: 8px; margin: calc(27vh - 92px - 23px) 0 12px 30vw; }
+  #cerebro .jv-ag-foco .jvf-menu { justify-self: start; }
+  #cerebro .jv-ag-foco .jvf-corpo { touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+  /* no foco, a Base e a Central voltam para logo acima da barra — e a lista termina antes delas */
+  #cerebro.modo-3d.jv-focado.jv-foco-ag .jv-menu, #cerebro.modo-3d.jv-focado.jv-foco-ag .jv-central-btn { bottom: calc(env(safe-area-inset-bottom) + 84px); opacity: 0.7; }
+}
+@media (max-width: 380px) { #cerebro .jv-ag-foco .jvf-topo { margin-left: 26vw; } }

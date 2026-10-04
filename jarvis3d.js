@@ -476,6 +476,12 @@ function construirNucleo() {
 // como o buraco negro do Interstellar. Sombra em volta bem suave, SEM circunferências e SEM piscar: só respira.
 // Quando ele fala, a luz e a faixa pulsam com a voz.
 function texturaArco() {
+  if (typeof window.arcoLuzCanvas === 'function') { // fase 10: desfoque calculado no app.js — o Safari do iPhone ignora ctx.filter e o arco saía duro e cinza
+    const T = 512, P = Math.PI, c = window.arcoLuzCanvas(T, T * 0.3, [
+      { op: 0.55, larg: T * 0.07, desf: T * 0.025, de: P * 1.04, ate: P * 1.96 }, { op: 0.35, larg: T * 0.12, desf: T * 0.025, de: P * 1.04, ate: P * 1.96 },
+      { op: 0.9, larg: T * 0.025, desf: T * 0.025, de: P * 1.04, ate: P * 1.96 }, { op: 0.22, larg: T * 0.04, desf: T * 0.02, de: P * 0.12, ate: P * 0.88 }]);
+    const tc = new THREE.CanvasTexture(c); tc.colorSpace = THREE.SRGBColorSpace; return tc;
+  }
   const T = 512, cv = document.createElement('canvas'); cv.width = cv.height = T; const x = cv.getContext('2d'), m = T / 2;
   x.filter = `blur(${T * 0.025}px)`; x.lineCap = 'round';
   for (let k = 0; k < 3; k++) { x.strokeStyle = `rgba(255,255,255,${[0.55, 0.35, 0.9][k]})`; x.lineWidth = T * [0.07, 0.12, 0.025][k]; x.beginPath(); x.ellipse(m, m, T * 0.3, T * 0.3, 0, Math.PI * 1.04, Math.PI * 1.96); x.stroke(); }
