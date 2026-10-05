@@ -8722,6 +8722,7 @@ function renderPaginaAgente() {
   if (id === 'estoque') return renderPaginaEstoque();
   if (id === 'prospeccao') return renderPaginaProspeccao();
   if (id === 'conversas') return renderPaginaConversas();
+  if (id === 'dev') return renderPaginaDev(); // fase 11: estúdio claro
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -9524,6 +9525,126 @@ function htmlDatasDev(aba) {
     return `<li><span><b>${esc(c.nome)} · ${esc(isoParaBR(c.data).slice(0, 5))}</b><small>${esc(c.ideias.join(' · '))}</small><small class="cc-sub">${c.dias === 0 ? 'hoje' : 'em ' + plural(c.dias, 'dia', 'dias')}${pz ? ' · ' + esc(pz) : ''}${c.preco ? ' · ' + esc(c.preco) : ''}</small></span></li>`; }).join('')}</ul>
     <p class="cc-txt">Gostou de uma? Peça ao Desenvolvedor (botão abaixo) para ela virar projeto.</p>`);
 }
+// =====================================================================================================================
+// PÁGINA DO DESENVOLVEDOR = ESTÚDIO CLARO (fase 11, pedido do Rafael 05/10/2026: "muito miúdo", "sem esse preto no fundo",
+// "do jeito que o desenvolvedor tem sido elaborado"). Fundo claro de estúdio, letras grandes, os modelos 3D como produto em vitrine.
+// Ordem combinada: 1) PRECISA DE VOCÊ · 2) VITRINE (modelos com prévia; gira no toque) · 3) EM PRODUÇÃO (pedidos em colunas:
+// precisa de você / na fila / modelando / pronto) · 4) IDEIAS por nicho · 5) DATAS. Depois: tarefa de hoje no PC, o que ele diz,
+// pedir um modelo e o comando da nuvem. Classes `dvs-*` (CSS escopado em .ag:has(.dvs)). Abrir um modelo = abrirProjetoDev.
+// =====================================================================================================================
+const NICHOS_DEV = Object.fromEntries(ABAS_DEV);
+/** "PRIORIDADE 1/8 (placas reais…): placa profissional de mesa — Dr. …" → { chip: 'Prioridade 1/8', titulo: 'placa profissional de mesa — Dr. …' } */
+function tituloPedidoDev(t) {
+  let s = String(t || '').trim(), chip = '';
+  const m = s.match(/^(PRIORIDADE[^:(]*?)(\s*\([^)]*\))?\s*:\s*/i); if (m) { chip = m[1].trim().replace(/^PRIORIDADE/i, 'Prioridade'); s = s.slice(m[0].length); }
+  const v = s.match(/^(Variante[^:]*):\s*/i); if (!chip && v) { chip = v[1].replace(/\s*\([^)]*\)/g, '').replace(/\s+da placa profissional/i, '').slice(0, 28); s = s.slice(v[0].length); }
+  s = s.charAt(0).toUpperCase() + s.slice(1);
+  return { chip, titulo: s.length > 110 ? s.slice(0, 108).replace(/\s+\S*$/, '') + '…' : s, completo: String(t || '') };
+}
+/** A avaliação do Rafael anotada no projeto (no "falta"): vira selo na vitrine. */
+function selosProjetoDev(p) {
+  const f = String(p.falta || '');
+  return /muito boa|padr[aã]o de qualidade/i.test(f) ? ['⭐ Padrão de qualidade', 'ouro'] : /ficou ruim|n[aã]o usar/i.test(f) ? ['Refazer se pedir', 'ruim'] : null;
+}
+/** A próxima ação do projeto, curta (1ª frase do "falta", sem a avaliação). */
+function proximaAcaoDev(p) {
+  let f = String(p.falta || '').replace(/^Rafael \(\d{2}\/\d{2}\/\d{4}\):\s*ficou [^.—]*[.—]\s*(é o padrão[^.]*\.|n[aã]o usar como modelo\.[^.]*\.)?\s*/i, '').trim();
+  const i = f.search(/[.;](\s|$)/); if (i > 20) f = f.slice(0, i);
+  return f.length > 150 ? f.slice(0, 148).replace(/\s+\S*$/, '') + '…' : f;
+}
+function projetosDev() { return ((devDados && devDados.projetos) || []).slice(); }
+/** O que precisa do Rafael: imagens para aprovar, pedidos com dúvida e os 3MF prontos para o teste físico (os mais novos). */
+function pendenciasDev() {
+  const ps = projetosDev(), pd = (pedidosDev && pedidosDev.pedidos) || [], L = [];
+  ps.filter(p => p.status === 'imagem').forEach(p => L.push({ tipo: 'aprovar', rot: 'Aprovar a imagem', p, txt: proximaAcaoDev(p) || 'Veja a imagem e diga se segue para o 3MF.' }));
+  pd.filter(x => x.status === 'duvida').forEach(x => L.push({ tipo: 'responder', rot: 'Responder', pedido: x, txt: x.resposta || 'O Desenvolvedor precisa de uma informação sua.' }));
+  ps.filter(p => p.status === '3mf' && /imprimir|testar|teste/i.test(p.falta || '') && !/ficou ruim|n[aã]o usar/i.test(p.falta || ''))
+    .sort((a, b) => String(b.atualizadoEm || '').localeCompare(String(a.atualizadoEm || ''))).slice(0, 4)
+    .forEach(p => L.push({ tipo: 'testar', rot: 'Imprimir o teste', p, txt: proximaAcaoDev(p) }));
+  return L;
+}
+function cartaoPendenciaDev(x, k) {
+  const cor = { aprovar: '#ff9f0a', responder: '#ff3b30', testar: '#0071e3' }[x.tipo], p = x.p;
+  const titulo = p ? p.nome : tituloPedidoDev(x.pedido.texto).titulo;
+  const img = p && p.previa ? `<img data-cofre="${esc(p.previa)}" alt="" loading="lazy">` : `<span class="dvs-ico" aria-hidden="true">${x.tipo === 'responder' ? '?' : '✦'}</span>`;
+  const acao = p ? `abrirProjetoDev('${esc(p.codigo)}')` : `abrirChatAgente('dev', { ref: ${esc(JSON.stringify(String(x.pedido.texto).slice(0, 200)))} })`;
+  return `<button type="button" class="dvs-pend" style="--c:${cor}; --k:${k}" onclick="${acao}"><span class="dvs-pend-img">${img}</span><span class="dvs-pend-txt"><em>${esc(x.rot)}</em><b>${esc(titulo)}</b><small>${esc(x.txt)}</small></span><i aria-hidden="true">›</i></button>`;
+}
+function cartaoVitrineDev(p, k) {
+  const e = ETAPAS_DEV[p.status || 'ideia'] || ETAPAS_DEV.ideia, selo = selosProjetoDev(p), arqs = (p.arquivos || []).length;
+  return `<button type="button" class="dvs-modelo" data-nicho="${esc(p.categoria || 'empresas')}" style="--k:${k}" onclick="abrirProjetoDev('${esc(p.codigo)}')" aria-label="Abrir ${esc(p.nome)}">
+    <span class="dvs-palco">${p.previa ? `<img data-cofre="${esc(p.previa)}" alt="" loading="lazy">` : '<span class="dvs-ico" aria-hidden="true">✦</span>'}${p.folha ? '<span class="dvs-3d">3D · girar</span>' : ''}${selo ? `<span class="dvs-selo ${selo[1]}">${esc(selo[0])}</span>` : ''}</span>
+    <span class="dvs-modelo-txt"><span class="dvs-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b><small>${esc(NICHOS_DEV[p.categoria] || 'Empresas')} · ${esc(p.codigo)}${p.versao ? ' ' + esc(p.versao) : ''}${arqs ? ` · ⬇ ${plural(arqs, 'arquivo', 'arquivos')}` : ''}</small>${proximaAcaoDev(p) ? `<span class="dvs-prox">Próximo: ${esc(proximaAcaoDev(p))}</span>` : ''}</span></button>`;
+}
+const COLUNAS_DEV = [['duvida', 'Precisa de você', '#ff3b30'], ['novo', 'Na fila', '#ff9f0a'], ['andamento', 'Modelando', '#0071e3'], ['feito', 'Pronto', '#34c759']];
+function quadroPedidosDev() {
+  const semana = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const pd = ((pedidosDev && pedidosDev.pedidos) || []).filter(x => x.status !== 'feito' || String(x.quando || '') >= semana);
+  if (!pd.length) return '<p class="dvs-vazio">Nenhum pedido agora. Peça um modelo aqui embaixo ou pelo J.A.R.V.I.S. (voz ou chat).</p>';
+  return `<div class="dvs-quadro">${COLUNAS_DEV.map(([st, nome, cor]) => { const L = pd.filter(x => (x.status || 'novo') === st);
+    const card = x => { const t = tituloPedidoDev(x.texto);
+      return `<details class="dvs-ped"><summary>${t.chip ? `<em>${esc(t.chip)}</em>` : ''}<b>${esc(t.titulo)}</b><small>${esc(isoParaBR(String(x.quando || '').slice(0, 10)).slice(0, 5))}${x.origem ? ' · ' + esc(x.origem) : ''}${x.codigo ? ' · ' + esc(x.codigo) : ''}</small></summary>
+        <p>${esc(t.completo)}</p>${x.resposta ? `<p class="dvs-resp"><b>Desenvolvedor:</b> ${esc(x.resposta)}</p>` : ''}${x.codigo && projetosDev().some(p => p.codigo === x.codigo) ? `<button type="button" onclick="abrirProjetoDev('${esc(x.codigo)}')">Ver o modelo ›</button>` : ''}</details>`; };
+    return `<section class="dvs-col" style="--c:${cor}"><h3><i></i>${esc(nome)}<span>${L.length}</span></h3>${L.length ? L.slice(0, 5).map(card).join('') + (L.length > 5 ? `<details class="dvs-mais"><summary>Mais ${plural(L.length - 5, 'pedido', 'pedidos')}</summary>${L.slice(5).map(card).join('')}</details>` : '') : '<p class="dvs-col-vazia">—</p>'}</section>`; }).join('')}</div>`;
+}
+function ideiasDev() {
+  const r = relatorioAgente('dev') || {}, ps = projetosDev().filter(p => (p.status || 'ideia') === 'ideia');
+  return [...ps.map(p => ({ nicho: p.categoria || 'empresas', titulo: p.nome, porque: proximaAcaoDev(p), personaliza: p.personaliza, codigo: p.codigo, projeto: true })),
+    ...(r.ideias || []).filter(i => !ps.some(p => semAcentoCer(p.nome) === semAcentoCer(i.titulo))).map(i => ({ nicho: semAcentoCer(i.nicho || 'empresas'), titulo: i.titulo, porque: i.porque, personaliza: i.personaliza, complexidade: i.complexidade, dia: i.dia }))];
+}
+function filtrarDev(lista, k) {
+  cc.devFiltro = cc.devFiltro || {}; cc.devFiltro[lista] = k;
+  document.querySelectorAll(`.dvs-filtros[data-lista="${lista}"] button`).forEach(b => b.classList.toggle('on', b.dataset.k === k));
+  document.querySelectorAll(`[data-lista-itens="${lista}"] > [data-nicho]`).forEach(c => { c.hidden = k !== 'todos' && c.dataset.nicho !== k; });
+}
+function filtrosDev(lista, itens) {
+  const conta = k => itens.filter(x => x === k).length, k0 = ((cc.devFiltro || {})[lista]) || 'todos';
+  return `<div class="dvs-filtros" data-lista="${lista}" role="tablist">${[['todos', 'Todos', itens.length], ...ABAS_DEV.map(([k, n]) => [k, n, conta(k)]).filter(x => x[2])].map(([k, n, q]) => `<button type="button" role="tab" data-k="${k}" class="${k === k0 ? 'on' : ''}" onclick="filtrarDev('${lista}', '${k}')">${esc(n)}<span>${q}</span></button>`).join('')}</div>`;
+}
+async function pedirIdeiaDev(i) {
+  const x = ideiasDev()[i]; if (!x) return;
+  if (!confirm(`${x.projeto ? 'Pedir ao Desenvolvedor para começar este projeto?' : 'Pedir ao Desenvolvedor para transformar em projeto?'}\n\n“${x.titulo}”\n\nEle começa na próxima rodada do PC (10h, 15h ou 20h).`)) return;
+  const pd = await pedirAoDesenvolvedor(`${x.projeto ? 'Começar o projeto' : 'Transformar a ideia em projeto'}: ${x.titulo}${x.personaliza ? ' (personaliza: ' + x.personaliza + ')' : ''}${x.codigo ? ' [' + x.codigo + ']' : ''}`, 'app');
+  if (pd) { toast('Pedido enviado ao Desenvolvedor.', 3500); renderPaginaDev(); }
+}
+async function enviarPedidoModeloDev(ev) {
+  ev.preventDefault(); const ta = $j('dvs-pedido'), t = ta ? ta.value.trim() : ''; if (!t) return;
+  const pd = await pedirAoDesenvolvedor(t, 'app'); if (pd) { ta.value = ''; toast('Pedido enviado. Ele aparece em “Na fila”.', 3500); renderPaginaDev(); }
+}
+function renderPaginaDev() {
+  const el = $j('ag-pag'); if (!el) return;
+  const a = todosAgentes().find(x => x.id === 'dev'), r = relatorioAgente('dev') || {}, ps = projetosDev();
+  const vitrine = ps.filter(p => p.previa).sort((x, y) => (['3mf', 'feito', 'aprovado', 'imagem', 'ideia'].indexOf(x.status) - ['3mf', 'feito', 'aprovado', 'imagem', 'ideia'].indexOf(y.status)) || String(y.atualizadoEm || '').localeCompare(String(x.atualizadoEm || '')));
+  const destaque = ps.filter(p => p.folha).sort((x, y) => ((selosProjetoDev(y) || [])[1] === 'ouro') - ((selosProjetoDev(x) || [])[1] === 'ouro') || String(y.atualizadoEm || '').localeCompare(String(x.atualizadoEm || '')))[0];
+  const pend = pendenciasDev(), pd = (pedidosDev && pedidosDev.pedidos) || [], ideias = ideiasDev();
+  const nums = [[pend.length, 'precisam de você'], [ps.filter(p => p.status === '3mf').length, 'modelos 3MF prontos'], [pd.filter(x => x.status === 'novo' || x.status === 'andamento').length, 'pedidos em produção'], [ideias.length, 'ideias na mesa']];
+  const { est, cmd, resp } = partesComandoAgente('dev');
+  const datas = calendarioComercial(90).slice(0, 6);
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
+      <button type="button" class="ag-falar" onclick="falarComAgente('dev')">🎙 Falar</button></header>
+    <div class="ag-rolo dvs" id="ag-rolo">
+      <section class="dvs-heroi"><div class="dvs-heroi-txt"><small>Estúdio de produtos · Primos 3D</small><h1>Desenvolvedor</h1><p>${esc(a.funcao || 'Cria os produtos da Primos 3D')}. O Claude modela no PC e entrega o 3MF pronto para o Bambu Studio.</p>
+        <ul class="dvs-nums">${nums.map(([v, t], k) => `<li style="--k:${k}"><b>${v}</b><span>${esc(t)}</span></li>`).join('')}</ul></div>
+        ${destaque ? `<figure class="dvs-destaque"><div class="dvs-pedestal"><div class="dev-giro dvs-giro" id="dvs-giro" data-folha="${esc(destaque.folha)}"></div></div><figcaption><span class="dvs-etapa" style="--c:${(ETAPAS_DEV[destaque.status] || ETAPAS_DEV.ideia)[1]}">${esc((ETAPAS_DEV[destaque.status] || ETAPAS_DEV.ideia)[0])}</span><b>${esc(destaque.nome)}</b><small>Arraste para girar · <button type="button" onclick="abrirProjetoDev('${esc(destaque.codigo)}')">abrir e baixar o 3MF ›</button></small></figcaption></figure>` : ''}</section>
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Precisa de você</h2><p>${pend.length ? 'O que está parado esperando uma decisão ou um teste seu.' : 'Nada esperando você agora.'}</p></header>
+        ${pend.length ? `<div class="dvs-pends">${pend.map(cartaoPendenciaDev).join('')}</div>` : '<p class="dvs-vazio">Tudo em dia. Quando houver imagem para aprovar, dúvida ou modelo para testar, aparece aqui.</p>'}</section>
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Vitrine</h2><p>${plural(vitrine.length, 'modelo com prévia', 'modelos com prévia')}. Toque num modelo para girar, dar zoom e baixar o arquivo.</p></header>
+        ${vitrine.length ? filtrosDev('vitrine', vitrine.map(p => p.categoria || 'empresas')) + `<div class="dvs-vitrine" data-lista-itens="vitrine">${vitrine.map(cartaoVitrineDev).join('')}</div>` : '<p class="dvs-vazio">As prévias aparecem aqui quando o PC renderizar o primeiro modelo.</p>'}</section>
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Em produção</h2><p>Seus pedidos ao Desenvolvedor. Ele trabalha nas rodadas do PC: 10h, 15h e 20h. Toque num pedido para ler tudo.</p></header>${quadroPedidosDev()}
+        <form class="dvs-pedir" onsubmit="enviarPedidoModeloDev(event)"><label for="dvs-pedido">Pedir um modelo novo</label><div><textarea id="dvs-pedido" rows="2" maxlength="1500" placeholder="Ex.: placa de mesa para a Dra. Ana, dentista, em branco e dourado, 20 cm"></textarea><button type="submit">Pedir</button></div></form></section>
+      ${r.paraOClaude && r.paraOClaude.tarefa ? `<section class="dvs-sec"><div class="dvs-tarefa"><small>Tarefa de hoje no PC</small><p>${r.paraOClaude.codigo ? `<b>${esc(r.paraOClaude.codigo)}</b> — ` : ''}${esc(r.paraOClaude.tarefa)}</p></div></section>` : ''}
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Ideias na mesa</h2><p>O que ainda é ideia, por nicho. Gostou? Peça para virar projeto.</p></header>
+        ${ideias.length ? filtrosDev('ideias', ideias.map(i => i.nicho)) + `<div class="dvs-ideias" data-lista-itens="ideias">${ideias.map((i, k) => `<article class="dvs-ideia" data-nicho="${esc(i.nicho)}"><small>${esc(NICHOS_DEV[i.nicho] || i.nicho)}${i.projeto ? ' · já é projeto' : i.dia ? ' · ideia de ' + esc(isoParaBR(i.dia).slice(0, 5)) : ''}${i.complexidade ? ' · ' + esc(i.complexidade) : ''}</small><b>${esc(i.titulo)}</b>${i.porque ? `<p>${esc(i.porque)}</p>` : ''}${i.personaliza ? `<p class="dvs-pers">Personaliza: ${esc(i.personaliza)}</p>` : ''}<button type="button" onclick="pedirIdeiaDev(${k})">${i.projeto ? 'Pedir para começar' : 'Pedir para virar projeto'}</button></article>`).join('')}</div>` : '<p class="dvs-vazio">As ideias chegam na rodada da manhã.</p>'}</section>
+      ${datas.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Datas que vêm aí</h2><p>Boas desculpas para um produto novo.</p></header><div class="dvs-datas">${datas.map(c => `<article><b>${esc(c.nome)}</b><small>${esc(isoParaBR(c.data).slice(0, 5))} · ${c.dias === 0 ? 'hoje' : 'em ' + plural(c.dias, 'dia', 'dias')}</small><p>${esc((c.ideias || []).slice(0, 3).join(' · '))}</p></article>`).join('')}</div></section>` : ''}
+      ${r.manchete ? `<section class="dvs-sec"><header class="dvs-tit"><h2>O Desenvolvedor diz</h2><p>Relatório da rodada de ${esc(isoParaBR(r.dia || '').slice(0, 5))}.</p></header><div class="dvs-diz"><p class="dvs-manchete">${textoAgente(r.manchete)}</p>${(r.acoes || []).length ? `<ul>${r.acoes.map(x => `<li>${textoAgente(x)}</li>`).join('')}</ul>` : ''}</div></section>` : ''}
+      <section class="dvs-sec dvs-cmd"><header class="dvs-tit"><h2>Comandar o agente</h2><p>Peça uma análise nova na nuvem ou pause as rodadas.</p></header>${est}${cmd}${resp}</section>
+      <footer class="ag-fim">J.A.R.V.I.S. · Estúdio do Desenvolvedor</footer>
+    </div>`;
+  carregarMidiasCofre(el);
+  if (destaque) montarGiroDev($j('dvs-giro'), destaque.folha);
+  ['vitrine', 'ideias'].forEach(l => { const k = (cc.devFiltro || {})[l]; if (k && k !== 'todos') filtrarDev(l, k); });
+  posRenderPagina();
+}
 // --- agente SHOPEE (fase 9): a nuvem escreve 3 rascunhos de anúncio por dia (acumulam até cobrir os produtos fotografados);
 //     o Rafael aprova aqui → pedido ao Claude no PC para subir na Shopee como SALVO E OCULTO (nunca publica).
 //     As aprovações ficam no módulo `shopeeaprov` (sincroniza): { id, produto, titulo, preco, dia, status: aprovado|subido }.
@@ -9909,14 +10030,19 @@ function publicarConversasCofre() {
 }
 
 /** Painel do agente + a caixa de COMANDO, o andamento da tarefa e a resposta ao último comando (agentes da nuvem). */
-function htmlPainelAgente(id) {
-  const html = htmlPainelAgenteBase(id); if (!AGENTES_NUVEM.includes(id)) return html;
+/** O andamento na nuvem, a caixa de comando e a resposta ao último comando (painel da Central e páginas próprias, como a do Desenvolvedor). */
+function partesComandoAgente(id) {
   const t = ((cc.execucao || {}).tarefas || {})[id], r = relatorioAgente(id), pausado = ((cc.execucao || {}).pausados || []).includes(id);
   const est = t && (t.status === 'rodando' || t.status === 'fila') ? `<p class="cc-exec rodando"><span class="spin"></span>${t.status === 'fila' ? 'Na fila do GitHub…' : 'Trabalhando agora…'}${t.instrucao ? ` <b>“${esc(t.instrucao)}”</b>` : ''}<button type="button" class="cc-mini sec" onclick="controlarAgente('cancelar', '${id}')">Cancelar</button></p>`
     : pausado ? `<p class="cc-exec">⏸ Pausado: fora da rodada das 7h. <button type="button" class="cc-mini" onclick="controlarAgente('retomar', '${id}')">Retomar</button></p>` : '';
   const resp = r && r.resposta ? ccBloco('Resposta ao seu comando', `<div class="cc-relatorio cc-resp"><p class="cc-nota">Você pediu: “${esc(r.comando || '')}”</p><p class="cc-txt">${textoAgente(r.resposta)}</p></div>`) : '';
   const cmd = `<form class="cc-cmd" onsubmit="enviarComandoAgente(event, '${id}')"><input id="cc-cmd" placeholder="Comando para o agente (ex.: refaça o payback com 30 vendas/mês)" maxlength="400" autocomplete="off" enterkeyhint="send"><button type="submit" aria-label="Enviar comando">↑</button></form>
     <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Reanalisar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="conversarComAgente('${id}')">💬 Escrever</button></div>`;
+  return { est, cmd, resp };
+}
+function htmlPainelAgente(id) {
+  const html = htmlPainelAgenteBase(id); if (!AGENTES_NUVEM.includes(id)) return html;
+  const { est, cmd, resp } = partesComandoAgente(id);
   const agv = todosAgentes().find(x => x.id === id), falar = VOZ_AGENTES[id] && agv ? `<button type="button" class="cc-falar" style="--ag:${COR_AGENTE[id] || '#0a84ff'}" onclick="falarComAgente('${id}')"><i></i>Falar com ${esc(agv.nome)}</button>` : '';
   const ag = todosAgentes().find(x => x.id === id), sk = ((ag && ag.skills) || []).filter(k => SKILLS_DESC[k]);
   const skills = sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '';
