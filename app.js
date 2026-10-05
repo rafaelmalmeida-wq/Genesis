@@ -8150,14 +8150,14 @@ function htmlAgenteProducao(a) {
 // O PC completa (garimpo-pc.ps1 → dados/garimpo-pc.json): capa do MakerWorld (a nuvem é bloqueada) e o 3D GIRANDO do STL do Printables.
 // Notificação no iPhone quando fica pronto (dia.mjs, a partir das 8h). Selo de licença: verde pode vender · amarelo verificar · vermelho só referência.
 // =====================================================================================================================
-const REDES_GARIMPO = { tiktok: ['TikTok', '#ff2d55'], instagram: ['Instagram', '#e1306c'], youtube: ['YouTube', '#ff3b30'], pinterest: ['Pinterest', '#e60023'], shopee: ['Shopee', '#ff6b2c'], mercadolivre: ['Mercado Livre', '#ffd60a'], outro: ['Internet', '#8e8e93'] };
+const REDES_GARIMPO = { tiktok: ['TikTok', '#ff2d55'], instagram: ['Instagram', '#e1306c'], youtube: ['YouTube', '#ff3b30'], pinterest: ['Pinterest', '#e60023'], shopee: ['Shopee', '#ff6b2c'], mercadolivre: ['Mercado Livre', '#ffd60a'], printables: ['Em alta no Printables', '#fa6831'], makerworld: ['Em alta no MakerWorld', '#00ae42'], outro: ['Internet', '#8e8e93'] };
 const SITES_GARIMPO = { makerworld: 'MakerWorld', printables: 'Printables', thingiverse: 'Thingiverse', cults: 'Cults3D', thangs: 'Thangs' };
 const LIC_GARIMPO = { ok: ['Pode vender', '#30d158'], verificar: ['Verificar licença', '#ffd60a'], nao: ['Só referência', '#ff453a'] };
 /** O garimpo mais recente (nuvem) com o que o PC completou por cima (capa do MakerWorld, licença conferida, 3D girando). */
 function garimpoDoDia() {
   const g = relatoriosAgentes && relatoriosAgentes.garimpo; if (!g || !Array.isArray(g.itens) || !g.itens.length) return null;
   const pc = garimpoPC && garimpoPC.dia === g.dia && garimpoPC.itens ? garimpoPC.itens : {};
-  return { ...g, itens: g.itens.map(x => { const p = pc[x.id] || {}; return { ...x, ...p, foto: p.foto || x.foto, link: p.linkOk === false ? '' : x.link }; }) };
+  return { ...g, itens: g.itens.map(x => { const p = pc[x.id] || {}; return { ...x, ...p, foto: p.foto || x.foto, link: p.link || (p.linkOk === false ? '' : x.link) }; }) };
 }
 function decisaoGarimpo(id) { return garimpoAprov.find(d => d.id === id) || null; }
 /** Abre a página da Produção já no garimpo (notificação ?abrir=garimpo). */
@@ -8205,7 +8205,7 @@ function htmlCartaoGarimpo(it, k) {
   const pop = [it.curtidas ? `♥ ${mil(it.curtidas)}` : '', it.downloads ? `⬇ ${mil(it.downloads)}` : '', it.impressoes ? `🖨 ${mil(it.impressoes)}` : ''].filter(Boolean).join(' · ');
   const quem = (it.indicadoPor || []).map(a => `<span style="--c:${COR_AGENTE[a] || '#8e8e93'}">${esc(nomeConv(a))}</span>`).join('');
   const votos = Object.entries(it.votos || {}).filter(([, v]) => v).map(([a, v]) => `<li style="--c:${COR_AGENTE[a] || '#8e8e93'}"><b>${esc(nomeConv(a))}</b><span>${esc(v)}</span></li>`).join('');
-  const links = it.link ? `<a class="gm-link" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">Abrir no ${esc(site || 'site')} ↗</a>${it.linkOk === null && it.site !== 'makerworld' ? '<small class="gm-aviso">link da busca, ainda não conferido</small>' : ''}`
+  const links = it.link ? `<a class="gm-link" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">Abrir no ${esc(site || 'site')} ↗</a>${it.parecido ? '<small class="gm-aviso">arquivo parecido, achado pelo nome — confira se é o mesmo</small>' : it.linkOk === null && it.site !== 'makerworld' ? '<small class="gm-aviso">link da busca, ainda não conferido</small>' : ''}`
     : `<span class="gm-buscar">Buscar o arquivo: ${Object.entries(it.buscas || {}).map(([s, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(SITES_GARIMPO[s] || s)}</a>`).join(' · ')}</span>`;
   const acoes = !d ? `<button type="button" class="gm-aprovar" onclick="aprovarGarimpo('${esc(it.id)}')">✓ Aprovar → fila</button><button type="button" class="gm-recusar" onclick="recusarGarimpo('${esc(it.id)}')">Agora não</button>`
     : `<p class="gm-feito ${d.decisao}">${d.decisao === 'aprovado' ? '✓ Na fila de impressão' : '✕ Recusado — não volta'}<button type="button" onclick="desfazerGarimpo('${esc(it.id)}')">Desfazer</button></p>`;
