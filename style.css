@@ -3812,3 +3812,124 @@ body.eb-aberto { overflow: hidden; }
 .jv-abertura.espera .jv-ab-toque { animation: jvAbPisca 1.6s ease-in-out infinite !important; animation-play-state: running !important; }
 .jv-abertura.espera::before { animation-play-state: running !important; }
 @keyframes jvAbPisca { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+/* ===== CONVERSA COM CADA AGENTE (fase 11): botão "Conversar" na página do agente, a janela de conversa e o "Responder" da página inicial ===== */
+.ag-conversar { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; padding: 8px 14px; border: 0; border-radius: 999px; font: inherit; font-size: 0.82rem; font-weight: 600; color: #f2f2f7; background: color-mix(in srgb, var(--ag, #fff) 20%, rgba(255,255,255,0.08)); box-shadow: inset 0 0 0 0.5px color-mix(in srgb, var(--ag, #fff) 55%, transparent); cursor: pointer; white-space: nowrap; }
+.ag-conversar:hover { background: color-mix(in srgb, var(--ag, #fff) 32%, rgba(255,255,255,0.1)); }
+.ag-conversar:focus-visible { outline: 2px solid #0a84ff; outline-offset: 2px; }
+.ag-conversar i { font-style: normal; display: inline-grid; place-items: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--ag, #fff); color: #000; font-size: 0.64rem; font-weight: 700; }
+@media (max-width: 520px) { .ag-conversar { padding: 8px 11px; margin-right: 4px; } .ag-topo { gap: 8px; } .ag-topo strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } }
+
+.agc { position: fixed; inset: 0; z-index: 9740; color: #f5f5f7; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, sans-serif; }
+.agc[hidden] { display: none; }
+body.agc-aberto { overflow: hidden; }
+.agc-fundo { position: absolute; inset: 0; background: rgba(0,0,0,0.45); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); animation: agcFundo 0.25s ease both; }
+.agc-caixa { position: absolute; top: 0; right: 0; bottom: 0; width: min(440px, 100%); display: flex; flex-direction: column; background: rgba(18,18,20,0.95); -webkit-backdrop-filter: blur(30px) saturate(1.4); backdrop-filter: blur(30px) saturate(1.4); box-shadow: -0.5px 0 0 rgba(255,255,255,0.1), -30px 0 60px rgba(0,0,0,0.5); animation: agcEntra 0.38s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes agcEntra { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes agcFundo { from { opacity: 0; } }
+.agc-topo { display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 12px) 12px 10px 16px; border-bottom: 0.5px solid rgba(255,255,255,0.08); }
+.agc-topo > div { flex: 1; min-width: 0; }
+.agc-topo b { display: block; font-size: 1rem; font-weight: 600; }
+.agc-topo small { display: block; font-size: 0.72rem; color: #8e8e93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.agc-bola { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff 0, color-mix(in srgb, var(--ag) 70%, #fff) 16%, var(--ag) 55%, color-mix(in srgb, var(--ag) 55%, #000) 100%); box-shadow: 0 0 18px color-mix(in srgb, var(--ag) 55%, transparent); }
+.agc.pensando .agc-topo .agc-bola { animation: agcPensa 1.2s ease-in-out infinite; }
+@keyframes agcPensa { 50% { transform: scale(0.86); box-shadow: 0 0 28px var(--ag); } }
+.agc-bola.grande { display: block; width: 56px; height: 56px; margin: 0 auto 14px; }
+.agc-voz, .agc-pag, .agc-x { flex: 0 0 auto; border: 0; border-radius: 999px; padding: 7px 12px; font: inherit; font-size: 0.78rem; font-weight: 600; color: #f2f2f7; background: rgba(255,255,255,0.1); cursor: pointer; }
+.agc-voz { background: var(--ag); color: #fff; }
+.agc-x { width: 32px; height: 32px; padding: 0; }
+.agc-pag[hidden] { display: none; }
+.agc-voz:focus-visible, .agc-pag:focus-visible, .agc-x:focus-visible, .agc-filtros button:focus-visible { outline: 2px solid #0a84ff; outline-offset: 2px; }
+.agc-filtros { display: flex; gap: 6px; padding: 10px 16px 4px; overflow-x: auto; scrollbar-width: none; }
+.agc-filtros::-webkit-scrollbar { display: none; }
+.agc-filtros button { flex: 0 0 auto; border: 0; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 0.76rem; font-weight: 600; color: #aeaeb2; background: rgba(255,255,255,0.06); cursor: pointer; }
+.agc-filtros button.on { color: #000; background: #f2f2f7; }
+.agc-filtros i { font-style: normal; margin-left: 6px; opacity: 0.6; font-weight: 500; }
+.agc-msgs { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 8px 14px 16px; display: flex; flex-direction: column; gap: 8px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+.agc-dia { align-self: center; margin: 10px 0 2px; font-size: 0.66rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: #8e8e93; }
+.agc-m { max-width: 86%; padding: 9px 13px; border-radius: 18px; font-size: 0.9rem; line-height: 1.42; overflow-wrap: anywhere; animation: agcMsg 0.3s ease both; }
+@keyframes agcMsg { from { opacity: 0; transform: translateY(6px); } }
+.agc-m p { margin: 0; }
+.agc-m small { display: block; margin-top: 4px; font-size: 0.66rem; color: rgba(235,235,245,0.45); }
+.agc-m.eu { align-self: flex-end; background: #0a84ff; color: #fff; border-bottom-right-radius: 6px; }
+.agc-m.eu small { color: rgba(255,255,255,0.72); text-align: right; }
+.agc-m.eu blockquote { margin: 0 0 6px; padding: 4px 8px; border-left: 2px solid rgba(255,255,255,0.6); border-radius: 0 8px 8px 0; background: rgba(0,0,0,0.14); font-size: 0.76rem; color: rgba(255,255,255,0.88); }
+.agc-m.dele { align-self: flex-start; background: rgba(255,255,255,0.08); border-bottom-left-radius: 6px; box-shadow: inset 2px 0 0 var(--ag); }
+.agc-m.dele .jvc-texto p { margin: 0 0 6px; } .agc-m.dele .jvc-texto p:last-child { margin-bottom: 0; }
+.agc-m.dele .jvc-texto ul, .agc-m.dele .jvc-texto ol { margin: 4px 0 6px; padding-left: 18px; }
+.agc-m.dele .jvc-texto h6 { margin: 6px 0 2px; font-size: 0.86rem; }
+.agc-m .jvc-acoes { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 6px; }
+.agc-nota { margin-top: 6px !important; font-size: 0.76rem; color: #ffd60a; }
+.agc-jv { align-self: stretch; margin: 2px 8px; padding: 8px 12px; border-radius: 14px; background: rgba(255,255,255,0.035); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.08); font-size: 0.8rem; color: #d1d1d6; animation: agcMsg 0.3s ease both; }
+.agc-jv header { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-bottom: 3px; font-size: 0.68rem; color: #8e8e93; }
+.agc-jv header b { color: var(--de); font-weight: 600; }
+.agc-jv header i { font-style: normal; opacity: 0.6; }
+.agc-jv header em { font-style: normal; padding: 1px 7px; border-radius: 999px; background: rgba(255,255,255,0.06); }
+.agc-jv header time { margin-left: auto; }
+.agc-jv p { margin: 0; line-height: 1.4; }
+.agc-jv p.ex { margin-top: 4px; font-size: 0.76rem; color: #8e8e93; }
+.agc-sis { align-self: center; font-size: 0.72rem; color: #8e8e93; }
+.agc-vazio { margin: auto; padding: 30px 20px; text-align: center; color: #aeaeb2; }
+.agc-vazio b { display: block; font-weight: 600; color: #f2f2f7; }
+.agc-vazio small { display: block; margin-top: 6px; font-size: 0.8rem; line-height: 1.4; }
+.agc-ref { display: flex; align-items: center; gap: 8px; margin: 0 12px; padding: 7px 10px; border-radius: 12px 12px 0 0; background: rgba(255,255,255,0.06); font-size: 0.76rem; color: #aeaeb2; }
+.agc-ref[hidden] { display: none; }
+.agc-ref span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agc-ref i { color: #f2f2f7; }
+.agc-ref button { border: 0; background: none; color: #8e8e93; font-size: 0.85rem; cursor: pointer; }
+.agc-form { display: flex; align-items: flex-end; gap: 8px; padding: 8px 12px calc(env(safe-area-inset-bottom) + 10px); border-top: 0.5px solid rgba(255,255,255,0.08); }
+.agc-form textarea { flex: 1; min-height: 38px; max-height: 140px; resize: none; padding: 9px 14px; border: 0; border-radius: 20px; background: rgba(255,255,255,0.08); color: #f5f5f7; font: inherit; font-size: 16px; line-height: 1.3; outline: none; }
+.agc-form textarea:focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ag) 70%, transparent); }
+.agc-mic, .agc-enviar { flex: 0 0 38px; width: 38px; height: 38px; border: 0; border-radius: 50%; display: grid; place-items: center; cursor: pointer; }
+.agc-mic { background: rgba(255,255,255,0.08); color: #f2f2f7; }
+.agc-mic svg { width: 18px; height: 18px; }
+body.jv-ouvindo .agc-mic { background: #ff453a; color: #fff; animation: ccFalarPulso 1.4s ease-out infinite; }
+.agc-enviar { background: var(--ag); color: #fff; font-size: 1.1rem; font-weight: 700; }
+.agc-mic:focus-visible, .agc-enviar:focus-visible { outline: 2px solid #0a84ff; outline-offset: 2px; }
+@media (max-width: 800px) { .agc-caixa { width: 100%; box-shadow: none; } .agc-fundo { display: none; } }
+@media (prefers-reduced-motion: reduce) { .agc-caixa, .agc-fundo, .agc-m, .agc-jv { animation: none; } }
+
+/* página inicial: o recado vira um bloco (não mais um botão só) — o texto abre o agente na Central, "Responder" abre a conversa, a barrinha manda direto */
+.jv-ag-aviso { cursor: default; }
+.jv-ag-aviso:active { transform: none; }
+.jv-ag-aviso > i { grid-row: 1 / span 4; }
+.jv-ag-aviso small[role="button"], .jv-ag-txt span[role="button"] { cursor: pointer; }
+.jv-ag-txt { margin: 1px 0 0; font-size: 0.8rem; line-height: 1.35; color: var(--jv-txt2, #d1d1d6); }
+.jv-ag-aviso .jv-ag-txt span { display: inline; -webkit-line-clamp: unset; overflow: visible; font-size: inherit; color: inherit; }
+.jv-ag-resp { display: inline; padding: 0 0 0 2px; border: 0; background: none; font: inherit; font-size: 0.72rem; font-weight: 600; color: var(--ag); opacity: 0.8; white-space: nowrap; cursor: pointer; }
+.jv-ag-resp::after { content: " ›"; }
+.jv-ag-resp:hover { opacity: 1; text-decoration: underline; }
+.jv-ag-resp:focus-visible, .jv-ag-eco button:focus-visible { outline: 2px solid #0a84ff; outline-offset: 2px; border-radius: 4px; }
+.jv-ag-barra { display: flex; align-items: center; gap: 4px; margin-top: 4px; border-bottom: 0.5px solid rgba(255,255,255,0.1); opacity: 0.5; transition: opacity 0.2s, border-color 0.2s; }
+.jv-ag-barra:focus-within, .jv-ag-aviso:hover .jv-ag-barra { opacity: 1; border-color: var(--ag); }
+.jv-ag-barra input { flex: 1; min-width: 0; padding: 5px 0; border: 0; background: none; color: var(--jv-txt, #fff); font: inherit; font-size: 0.76rem; outline: none; }
+.jv-ag-barra input::placeholder { color: var(--jv-txt3, #8e8e93); }
+.jv-ag-barra button { flex: 0 0 22px; width: 22px; height: 22px; border: 0; border-radius: 50%; background: var(--ag); color: #fff; font-size: 0.75rem; font-weight: 700; cursor: pointer; opacity: 0; transform: scale(0.6); transition: opacity 0.2s, transform 0.2s; }
+.jv-ag-barra:focus-within button { opacity: 1; transform: none; }
+.jv-ag-eco { margin: 5px 0 0; padding: 6px 8px; border-radius: 10px; background: color-mix(in srgb, var(--ag) 13%, transparent); font-size: 0.74rem; line-height: 1.35; color: var(--jv-txt2, #d1d1d6); }
+.jv-ag-eco[hidden] { display: none; }
+.jv-ag-eco button { padding: 0; border: 0; background: none; font: inherit; font-weight: 600; color: var(--ag); cursor: pointer; }
+.agc-pontos { display: inline-flex; gap: 2px; vertical-align: middle; }
+.agc-pontos i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: agcPonto 1s ease-in-out infinite; }
+.agc-pontos i:nth-child(2) { animation-delay: 0.15s; } .agc-pontos i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes agcPonto { 50% { opacity: 0.25; } }
+@media (max-width: 800px) { .jv-ag-barra { opacity: 0.75; } .jv-ag-barra input { font-size: 16px; padding: 6px 0; } .jv-ag-barra button { opacity: 1; transform: none; flex-basis: 26px; width: 26px; height: 26px; } }
+/* os estilos gerais de form/input/button do app (coluna, 44 px, margem) não valem aqui */
+.jv-ag-aviso .jv-ag-barra, #ag-chat .agc-form { flex-direction: row; }
+.jv-ag-aviso .jv-ag-barra input { min-height: 0; height: auto; margin: 0; box-shadow: none; border-radius: 0; }
+.jv-ag-aviso .jv-ag-barra button, #ag-chat .agc-form button, #ag-chat .agc-topo button, #ag-chat .agc-filtros button, .jv-ag-aviso .jv-ag-resp, .jv-ag-aviso .jv-ag-eco button { margin: 0; min-height: 0; box-shadow: none; }
+#ag-chat .agc-form textarea { margin: 0; width: auto; }
+/* os botões gerais do celular (azul, 13 px de espaço, 16 px) não valem nos botões da conversa */
+#jv-destaques .jv-ag-barra button { display: grid; place-items: center; padding: 0; background: var(--ag); color: #fff; font-size: 0.8rem; line-height: 1; border-radius: 50%; }
+#jv-destaques .jv-ag-resp, #jv-destaques .jv-ag-eco button { padding: 0; background: none; color: var(--ag); font-size: 0.72rem; line-height: inherit; border-radius: 0; width: auto; height: auto; }
+#jv-destaques .jv-ag-eco button { font-size: inherit; }
+#ag-chat .agc-mic, #ag-chat .agc-enviar { padding: 0; line-height: 1; font-size: 1.1rem; }
+#ag-chat .agc-mic { background: rgba(255,255,255,0.08); color: #f2f2f7; } #ag-chat .agc-enviar { background: var(--ag); color: #fff; }
+body.jv-ouvindo #ag-chat .agc-mic { background: #ff453a; color: #fff; }
+#ag-chat .agc-voz, #ag-chat .agc-pag { padding: 7px 12px; font-size: 0.78rem; line-height: 1.2; width: auto; } #ag-chat .agc-voz { background: var(--ag); color: #fff; } #ag-chat .agc-pag { background: rgba(255,255,255,0.1); color: #f2f2f7; }
+#ag-chat .agc-x { padding: 0; width: 32px; height: 32px; font-size: 0.9rem; line-height: 1; background: rgba(255,255,255,0.1); color: #f2f2f7; }
+#ag-chat .agc-filtros button { padding: 6px 12px; font-size: 0.76rem; line-height: 1.2; width: auto; background: rgba(255,255,255,0.06); color: #aeaeb2; } #ag-chat .agc-filtros button.on { background: #f2f2f7; color: #000; }
+#ag-chat .agc-ref button { padding: 0 4px; background: none; color: #8e8e93; width: auto; font-size: 0.85rem; }
+#ag-chat .jvc-acao { width: auto; }
+#ag-pag .ag-conversar { padding: 8px 14px; font-size: 0.82rem; line-height: 1.2; width: auto; color: #f2f2f7; background: color-mix(in srgb, var(--ag, #fff) 20%, rgba(255,255,255,0.08)); }
+@media (max-width: 520px) { #ag-pag .ag-conversar { padding: 8px 11px; } }
