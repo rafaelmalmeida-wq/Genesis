@@ -4208,3 +4208,59 @@ body.jv-ouvindo #ag-chat .agc-mic { background: #ff453a; color: #fff; }
 /* fase 11: o espaço do J.A.R.V.I.S. — no celular o pensamento aparece inteiro (título + 3 linhas), sem a estrelinha de aviso */
 @media (max-width: 800px) { .jv-dest.jv-pensa span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.78rem; } .jv-dest.jv-pensa strong::before { content: none; } }
 .jv-dest.jv-pensa strong { font-weight: 650; }
+
+/* ===== PROSPECÇÃO (fase 11): SIMULADOR AO VIVO (controles + resultado lado a lado) e PATENTES ===== */
+.pr-simu-sec { margin-top: 10px; }
+.pr-simu-tit h2 { margin: 0; font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; letter-spacing: -0.02em; color: #f5f5f7; }
+.pr-simu-tit p { margin: 6px 0 16px; font-size: 0.95rem; color: #aeaeb2; }
+.pr-simu { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.pr-simu .pr-sim { display: grid; gap: 12px; }
+.pr-grupo { margin: 0; padding: 12px 14px 6px; border: 0; border-radius: 18px; background: rgba(255,255,255,0.045); box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.08); }
+.pr-grupo legend { padding: 0; margin-bottom: 4px; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.04em; color: #e5e5ea; float: left; width: 100%; }
+.pr-grupo label { display: grid; gap: 4px; padding: 8px 0; clear: both; }
+.pr-grupo label + label { border-top: 0.5px solid rgba(255,255,255,0.06); }
+.pr-grupo label > span { display: flex; justify-content: space-between; gap: 10px; font-size: 0.86rem; color: #d1d1d6; }
+.pr-grupo label > span b { color: #f5f5f7; font-weight: 700; white-space: nowrap; }
+.pr-grupo label.mudou > span b { color: #2dd4bf; }
+.pr-grupo input[type="range"] { width: 100%; margin: 4px 0 0; min-height: 0; accent-color: #2dd4bf; height: 26px; }
+.pr-grupo .pr-chk { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; color: #d1d1d6; }
+.pr-grupo .pr-chk input { width: 18px; height: 18px; min-height: 0; margin: 0; accent-color: #2dd4bf; }
+.pr-simu .pr-reset { justify-self: start; }
+.pr-sim-res { position: sticky; top: calc(env(safe-area-inset-top) + 72px); padding: 16px; border-radius: 22px; background: linear-gradient(160deg, rgba(45,212,191,0.12), rgba(45,212,191,0.03)); box-shadow: inset 0 0 0 0.5px rgba(45,212,191,0.35), 0 20px 40px rgba(0,0,0,0.35); }
+.pr-sim-res.pisca { animation: prPisca .45s ease; }
+@keyframes prPisca { 0% { box-shadow: inset 0 0 0 1.5px rgba(45,212,191,0.9), 0 20px 40px rgba(0,0,0,0.35); } 100% { box-shadow: inset 0 0 0 0.5px rgba(45,212,191,0.35), 0 20px 40px rgba(0,0,0,0.35); } }
+.pr-res-tot { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0 14px; }
+.pr-res-tot > div { padding: 12px 14px; border-radius: 16px; background: rgba(0,0,0,0.3); }
+.pr-res-tot small { display: block; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8e8e93; }
+.pr-res-tot strong { display: block; margin: 4px 0 2px; font-size: clamp(1.4rem, 3vw, 1.9rem); font-weight: 800; letter-spacing: -0.02em; color: #f5f5f7; font-variant-numeric: tabular-nums; }
+.pr-res-tot .esc strong { color: #2dd4bf; }
+.pr-res-tot em { font-style: normal; font-size: 0.78rem; font-weight: 600; }
+.pr-res-tot em.mais { color: #30d158; } .pr-res-tot em.menos { color: #ff453a; } .pr-res-tot em.igual { color: #8e8e93; }
+.pr-res-canais { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.pr-res-canais li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; font-size: 0.82rem; color: #d1d1d6; }
+.pr-res-canais b { font-variant-numeric: tabular-nums; color: #f5f5f7; } .pr-res-canais b small { color: #2dd4bf; font-weight: 600; }
+.pr-res-canais i { grid-column: 1 / -1; position: relative; height: 8px; border-radius: 4px; background: rgba(255,255,255,0.06); }
+.pr-res-canais u, .pr-res-canais s { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; transition: width .25s ease; }
+.pr-res-canais u { background: var(--c); z-index: 1; } .pr-res-canais s { box-shadow: inset 0 0 0 1.5px var(--c); }
+.pr-res-cap { display: grid; gap: 4px; margin-top: 14px; padding: 10px 12px; border-radius: 14px; background: rgba(0,0,0,0.25); font-size: 0.8rem; color: #aeaeb2; }
+.pr-res-cap b { color: #f5f5f7; }
+.pr-pat { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.pr-pat-card { padding: 14px; border-radius: 18px; background: rgba(94,92,230,0.10); box-shadow: inset 0 0 0 0.5px rgba(94,92,230,0.35); display: grid; gap: 8px; align-content: start; }
+.pr-pat-card > small { font-size: 0.78rem; font-weight: 700; color: #c9c8ff; }
+.pr-pat-card > p { margin: 0; font-size: 0.86rem; line-height: 1.45; color: #d1d1d6; }
+.pr-pat-graf svg { width: 100%; height: auto; }
+.pr-pat-graf .zero { stroke: rgba(255,255,255,0.18); stroke-dasharray: 3 4; }
+.pr-pat-graf .rea { fill: none; stroke: #5e5ce6; stroke-width: 2.5; } .pr-pat-graf .esc { fill: none; stroke: #b0aeff; stroke-width: 2.5; stroke-dasharray: 6 4; }
+.pr-pat-aviso { grid-column: 1 / -1; }
+@media (max-width: 800px) {
+  .pr-simu { grid-template-columns: 1fr; }
+  .pr-sim-res { order: -1; top: calc(env(safe-area-inset-top) + 60px); z-index: 3; padding: 12px; background: rgba(10,30,28,0.94); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+  .pr-sim-res .pr-res-canais, .pr-sim-res .cc-nota { display: none; }
+  .pr-sim-res.aberto .pr-res-canais, .pr-sim-res.aberto .cc-nota { display: grid; }
+  .pr-res-tot { margin: 8px 0 6px; } .pr-res-tot > div { padding: 8px 10px; }
+  .pr-res-cap { margin-top: 6px; font-size: 0.74rem; }
+}
+.pr-res-mais { display: none; }
+@media (max-width: 800px) { .pr-res-mais { display: block; width: 100%; min-height: 0; margin: 6px 0 0; padding: 6px; border: 0; border-radius: 10px; background: rgba(45,212,191,0.14); color: #2dd4bf; font: inherit; font-size: 0.8rem; font-weight: 700; cursor: pointer; box-shadow: none; } .pr-sim-res.aberto .pr-res-mais { margin-bottom: 8px; } }
+.pr-res-dica { margin: 10px 0 0; padding: 9px 11px; border-radius: 12px; background: rgba(255,214,10,0.12); font-size: 0.8rem; line-height: 1.4; color: #ffe27a; }
+.pr-res-tot strong { white-space: nowrap; font-size: clamp(1.15rem, 2.2vw, 1.65rem); }

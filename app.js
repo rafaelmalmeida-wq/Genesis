@@ -9238,17 +9238,26 @@ async function aprovarCapEbook(id) {
 // Taxas pesquisadas em 04/10/2026: Shopee 20% + R$ 4 por item (CNPJ); Mercado Livre clássico 10–14% + custo fixo até ~R$ 6,75
 // abaixo de R$ 79; Kiwify 8,99% + R$ 2,49 (Hotmart 9,9% + R$ 1); página de venda de infoproduto converte 1–3%.
 // =====================================================================================================================
-const PROSP_PADRAO = { maqHorasDia: 12, eficiencia: 0.75, maquinasExtra: 0, horasRafael: 40, novosExpositores: 4, shopeeAds: true, mlMes: 4, ebookPreco: 67, ebookAds: 300, b2bAtivo: true };
-const PROSP_SIM = [ // o simulador da página: [chave, rótulo, mín, máx, passo, formato]
-  ['maqHorasDia', 'Horas por dia de cada impressora', 4, 24, 1, v => v + ' h'],
-  ['maquinasExtra', 'Impressoras a mais', 0, 7, 1, v => v ? '+' + v : 'nenhuma'],
-  ['horasRafael', 'Suas horas por semana na Primos', 5, 70, 5, v => v + ' h'],
-  ['novosExpositores', 'Expositores novos (cenário em escala)', 0, 20, 1, v => String(v)],
-  ['ebookPreco', 'Preço do e-book', 27, 197, 10, v => 'R$ ' + v],
-  ['ebookAds', 'Anúncio do e-book por mês', 0, 2000, 50, v => v ? 'R$ ' + v : 'sem anúncio'],
-  ['mlMes', 'Mercado Livre começa no mês', 1, 12, 1, v => v + 'º']
+const PROSP_PADRAO = { maqHorasDia: 12, eficiencia: 0.75, maquinasExtra: 0, horasRafael: 40, novosExpositores: 4, shopeeAds: true, mlMes: 4, ebookPreco: 67, ebookAds: 300, b2bAtivo: true,
+  patModelos: 2, patInicio: 4, patVendas: 3, patPreco: 60, patMensal: 39, patLojistas: 15, patCusto: 300 }; // fase 11: modelos próprios protegidos (peças + licença por assinatura)
+const PROSP_SIM = [ // o simulador da página: [chave, rótulo, mín, máx, passo, formato, grupo]
+  ['maqHorasDia', 'Horas por dia de cada impressora', 4, 24, 1, v => v + ' h', 'fabrica'],
+  ['maquinasExtra', 'Impressoras a mais', 0, 7, 1, v => v ? '+' + v : 'nenhuma', 'fabrica'],
+  ['horasRafael', 'Suas horas por semana na Primos', 5, 70, 5, v => v + ' h', 'fabrica'],
+  ['novosExpositores', 'Expositores novos (em escala)', 0, 20, 1, v => String(v), 'canais'],
+  ['mlMes', 'Mercado Livre começa no mês', 1, 12, 1, v => v + 'º', 'canais'],
+  ['ebookPreco', 'Preço do e-book', 27, 197, 10, v => 'R$ ' + v, 'ebook'],
+  ['ebookAds', 'Anúncio do e-book por mês', 0, 2000, 50, v => v ? 'R$ ' + v : 'sem anúncio', 'ebook'],
+  ['patModelos', 'Modelos próprios protegidos', 0, 20, 1, v => v ? String(v) : 'nenhum', 'patentes'],
+  ['patInicio', 'Primeiro registro depositado no mês', 1, 12, 1, v => v + 'º', 'patentes'],
+  ['patVendas', 'Peças vendidas por modelo por mês', 0, 30, 1, v => String(v), 'patentes'],
+  ['patPreco', 'Preço médio da peça própria', 20, 200, 5, v => 'R$ ' + v, 'patentes'],
+  ['patMensal', 'Mensalidade da licença (por lojista)', 9, 199, 5, v => 'R$ ' + v + '/mês', 'patentes'],
+  ['patLojistas', 'Lojistas assinantes em 12 meses (em escala)', 0, 100, 1, v => String(v), 'patentes'],
+  ['patCusto', 'Custo por registro (INPI + dossiê)', 0, 2000, 50, v => 'R$ ' + v, 'patentes']
 ];
-const CANAIS_PROSP = { consignado: ['Chaveiros · consignado', '#bf5af2', '🔑'], shopee: ['Shopee', '#ff6b2c', '🛍'], ml: ['Mercado Livre', '#ffd60a', '🤝'], direto: ['Direto · brindes e encomendas', '#30d158', '🏢'], ebook: ['E-book J.A.R.V.I.S.', '#e9c46a', '📖'] };
+const GRUPOS_SIM = [['fabrica', '🏭 Fábrica e você'], ['canais', '🛒 Canais'], ['ebook', '📖 E-book'], ['patentes', '🛡 Modelos próprios · patentes']];
+const CANAIS_PROSP = { consignado: ['Chaveiros · consignado', '#bf5af2', '🔑'], shopee: ['Shopee', '#ff6b2c', '🛍'], ml: ['Mercado Livre', '#ffd60a', '🤝'], direto: ['Direto · brindes e encomendas', '#30d158', '🏢'], ebook: ['E-book J.A.R.V.I.S.', '#e9c46a', '📖'], patentes: ['Modelos próprios · patentes', '#5e5ce6', '🛡'] };
 const HORIZ_PROSP = [[3, '3 meses'], [12, '12 meses'], [36, '3 anos']];
 const COR_PROSP = '#2dd4bf';
 const prospEstado = { horiz: 12, cen: 'realista', canal: null, novo: { preco: 35, gramas: 60, horas: 2, canal: 'shopee', vendas: 10 }, publicadoEm: 0 };
@@ -9305,7 +9314,7 @@ function baseProsp() {
  *  rende menos por hora do recurso que acabou (máquina ou as horas do Rafael). */
 function simularProsp(cen, P = premissasProsp(), B = baseProsp()) {
   const esc = cen === 'escala', M = 36, maqH = (B.maquinas + (P.maquinasExtra || 0)) * P.maqHorasDia * 30 * P.eficiencia, rafH = P.horasRafael * 4.33;
-  const R = { cen, maqH, rafH, canais: {}, uso: [], usoRaf: [], kg: [], invest: 0, cortes: {} };
+  const R = { cen, maqH, rafH, canais: {}, uso: [], usoRaf: [], kg: [], invest: 0, cortes: {}, pat: { pecas: [], licencas: [], invest: [], lojistas: [], modelos: [] } };
   Object.keys(CANAIS_PROSP).forEach(k => { R.canais[k] = { lucro: [], receita: [], unid: [] }; R.cortes[k] = 0; });
   for (let t = 1; t <= M; t++) {
     const d = {};
@@ -9327,9 +9336,26 @@ function simularProsp(cen, P = premissasProsp(), B = baseProsp()) {
     const te = t - B.eb.lanc + 1;
     if (te >= 1) {
       const vis = B.eb.visitas0 * Math.min(esc ? 15 : 5, Math.pow(esc ? 1.15 : 1.08, t - 1)), adsE = P.ebookAds, liq = P.ebookPreco * (1 - 0.0899) - 2.49;
-      const vendas = vis * 0.01 + adsE / 0.9 * 0.015, bump = esc ? 0.3 * (27 * (1 - 0.0899) - 2.49) : 0, mentoria = esc && te > 6 ? 2 * 997 * 0.9 : 0;
+      const elast = Math.pow(67 / Math.max(1, P.ebookPreco), 1.1); // fase 11: preço mais alto = menos gente compra (antes a conversão não mudava com o preço)
+      const vendas = (vis * 0.01 + adsE / 0.9 * 0.015) * elast, bump = esc ? 0.3 * (27 * (1 - 0.0899) - 2.49) : 0, mentoria = esc && te > 6 ? 2 * 997 * 0.9 : 0;
       d.ebook = { unid: vendas, receita: vendas * (P.ebookPreco + (esc ? 0.3 * 27 : 0)) + (mentoria ? 2 * 997 : 0), lucroV: vendas * (liq + bump) + mentoria, fixo: adsE, hMaq: 0, hRaf: 2 * 4.33 + (mentoria ? 8 : 0), kg: 0 };
     } else d.ebook = { unid: 0, receita: 0, lucroV: 0, fixo: 0, hMaq: 0, hRaf: 2 * 4.33, kg: 0 };
+    // fase 11 · MODELOS PRÓPRIOS PROTEGIDOS (Gestão de Patentes + Desenvolvedor): a partir do mês do 1º depósito,
+    // (a) PEÇAS: a Primos vende a linha própria com exclusividade (sem cópia barata ao lado) — 50% do ritmo nos 3 primeiros meses;
+    // (b) LICENÇA POR ASSINATURA: lojistas pagam uma mensalidade para imprimir e vender os modelos (começa 2 meses depois do depósito;
+    //     realista: ~1 lojista novo a cada 2 meses até 1/3 da meta; escala: chega à meta em 12 meses e +50% em 3 anos); 10% de plataforma;
+    // (c) INVESTIMENTO: custo por registro no mês do depósito (em escala, 1 modelo novo protegido a cada 2 meses, até 3× os iniciais).
+    {
+      const tp = t - P.patInicio + 1, ativo = P.patModelos > 0 && tp >= 1;
+      const extra = esc && ativo ? Math.min(P.patModelos * 2, Math.floor((tp - 1) / 2)) : 0, modelos = ativo ? P.patModelos + extra : 0;
+      const ramp = tp <= 3 ? 0.5 : 1, uP = modelos * P.patVendas * (esc ? 1.8 : 1) * ramp;
+      const custoP = 0.08 * B.custoKg + 3 * 1.45 + ((B.pc.parametros || {}).embalagem || 0.75) + 1.5, lucroP = P.patPreco * 0.9 - custoP; // 80 g, 3 h de máquina, embalagem; 10% de taxa média de canal
+      const tl = tp - 2, lojistas = !ativo || tl < 1 ? 0 : esc ? Math.min(P.patLojistas * 1.5, P.patLojistas * Math.min(1, tl / 12) + (tl > 12 ? P.patLojistas * 0.5 * Math.min(1, (tl - 12) / 24) : 0)) : Math.min(P.patLojistas / 3, Math.floor(tl / 2) + 1);
+      const recL = lojistas * P.patMensal, extraAntes = esc && tp >= 2 ? Math.min(P.patModelos * 2, Math.floor((tp - 2) / 2)) : 0;
+      const inv = !ativo ? 0 : tp === 1 ? P.patModelos * P.patCusto : extra > extraAntes ? P.patCusto : 0;
+      d.patentes = { unid: uP + lojistas, receita: uP * P.patPreco + recL, lucroV: uP * lucroP + recL * 0.9, fixo: inv, hMaq: uP * 3, hRaf: uP * 10 / 60 + (lojistas ? 2 + lojistas * 0.2 : 0), kg: uP * 0.08,
+        pecas: uP * lucroP, licencas: recL * 0.9, lucro0: uP * lucroP + recL * 0.9, lojistas, modelos };
+    }
     // capacidade: máquina e as horas do Rafael (corta primeiro quem rende menos por hora daquele recurso)
     [['hMaq', maqH], ['hRaf', rafH]].forEach(([res, cap]) => {
       let resta = cap; Object.keys(d).sort((a, b) => (d[b].lucroV / (d[b][res] || 1e-9)) - (d[a].lucroV / (d[a][res] || 1e-9))).forEach(k => {
@@ -9337,6 +9363,7 @@ function simularProsp(cen, P = premissasProsp(), B = baseProsp()) {
         const f = Math.max(0, resta) / need; resta = 0; R.cortes[k] = Math.max(R.cortes[k], 1 - f); ['unid', 'receita', 'lucroV', 'hMaq', 'hRaf', 'kg'].forEach(c => { x[c] *= f; }); });
     });
     Object.keys(d).forEach(k => { const x = d[k], c = R.canais[k]; c.lucro.push(x.lucroV - x.fixo); c.receita.push(x.receita); c.unid.push(x.unid); });
+    { const x = d.patentes, f = x.lucro0 ? x.lucroV / x.lucro0 : 1; R.pat.pecas.push(x.pecas * f); R.pat.licencas.push(x.licencas * f); R.pat.invest.push(x.fixo); R.pat.lojistas.push(x.lojistas); R.pat.modelos.push(x.modelos); } // depois do corte de capacidade
     R.invest += Object.values(d).reduce((s, x) => s + (x.fixo || 0), 0);
     R.uso.push(Object.values(d).reduce((s, x) => s + x.hMaq, 0) / maqH); R.usoRaf.push(Object.values(d).reduce((s, x) => s + x.hRaf, 0) / rafH); R.kg.push(Object.values(d).reduce((s, x) => s + x.kg, 0));
   }
@@ -9357,9 +9384,9 @@ function itensProsp(B = baseProsp()) {
 function modeloProsp() {
   const P = premissasProsp(), chave = JSON.stringify(P), mm = prospEstado.memo; if (mm && mm.k === chave && Date.now() - mm.t < 1500) return mm.m; // o quadro pede várias vezes seguidas
   const B = baseProsp(), rea = simularProsp('realista', P, B), esc = simularProsp('escala', P, B), itens = itensProsp(B);
-  const jaDeu = { consignado: B.ex.jaDeu, shopee: B.sh.jaDeu, ml: 0, direto: B.dir.jaDeu, ebook: 0 };
+  const jaDeu = { consignado: B.ex.jaDeu, shopee: B.sh.jaDeu, ml: 0, direto: B.dir.jaDeu, ebook: 0, patentes: 0 };
   const mel = itens[0], teto = mel ? rea.maqH * mel.porH : 0;
-  const confianca = { consignado: B.ex.dias >= 30 && B.ex.vendidos >= 20 ? 'média' : 'baixa', shopee: B.sh.vendas >= 10 ? 'média' : 'baixa', ml: 'baixa', direto: B.dir.pedidos >= 5 ? 'média' : 'baixa', ebook: 'baixa' };
+  const confianca = { consignado: B.ex.dias >= 30 && B.ex.vendidos >= 20 ? 'média' : 'baixa', shopee: B.sh.vendas >= 10 ? 'média' : 'baixa', ml: 'baixa', direto: B.dir.pedidos >= 5 ? 'média' : 'baixa', ebook: 'baixa', patentes: 'baixa' };
   // o gargalo do cenário em escala: o primeiro recurso que lota nos 36 meses (e em que mês)
   const tMaq = esc.uso.findIndex(u => u >= 0.98), tRaf = esc.usoRaf.findIndex(u => u >= 0.98), kgMes = rea.kg[2];
   const gargalo = tMaq >= 0 && (tRaf < 0 || tMaq <= tRaf) ? 'maquinas' : tRaf >= 0 ? 'rafael' : B.estoqueKg && kgMes > B.estoqueKg ? 'filamento' : 'demanda';
@@ -9392,7 +9419,11 @@ function textoCanalProsp(k, m) {
     ebook: { ate: `${B.eb.escritos} de ${B.eb.total} capítulos escritos · ainda sem venda · ${B.eb.seguidores} seguidores e ~${Math.round(B.eb.visitas0)} visitas ao perfil por mês no TikTok.`,
       rea: `Lança no ${B.eb.lanc}º mês. Orgânico: 1% das visitas ao perfil compram (as visitas crescem 8% ao mês). Anúncio de ${reais(m.P.ebookAds)}/mês: CPC ~R$ 0,90 e 1,5% de conversão ≈ ${(m.P.ebookAds / 0.9 * 0.015).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} vendas. Preço ${reais(m.P.ebookPreco)} − Kiwify (8,99% + R$ 2,49).`,
       esc: 'Bastidores do J.A.R.V.I.S. no TikTok (público cresce 15% ao mês), order bump de R$ 27 (30% levam) e mentoria a partir do 6º mês de venda (2 alunos/mês a R$ 997).',
-      como: ['Para vender em escala, preço de entrada (R$ 47–67) + order bump + mentoria: o volume vem do preço baixo e o lucro do upsell.', 'Anúncio só se paga quando a página converte: teste com R$ 10/dia antes de subir.', 'Cada fase do J.A.R.V.I.S. vira um vídeo de bastidor: é o público mais barato que existe.'] }
+      como: ['Para vender em escala, preço de entrada (R$ 47–67) + order bump + mentoria: o volume vem do preço baixo e o lucro do upsell.', 'Anúncio só se paga quando a página converte: teste com R$ 10/dia antes de subir.', 'Cada fase do J.A.R.V.I.S. vira um vídeo de bastidor: é o público mais barato que existe.'] },
+    patentes: { ate: `Ainda sem registro. ${plural(((relatorioAgente('patentes') || {}).candidatos || []).length, 'candidato', 'candidatos')} da Gestão de Patentes · ${plural(registrosPatentes.length, 'registro acompanhado', 'registros acompanhados')} · ${plural(projetosDev().filter(p => ['3mf', 'feito'].includes(p.status)).length, 'modelo próprio pronto', 'modelos próprios prontos')} no Desenvolvedor.`,
+      rea: `${plural(m.P.patModelos, 'modelo protegido', 'modelos protegidos')} a partir do ${m.P.patInicio}º mês. PEÇAS: ${m.P.patVendas} por modelo por mês a ${reais(m.P.patPreco)} (metade do ritmo nos 3 primeiros meses). LICENÇA: ~1 lojista novo a cada 2 meses pagando ${reais(m.P.patMensal)}/mês, até ${Math.round(m.P.patLojistas / 3)}. Desconta ${reais(m.P.patCusto)} por registro.`,
+      esc: `Mais 1 modelo protegido a cada 2 meses (até ${m.P.patModelos * 3}), peças vendendo 1,8× (vitrine da linha própria + Shopee) e ${m.P.patLojistas} lojistas assinantes em 12 meses (clube de arquivos com licença comercial), +50% em 3 anos.`,
+      como: ['Proteja primeiro o que já é padrão de qualidade (as placas 003/004) — e não poste antes de decidir o depósito.', 'Licença por assinatura funciona como um clube: catálogo que cresce todo mês + arquivo com a marca Primos 3D. Lojista paga pelo que é novo e exclusivo.', 'Comece pelo desenho industrial (a forma); MEI tem desconto no INPI — confirme a tabela atual e um especialista antes de depositar.'] }
   }[k];
   return { ...base, hz, r, e, porMesR: porMes(m.rea.canais[k]), porMesE: porMes(m.esc.canais[k]), corte: Math.max(m.rea.cortes[k], 0) };
 }
@@ -9451,19 +9482,56 @@ function htmlCanaisProsp(m) {
         <table class="pr-tab"><thead><tr><th></th>${HORIZ_PROSP.map(([, h]) => `<th>${h}</th>`).join('')}</tr></thead><tbody><tr><td>Realista</td>${HORIZ_PROSP.map(([h]) => `<td>${reaisK(somaArr(m.rea.canais[k].lucro, h))}</td>`).join('')}</tr><tr><td>Em escala</td>${HORIZ_PROSP.map(([h]) => `<td>${reaisK(somaArr(m.esc.canais[k].lucro, h))}</td>`).join('')}</tr></tbody></table>
         ${t.corte > 0.01 ? `<p class="cc-alerta">⚠️ A capacidade cortou até ${Math.round(t.corte * 100)}% deste canal no cenário realista (faltou máquina ou hora sua).</p>` : ''}</div>` : ''}</article>`; }).join('');
 }
+// --- SIMULADOR AO VIVO (fase 11, pedido do Rafael 06/10/2026: "não funciona" = o resultado ficava longe, lá em cima; agora os
+//     controles e o resultado ficam lado a lado, tudo recalcula enquanto ele arrasta, com a diferença para o cenário de hoje) ---
 function htmlSimProsp() {
-  const P = premissasProsp();
-  return `<div class="pr-sim">${PROSP_SIM.map(([k, rot, a, b, p, f]) => `<label><span>${esc(rot)}<b id="pr-v-${k}">${esc(f(P[k]))}</b></span><input type="range" min="${a}" max="${b}" step="${p}" value="${P[k]}" oninput="mudarPremissaProsp('${k}', Number(this.value))"></label>`).join('')}
-    <label class="pr-chk"><input type="checkbox" ${P.shopeeAds ? 'checked' : ''} onchange="mudarPremissaProsp('shopeeAds', this.checked)"> Shopee Ads no cenário em escala</label>
-    <label class="pr-chk"><input type="checkbox" ${P.b2bAtivo ? 'checked' : ''} onchange="mudarPremissaProsp('b2bAtivo', this.checked)"> Prospecção ativa de empresas no cenário em escala</label>
-    <button type="button" class="cc-btn pr-reset" onclick="voltarPremissasProsp()">Voltar ao cenário de hoje</button></div>`;
+  const P = premissasProsp(), mudou = k => P[k] !== PROSP_PADRAO[k];
+  return `<div class="pr-sim">${GRUPOS_SIM.map(([g, nome]) => `<fieldset class="pr-grupo"><legend>${esc(nome)}</legend>${PROSP_SIM.filter(x => x[6] === g).map(([k, rot, a, b, p, f]) => `<label class="${mudou(k) ? 'mudou' : ''}" id="pr-l-${k}"><span>${esc(rot)}<b id="pr-v-${k}">${esc(f(P[k]))}</b></span><input type="range" min="${a}" max="${b}" step="${p}" value="${P[k]}" oninput="mudarPremissaProsp('${k}', Number(this.value))" aria-label="${esc(rot)}"></label>`).join('')}
+      ${g === 'canais' ? `<label class="pr-chk"><input type="checkbox" ${P.shopeeAds ? 'checked' : ''} onchange="mudarPremissaProsp('shopeeAds', this.checked)"> Shopee Ads (em escala)</label><label class="pr-chk"><input type="checkbox" ${P.b2bAtivo ? 'checked' : ''} onchange="mudarPremissaProsp('b2bAtivo', this.checked)"> Prospecção ativa de empresas (em escala)</label>` : ''}</fieldset>`).join('')}
+    <button type="button" class="cc-btn pr-reset" onclick="voltarPremissasProsp()">↺ Voltar ao cenário de hoje</button></div>`;
+}
+/** O resultado ao lado dos controles: realista × em escala no horizonte escolhido, a diferença para hoje e cada canal. */
+function htmlSimRes(m) {
+  const H = prospEstado.horiz, ks = Object.keys(CANAIS_PROSP), base = prospEstado.baseHoje && prospEstado.baseHoje.b === m.B ? prospEstado.baseHoje : (prospEstado.baseHoje = { b: m.B, rea: simularProsp('realista', PROSP_PADRAO, m.B), esc: simularProsp('escala', PROSP_PADRAO, m.B) });
+  const tr = m.rea.total(H), te = m.esc.total(H), dr = tr - base.rea.total(H), de = te - base.esc.total(H);
+  const dif = v => Math.abs(v) < 1 ? '<em class="igual">igual a hoje</em>' : `<em class="${v > 0 ? 'mais' : 'menos'}">${v > 0 ? '+' : '−'}${reaisK(Math.abs(v)).replace('R$ ', 'R$ ')} vs hoje</em>`;
+  const vals = ks.map(k => [somaArr(m.rea.canais[k].lucro, H), somaArr(m.esc.canais[k].lucro, H)]), mx = Math.max(1, ...vals.flat().map(Math.abs));
+  const Hm = Math.min(H, 36) - 1, g = GARGALO_TXT[m.gargalo];
+  return `<div class="pr-seg">${HORIZ_PROSP.map(([h, t]) => `<button type="button" class="${h === H ? 'on' : ''}" onclick="prospEstado.horiz=${h}; atualizarProsp()">${t}</button>`).join('')}</div>
+    <div class="pr-res-tot"><div><small>Realista · ${esc((HORIZ_PROSP.find(x => x[0] === H) || [, ''])[1])}</small><strong>${reaisK(tr)}</strong>${dif(dr)}</div><div class="esc"><small>Em escala</small><strong>${reaisK(te)}</strong>${dif(de)}</div></div>
+    <button type="button" class="pr-res-mais" onclick="this.closest('.pr-sim-res').classList.toggle('aberto')">Ver por canal</button>
+    <ul class="pr-res-canais">${ks.map((k, i) => `<li style="--c:${CANAIS_PROSP[k][1]}"><span>${CANAIS_PROSP[k][2]} ${esc(CANAIS_PROSP[k][0])}</span><b>${reaisK(vals[i][0])} <small>→ ${reaisK(vals[i][1])}</small></b><i><u style="width:${(Math.max(0, vals[i][0]) / mx * 100).toFixed(1)}%"></u><s style="width:${(Math.max(0, vals[i][1]) / mx * 100).toFixed(1)}%"></s></i></li>`).join('')}</ul>
+    <div class="pr-res-cap"><span>Máquinas no mês ${Hm + 1}: <b>${Math.round(m.rea.uso[Hm] * 100)}%</b> realista · <b>${Math.round(m.esc.uso[Hm] * 100)}%</b> em escala</span><span>Suas horas: <b>${Math.round(m.esc.usoRaf[Hm] * 100)}%</b> em escala</span><span>Gargalo: <b>${esc(g[0])}</b>${m.gargaloMes ? ` no ${m.gargaloMes}º mês` : ''}</span></div>
+    ${(m.P.maquinasExtra !== PROSP_PADRAO.maquinasExtra || m.P.maqHorasDia !== PROSP_PADRAO.maqHorasDia || m.P.horasRafael !== PROSP_PADRAO.horasRafael) && Math.abs(dr) < 1 && Math.abs(de) < 1 ? `<p class="pr-res-dica">Mudar máquina ou horas não mexeu no lucro${H < 36 ? ' neste horizonte' : ''}: hoje o limite é a <b>demanda</b> (sobra capacidade). ${H < 36 ? 'Veja em 3 anos, ou mexa' : 'Mexa'} nos canais para ver o efeito.</p>` : ''}
+    <p class="cc-nota">Barra cheia = realista · contorno = em escala. Lucro depois de filamento, máquina, taxas, comissões, anúncios e registros; sem o seu salário. No e-book, preço mais alto = menos compradores (suposição: cada 10% a mais no preço tira ~11% dos compradores).</p>`;
 }
 function mudarPremissaProsp(k, v) {
-  prefs.prosp = { ...(prefs.prosp || {}), [k]: v }; salvarPrefsJarvis();
+  prefs.prosp = { ...(prefs.prosp || {}), [k]: v };
+  clearTimeout(prospEstado.tSalvar); prospEstado.tSalvar = setTimeout(salvarPrefsJarvis, 400); // grava sem travar o arrasto
   const d = PROSP_SIM.find(x => x[0] === k), el = $j('pr-v-' + k); if (d && el) el.textContent = d[5](v);
-  clearTimeout(prospEstado.t); prospEstado.t = setTimeout(atualizarProsp, 60); prospEstado.publicadoEm = 0;
+  const l = $j('pr-l-' + k); if (l) l.classList.toggle('mudou', v !== PROSP_PADRAO[k]);
+  prospEstado.publicadoEm = 0;
+  if (!prospEstado.raf) prospEstado.raf = setTimeout(() => { prospEstado.raf = 0; atualizarProsp(true); }, 30); // quase na hora (junta os movimentos do arrasto)
 }
 function voltarPremissasProsp() { delete prefs.prosp; salvarPrefsJarvis(); prospEstado.publicadoEm = 0; const s = $j('pr-sim-caixa'); if (s) s.innerHTML = htmlSimProsp(); atualizarProsp(); }
+/** PATENTES na Prospecção (fase 11, pedido do Rafael 06/10/2026): quanto renderia proteger os modelos do Desenvolvedor — vendendo as peças
+ *  com exclusividade × licenciando os arquivos por mensalidade a outros lojistas. Números do canal 'patentes' do simulador. */
+function htmlPatentesProsp(m) {
+  const sum = (a, h) => somaArr(a, h), R = m.rea.pat, E = m.esc.pat;
+  const pay = S => { let ac = 0; for (let t = 0; t < 36; t++) { ac += S.pecas[t] + S.licencas[t] - S.invest[t]; if (ac > 0 && S.invest.slice(0, t + 1).some(x => x > 0)) return t + 1; } return null; };
+  const acum = S => { let ac = 0; return S.pecas.map((p, t) => (ac += p + S.licencas[t] - S.invest[t])); };
+  const ar = acum(R), ae = acum(E), mx = Math.max(1, ...ar, ...ae), mn = Math.min(0, ...ar, ...ae), W = 320, Hh = 110, y = v => (Hh - 8 - (v - mn) / (mx - mn) * (Hh - 16)).toFixed(1), x = t => (t / 35 * W).toFixed(1);
+  const linha = A => A.map((v, t) => `${t ? 'L' : 'M'}${x(t)},${y(v)}`).join(' ');
+  const card = (tit, ico, sub, rr, ee, extra) => `<div class="pr-pat-card"><small>${ico} ${esc(tit)}</small><p>${esc(sub)}</p><table class="pr-tab"><thead><tr><th></th><th>12 meses</th><th>3 anos</th></tr></thead><tbody><tr><td>Realista</td><td>${reaisK(rr[0])}</td><td>${reaisK(rr[1])}</td></tr><tr><td>Em escala</td><td>${reaisK(ee[0])}</td><td>${reaisK(ee[1])}</td></tr></tbody></table>${extra}</div>`;
+  const pr = pay(m.rea.pat), pe = pay(m.esc.pat);
+  return `<div class="pr-pat">
+    ${card('Vender as peças com exclusividade', '🏷', `A Primos vende a linha própria protegida (${reais(m.P.patPreco)} por peça, ${m.P.patVendas} por modelo por mês) sem cópia barata ao lado — e pode derrubar quem copiar.`, [sum(R.pecas, 12), sum(R.pecas, 36)], [sum(E.pecas, 12), sum(E.pecas, 36)], `<p class="cc-nota">Usa máquina: ${m.P.patModelos ? '~3 h por peça' : '—'}.</p>`)}
+    ${card('Licença dos arquivos por mensalidade', '🔁', `Outros lojistas pagam ${reais(m.P.patMensal)}/mês para imprimir e vender os seus modelos (clube de arquivos com licença comercial, 10% de plataforma).`, [sum(R.licencas, 12), sum(R.licencas, 36)], [sum(E.licencas, 12), sum(E.licencas, 36)], `<p class="cc-nota">Lojistas no 12º mês: ${Math.round(R.lojistas[11])} realista · ${Math.round(E.lojistas[11])} em escala · no 36º: ${Math.round(E.lojistas[35])}. Não usa máquina.</p>`)}
+    <div class="pr-pat-card pr-pat-graf"><small>📈 Acumulado da proteção (peças + licenças − registros)</small>
+      <svg viewBox="0 0 ${W} ${Hh}" aria-label="Lucro acumulado dos modelos protegidos em 36 meses"><line x1="0" x2="${W}" y1="${y(0)}" y2="${y(0)}" class="zero"/><path d="${linha(ar)}" class="rea"/><path d="${linha(ae)}" class="esc"/></svg>
+      <p class="cc-nota"><b style="color:#5e5ce6">━</b> realista ${reaisK(ar[35])} em 3 anos · <b style="color:#b0aeff">━</b> em escala ${reaisK(ae[35])}. Registros: ${reaisK(sum(R.invest, 36))} realista · ${reaisK(sum(E.invest, 36))} em escala. Se paga no ${pr ? pr + 'º mês' : '—'} (realista) · ${pe ? pe + 'º mês' : '—'} (em escala).</p></div>
+    <p class="cc-nota pr-pat-aviso">Estimativa para decidir, não promessa. O valor da licença e o número de lojistas são premissas suas (mude no simulador); o custo do registro depende da tabela atual do INPI (o MEI tem desconto) — confirme com um especialista em propriedade industrial. Só modelos criados pela Primos podem ser protegidos.</p></div>`;
+}
 /** Produto novo: ele digita preço, gramas, horas, canal e quantas vende por mês → o agente diz se vale (lucro/h × o ranking, capacidade). */
 function htmlNovoProsp(m) {
   const n = prospEstado.novo, B = m.B, custo = n.gramas / 1000 * B.custoKg + n.horas * 1.45 + ((B.pc.parametros || {}).embalagem || 0.75);
@@ -9528,14 +9596,16 @@ function renderPaginaProspeccao() {
       <section class="ag-heroi"><div class="ag-heroi-txt"><small>Primos 3D · analista</small><h1>Prospecção</h1><p>${manchete}</p></div>
         <div class="ag-palco">${radarProsp(m)}</div><div class="ag-desca">role para ver tudo<i></i></div></section>
       <section class="ag-sec ag-nums">${[[reaisK(ja), 'já entrou'], [reaisK(m.rea.total(12)), 'realista · 12 meses'], [reaisK(m.esc.total(12)), 'em escala · 12 meses'], [reaisK(m.esc.total(36)), 'em escala · 3 anos']].map(([v, t], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(v)}</strong><small>${esc(t)}</small></div>`).join('')}</section>
+      <section class="ag-sec pr-simu-sec"><header class="pr-simu-tit"><h2>Simulador ao vivo</h2><p>Arraste e veja na hora quanto volta em cada canal, no realista e em escala. Fica salvo neste aparelho e vai para o agente.</p></header>
+        <div class="pr-simu"><div id="pr-sim-caixa">${htmlSimProsp()}</div><aside class="pr-sim-res" id="pr-sim-res" aria-live="polite">${htmlSimRes(m)}</aside></div></section>
       <section class="ag-sec ag-corpo">
         ${ccBloco('Quanto volta, por canal', `<div id="pr-horiz">${htmlHorizProsp(m)}</div>`)}
+        ${ccBloco('🛡 Patentes: quanto podem render os modelos do Desenvolvedor', `<div id="pr-pat">${htmlPatentesProsp(m)}</div>`)}
         ${htmlConsenso('pagina')}
         ${ops.length ? ccBloco(`Oportunidades do dia · ${esc(isoParaBR(r.dia || ''))}`, `<ol class="pr-ops">${ops.map((o, k) => `<li style="--c:${(CANAIS_PROSP[o.canal] || [, COR_PROSP])[1]}; --k:${k}"><span class="n">${k + 1}</span><span><b>${textoAgente(o.titulo)}</b><small>${esc((CANAIS_PROSP[o.canal] || [o.canal || ''])[0])} · ${esc(o.prazo || '')} · confiança ${esc(o.confianca || '')}</small><p>${textoAgente(o.porque || '')}</p>${o.primeiroPasso ? `<p class="passo">Primeiro passo: ${textoAgente(o.primeiroPasso)}</p>` : ''}</span><em>${esc(o.retornoMes || '')}</em></li>`).join('')}</ol>${r.escala ? `<p class="cc-txt"><b>Para escalar:</b> ${textoAgente(r.escala)}</p>` : ''}`) : ''}
         ${ccBloco('Capacidade e gargalo', `<div id="pr-cap">${htmlCapProsp(m)}</div>`)}
         ${ccBloco('Lucro por hora de máquina', `<div id="pr-itens">${htmlItensProsp(m)}</div>`)}
         ${ccBloco('Canal por canal', `<p class="cc-nota">Toque num canal: até agora · realista · em escala · como majorar.</p><div id="pr-canais">${htmlCanaisProsp(m)}</div>`)}
-        ${ccBloco('Simulador', `<p class="cc-nota">Mude as premissas e veja tudo se recalcular (fica salvo neste aparelho e vai para o agente).</p><div id="pr-sim-caixa">${htmlSimProsp()}</div>`)}
         ${ccBloco('Produto novo: vale a pena?', `<div id="pr-novo">${htmlNovoProsp(m)}</div>`)}
         ${ccBloco('Relatório e comando do agente', `<details class="fin-det"><summary>Abrir o relatório de hoje, o comando e as skills</summary>${htmlPainelAgente('prospeccao').replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<button type="button" class="cc-btn ag-abrir"[^>]*>[^<]*<\/button>/, '')}</details>`)}
         <p class="cc-nota pr-fontes">Como o agente calcula: ritmo real de cada canal (com freio quando há poucos dias de dados), analogia e faixa conservadora onde ainda não há venda, capacidade de máquina e de horas suas, e taxas de 2026 (Shopee 20% + R$ 4; Mercado Livre 10–14% + custo fixo abaixo de R$ 79; Kiwify 8,99% + R$ 2,49). É estimativa para decidir, não promessa.</p>
@@ -9545,9 +9615,10 @@ function renderPaginaProspeccao() {
   animarPaginaAgente();
 }
 /** O simulador e os botões redesenham só o que muda (sem mexer nos controles deslizantes). */
-function atualizarProsp() {
+function atualizarProsp(vivo) { // vivo = enquanto arrasta: números direto, sem a animação de contar
   const m = modeloProsp();
-  [['pr-horiz', htmlHorizProsp], ['pr-cap', htmlCapProsp], ['pr-canais', htmlCanaisProsp], ['pr-novo', htmlNovoProsp]].forEach(([id, f]) => { const e = $j(id); if (e) { e.innerHTML = f(m); e.querySelectorAll('.ag-conta').forEach(n => { delete n.dataset.contado; contarNumero(n); }); } });
+  [['pr-sim-res', htmlSimRes], ['pr-horiz', htmlHorizProsp], ['pr-pat', htmlPatentesProsp], ['pr-cap', htmlCapProsp], ['pr-canais', htmlCanaisProsp], ['pr-novo', htmlNovoProsp]].forEach(([id, f]) => { const e = $j(id); if (e) { e.innerHTML = f(m); if (!vivo) e.querySelectorAll('.ag-conta').forEach(n => { delete n.dataset.contado; contarNumero(n); }); else e.querySelectorAll('.ag-conta').forEach(n => { n.dataset.contado = '1'; }); } });
+  const sr = $j('pr-sim-res'); if (sr && vivo) { sr.classList.remove('pisca'); void sr.offsetWidth; sr.classList.add('pisca'); }
   const nums = document.querySelectorAll('#ag-pag.ag .ag-nums .ag-conta'), v = [Object.values(m.jaDeu).reduce((s, x) => s + x, 0), m.rea.total(12), m.esc.total(12), m.esc.total(36)];
   if (cc.pagina === 'prospeccao') nums.forEach((n, i) => { if (v[i] !== undefined) n.textContent = reaisK(v[i]); });
   const radar = document.querySelector('#ag-pag .pr-radar'); if (radar) radar.outerHTML = radarProsp(m);
