@@ -4205,3 +4205,6 @@ body.jv-ouvindo #ag-chat .agc-mic { background: #ff453a; color: #fff; }
 @media (max-width: 520px) { .pt-reg { grid-template-columns: minmax(0, 1fr) auto; } .pt-num { grid-column: 1 / -1; } }
 /* na vitrine do Desenvolvedor: o modelo que a Gestão de Patentes quer proteger */
 .dvs-pat { position: absolute; right: 12px; top: 12px; padding: 5px 10px; border-radius: 999px; background: #ecebff; color: #3a38b8; font-size: 0.74rem; font-weight: 700; }
+/* fase 11: o espaço do J.A.R.V.I.S. — no celular o pensamento aparece inteiro (título + 3 linhas), sem a estrelinha de aviso */
+@media (max-width: 800px) { .jv-dest.jv-pensa span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 0.78rem; } .jv-dest.jv-pensa strong::before { content: none; } }
+.jv-dest.jv-pensa strong { font-weight: 650; }
