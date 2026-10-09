@@ -12,6 +12,11 @@ function changeTab(tabId) {
 // --- UTILITÁRIOS ---
 /** Protege texto digitado pelo usuário antes de ir pra tela (um "<b>" digitado vira texto, não negrito). */
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+/** Texto que vai DENTRO de um onclick="f(...)": vira uma string JS de verdade ("..."), já protegida para o atributo.
+ *  Usar sempre f(${jsa(x)}) — nunca f('${esc(x)}'): o navegador desfaz o &#39; antes de rodar e o dado vira código. */
+function jsa(s) { return esc(JSON.stringify(String(s ?? ''))); }
+/** Só deixa virar link endereço http(s) — um "javascript:" vindo de relatório ou digitado não vira código ao tocar. */
+function urlSegura(u) { const s = String(u ?? '').trim(); return /^https?:\/\/[^\s]+$/i.test(s) ? s : ''; }
 function isoDe(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 function hojeISO() { return isoDe(new Date()); }
 function hojeBR() { return new Date().toLocaleDateString('pt-BR'); }
@@ -23,8 +28,11 @@ let ultimoIdGerado = 0;
 function novoId() { let id = Date.now(); if (id <= ultimoIdGerado) id = ultimoIdGerado + 1; ultimoIdGerado = id; return id; }
 
 let toastTimer = null;
+/** fase 12 (Codex, achado 4): logo depois de uma gravação que FALHOU, nenhum "✓ feito" cobre o aviso de erro. */
+let salvarFalhouEm = 0;
 function toast(msg, ms = 3500) {
   const el = document.getElementById('toast'); if (!el) return;
+  if (Date.now() - salvarFalhouEm < 6000 && !/^⚠️/.test(String(msg))) return;
   el.innerText = msg; el.classList.add('show');
   clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
@@ -333,7 +341,7 @@ function enviarCapa(input) {
 function renderCapas() {
   const el = document.getElementById('capas-lista'); if (!el) return;
   const c = cfgAparencia();
-  const chip = (id, icone, nome, fundo) => `<button type="button" class="capa-chip ${c.capa === id || (!c.capa && id === 'auto') ? 'sel' : ''}" onclick="escolherCapa('${id}')" title="${nome}" ${fundo ? `style="background-image:url('${fundo}')"` : ''}><span>${icone}</span><small>${nome}</small></button>`;
+  const chip = (id, icone, nome, fundo) => `<button type="button" class="capa-chip ${c.capa === id || (!c.capa && id === 'auto') ? 'sel' : ''}" onclick="escolherCapa(${jsa(id)})" title="${nome}" ${fundo ? `style="background-image:url('${fundo}')"` : ''}><span>${icone}</span><small>${nome}</small></button>`;
   el.innerHTML = chip('auto', '🎨', 'Do tema', CAPAS[CAPA_DO_TEMA[c.tema] || 'floresta'][2])
     + Object.entries(CAPAS).map(([k, v]) => chip(k, v[0], v[1], v[2])).join('')
     + chip('url', '🔗', 'Link', c.capaUrl || '')
@@ -443,7 +451,7 @@ async function renderArte(forcar) {
   const el = document.getElementById('arte-conteudo');
   const obra = await carregarObraDoDia(forcar);
   if (!obra) { el.innerHTML = ''; return; }
-  el.innerHTML = `<a href="${esc(obra.link)}" target="_blank" rel="noopener" class="arte-img" title="Ver no ${esc(obra.fonte)}"><img src="${esc(obra.img)}" alt="${esc(obra.titulo)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'arte-erro\\'>🖼️ imagem indisponível (sem internet?)</div>'"></a>
+  el.innerHTML = `<a href="${esc(urlSegura(obra.link))}" target="_blank" rel="noopener" class="arte-img" title="Ver no ${esc(obra.fonte)}"><img src="${esc(obra.img)}" alt="${esc(obra.titulo)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'arte-erro\\'>🖼️ imagem indisponível (sem internet?)</div>'"></a>
     <div class="arte-info"><strong>${esc(obra.titulo)}</strong><small>${esc(obra.autor)}${obra.ano ? ' · ' + esc(String(obra.ano)) : ''}</small>${obra.sobre ? `<p class="pf-arte-sobre">${esc(obra.sobre)}</p>` : ""}<small class="item-date">${esc(obra.fonte)}${obra.aviso ? ' · ' + esc(obra.aviso) : ''}</small></div>`;
 }
 
@@ -1147,7 +1155,7 @@ function renderMesesFin() {
   const meses = []; for (let i = 5; i >= 0; i--) meses.push(somaMes(base, -i));
   const dados = meses.map(m => { const ts = transactions.filter(t => !transacaoPendente(t) && dataTransacao(t).startsWith(m)); return { m, inc: ts.filter(t => t.type === 'income').reduce((a, t) => a + t.amount, 0), exp: ts.filter(t => t.type === 'expense').reduce((a, t) => a + t.amount, 0) }; });
   const max = Math.max(1, ...dados.map(d => Math.max(d.inc, d.exp)));
-  el.innerHTML = dados.map(d => `<div class="mes-col ${d.m === finMonth && finModo === 'mes' ? 'atual' : ''}" onclick="finMonth='${d.m}'; finModo='mes'; redesenharFinancas();" title="Receitas ${formatCurrency(d.inc)} · Despesas ${formatCurrency(d.exp)}">
+  el.innerHTML = dados.map(d => `<div class="mes-col ${d.m === finMonth && finModo === 'mes' ? 'atual' : ''}" onclick="finMonth=${jsa(d.m)}; finModo='mes'; redesenharFinancas();" title="Receitas ${formatCurrency(d.inc)} · Despesas ${formatCurrency(d.exp)}">
       <div class="mes-bars"><div class="mes-bar inc" style="height:${Math.round(d.inc / max * 100)}%"></div><div class="mes-bar exp" style="height:${Math.round(d.exp / max * 100)}%"></div></div>
       <small>${nomeMes(d.m).slice(0, 3)}</small><small class="mes-saldo" style="color:${d.inc - d.exp >= 0 ? '#34c759' : '#ff3b30'}">${formatCurrency(d.inc - d.exp).replace('R$', '').trim()}</small></div>`).join('');
 }
@@ -1304,7 +1312,7 @@ function renderOrcamento() {
           <span class="orc-real" style="color:${estourou ? '#ff3b30' : 'var(--txt2)'}">${formatCurrency(real)}${prev ? ` <small>${pct}%</small>` : ''}</span>
           <span class="item-actions"><button class="mini-btn xs" title="Renomear" onclick="renomearItemOrc(${i.id})">✎</button><button class="mini-btn xs" title="Tirar do orçamento" onclick="removerItemOrc(${i.id})">✕</button></span></div>`;
       }).join('')}
-      <button type="button" class="mini-btn xs" onclick="addItemOrc('${kind}')">＋ rubrica</button></div>`;
+      <button type="button" class="mini-btn xs" onclick="addItemOrc(${jsa(kind)})">＋ rubrica</button></div>`;
   }).join('');
 }
 /** Cria (ou atualiza) a meta "Reserva de emergência" no módulo Negócios. */
@@ -2014,11 +2022,11 @@ function ordenarTarefas(a, b) {
 function renderTaskLists() {
   const el = document.getElementById('task-lists'); if (!el) return;
   const cont = id => tasks.filter(t => !t.done && (id === '__star' ? t.starred : id === '__all' ? true : t.list === id)).length;
-  const aba = (id, nome, icone) => `<span class="${taskView === id ? 'active' : ''}" onclick="verLista('${id}', this)">${icone} ${esc(nome)} <small>${cont(id)}</small></span>`;
+  const aba = (id, nome, icone) => `<span class="${taskView === id ? 'active' : ''}" onclick="verLista(${jsa(id)}, this)">${icone} ${esc(nome)} <small>${cont(id)}</small></span>`;
   el.innerHTML = aba('__star', 'Com estrela', '⭐') + tasklists.map(l => aba(l.id, l.name, '📋')).join('') + aba('__all', 'Todas', '🗂️') +
     `<span class="add-list" onclick="novaLista()">+ Nova lista</span>`;
   const tools = document.getElementById('task-list-tools');
-  if (tools) tools.innerHTML = (taskView !== '__star' && taskView !== '__all') ? `<button class="mini-btn" onclick="renomearLista('${taskView}')" title="Renomear lista">✎ ${esc(listaNome(taskView))}</button>${taskView !== 'padrao' ? `<button class="mini-btn" onclick="apagarLista('${taskView}')" title="Apagar lista">✕</button>` : ''}` : '';
+  if (tools) tools.innerHTML = (taskView !== '__star' && taskView !== '__all') ? `<button class="mini-btn" onclick="renomearLista(${jsa(taskView)})" title="Renomear lista">✎ ${esc(listaNome(taskView))}</button>${taskView !== 'padrao' ? `<button class="mini-btn" onclick="apagarLista(${jsa(taskView)})" title="Apagar lista">✕</button>` : ''}` : '';
   const sel = document.getElementById('task-list-select'); if (sel) sel.innerHTML = tasklists.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
   if (sel && !document.getElementById('task-id').value) sel.value = (taskView !== '__star' && taskView !== '__all') ? taskView : 'padrao';
 }
@@ -2396,7 +2404,7 @@ function todosMarcadores() { const s = new Set(); notes.forEach(n => (n.labels |
 
 function renderPaletaNota() {
   const el = document.getElementById('note-colors'); if (!el) return;
-  el.innerHTML = Object.keys(CORES_NOTA).map(k => [k, corNota(k)]).map(([k, c]) => `<span class="color-dot ${noteColorSel === k ? 'sel' : ''}" style="background:${c.bg}; border-color:${c.borda}" title="${c.nome}" onclick="escolherCorNota('${k}')"></span>`).join('');
+  el.innerHTML = Object.keys(CORES_NOTA).map(k => [k, corNota(k)]).map(([k, c]) => `<span class="color-dot ${noteColorSel === k ? 'sel' : ''}" style="background:${c.bg}; border-color:${c.borda}" title="${c.nome}" onclick="escolherCorNota(${jsa(k)})"></span>`).join('');
 }
 function escolherCorNota(k) { noteColorSel = k; renderPaletaNota(); }
 function alternarTipoNota(tipo, el) {
@@ -2636,7 +2644,7 @@ function renderMateriais() {
   if (!lista.length) { ul.innerHTML = '<li style="justify-content:center; color:#8e8e93; background:transparent; border:none;">Nenhum material aqui.</li>'; return; }
   lista.forEach(m => {
     const cor = temaCor(m.topicId);
-    ul.innerHTML += `<li class="material-item" style="border-left-color:${cor}"><div class="transaction-info" style="flex:1"><span>${(TIPOS_MATERIAL[m.kind] || '📌').slice(0, 2)} ${m.link ? `<a href="${esc(m.link)}" target="_blank" rel="noopener" style="color:var(--txt-forte)">${esc(m.title)} ↗</a>` : esc(m.title)} <small class="category-badge" style="color:${cor}; background:${cor}22">${esc(temaNome(m.topicId))}</small> <small class="item-date">${STATUS_MATERIAL[m.status] || ''}</small></span>
+    ul.innerHTML += `<li class="material-item" style="border-left-color:${cor}"><div class="transaction-info" style="flex:1"><span>${(TIPOS_MATERIAL[m.kind] || '📌').slice(0, 2)} ${urlSegura(m.link) ? `<a href="${esc(urlSegura(m.link))}" target="_blank" rel="noopener" style="color:var(--txt-forte)">${esc(m.title)} ↗</a>` : esc(m.title) + (m.link ? ` <small class="item-date">· ${esc(m.link)}</small>` : '')} <small class="category-badge" style="color:${cor}; background:${cor}22">${esc(temaNome(m.topicId))}</small> <small class="item-date">${STATUS_MATERIAL[m.status] || ''}</small></span>
         <div class="progress-line"><input type="range" min="0" max="100" value="${m.progress || 0}" onchange="progressoMaterial(${m.id}, this.value)" title="Progresso"><small>${m.progress || 0}%</small></div>${m.notes ? `<small class="item-notes">${esc(m.notes)}</small>` : ''}</div>
       <div class="item-actions"><button class="mini-btn" title="Avançar status" onclick="avancarMaterial(${m.id})">${m.status === 'concluido' ? '↩' : '▶'}</button><button class="mini-btn" title="Agendar revisões (1, 7, 30 dias)" onclick="agendarRevisao(${m.id})">🔁</button><button class="mini-btn" title="Editar" onclick="editarMaterial(${m.id})">✎</button><button class="mini-btn" title="Apagar" onclick="removerMaterial(${m.id})">✕</button></div></li>`;
   });
@@ -3222,15 +3230,15 @@ function restaurarAparencia() { prefs.aparencia = Object.assign({}, APARENCIA_PA
 function renderAparencia() {
   const c = cfgAparencia();
   const paleta = document.getElementById('temas-lista');
-  if (paleta) paleta.innerHTML = Object.entries(TEMAS).map(([k, t]) => `<button type="button" class="tema-chip ${c.tema === k ? 'sel' : ''}" onclick="escolherTema('${k}')" style="background:${t[2]}; border-color:${t[3]}"><span>${t[0]}</span><small style="color:${t[3]}">${t[1]}</small></button>`).join('');
+  if (paleta) paleta.innerHTML = Object.entries(TEMAS).map(([k, t]) => `<button type="button" class="tema-chip ${c.tema === k ? 'sel' : ''}" onclick="escolherTema(${jsa(k)})" style="background:${t[2]}; border-color:${t[3]}"><span>${t[0]}</span><small style="color:${t[3]}">${t[1]}</small></button>`).join('');
   const mc = document.getElementById('modo-cor');
-  if (mc) mc.innerHTML = Object.entries(MODOS_COR).map(([k, m]) => `<span class="${c.cores === k ? 'active' : ''}" onclick="escolherModoCor('${k}')">${m[0]} ${m[1]}</span>`).join('');
+  if (mc) mc.innerHTML = Object.entries(MODOS_COR).map(([k, m]) => `<span class="${c.cores === k ? 'active' : ''}" onclick="escolherModoCor(${jsa(k)})">${m[0]} ${m[1]}</span>`).join('');
   document.querySelectorAll('#abas-posicao span').forEach(s => s.classList.toggle('active', s.dataset.pos === c.abas));
   const fa = document.getElementById('arte-fonte'); if (fa) fa.querySelectorAll('span').forEach(s => s.classList.toggle('active', s.dataset.fonte === cfgArte().fonte));
   const al = document.getElementById('arte-ligado'); if (al) al.checked = cfgArte().ligado;
   renderCapas();
   const rel = document.getElementById('relogios-lista');
-  if (rel) rel.innerHTML = Object.entries(RELOGIOS).map(([k, r]) => `<span class="${(c.relogio || 'digital') === k ? 'active' : ''}" onclick="escolherRelogio('${k}')">${r[0]} ${r[1]}</span>`).join('');
+  if (rel) rel.innerHTML = Object.entries(RELOGIOS).map(([k, r]) => `<span class="${(c.relogio || 'digital') === k ? 'active' : ''}" onclick="escolherRelogio(${jsa(k)})">${r[0]} ${r[1]}</span>`).join('');
   const seg = document.getElementById('rel-segundos'); if (seg) seg.checked = !!c.segundos;
   const lista = document.getElementById('abas-ordem');
   if (lista) lista.innerHTML = c.ordem.map((id, i) => {
@@ -3238,9 +3246,9 @@ function renderAparencia() {
     const fixa = id === 'btn-settings' || id === 'btn-focus' || id === 'btn-cerebro';   // as duas pontas não saem do lugar
     return `<li class="aba-linha ${oculta ? 'oculta' : ''}"><span class="aba-nome">${nome}</span>
       <span class="item-actions">
-        <button class="mini-btn xs" title="${fixa ? 'Esta aba fica sempre na ponta' : 'Subir'}" onclick="moverAba('${id}', -1)" ${fixa || i <= 1 ? 'disabled' : ''}>↑</button>
-        <button class="mini-btn xs" title="${fixa ? 'Esta aba fica sempre na ponta' : 'Descer'}" onclick="moverAba('${id}', 1)" ${fixa || i >= c.ordem.length - 2 ? 'disabled' : ''}>↓</button>
-        <button class="mini-btn xs ${oculta ? '' : 'on'}" title="${fixa ? 'Esta aba não pode ser escondida' : (oculta ? 'Mostrar' : 'Esconder')}" onclick="alternarAbaVisivel('${id}')" ${fixa ? 'disabled' : ''}>${oculta ? '🙈' : '👁️'}</button>${fixa ? '<small class="aba-fixa" title="Painel Central fica sempre na primeira posição e Config na última">📌</small>' : ''}
+        <button class="mini-btn xs" title="${fixa ? 'Esta aba fica sempre na ponta' : 'Subir'}" onclick="moverAba(${jsa(id)}, -1)" ${fixa || i <= 1 ? 'disabled' : ''}>↑</button>
+        <button class="mini-btn xs" title="${fixa ? 'Esta aba fica sempre na ponta' : 'Descer'}" onclick="moverAba(${jsa(id)}, 1)" ${fixa || i >= c.ordem.length - 2 ? 'disabled' : ''}>↓</button>
+        <button class="mini-btn xs ${oculta ? '' : 'on'}" title="${fixa ? 'Esta aba não pode ser escondida' : (oculta ? 'Mostrar' : 'Esconder')}" onclick="alternarAbaVisivel(${jsa(id)})" ${fixa ? 'disabled' : ''}>${oculta ? '🙈' : '👁️'}</button>${fixa ? '<small class="aba-fixa" title="Painel Central fica sempre na primeira posição e Config na última">📌</small>' : ''}
       </span></li>`;
   }).join('');
 }
@@ -3420,7 +3428,7 @@ function separarLink(texto) {
 function textoComLink(texto) {
   const { titulo, url, loja } = separarLink(texto);
   if (!url) return esc(titulo);
-  return `${esc(titulo)} <a class="link-chip" href="${esc(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="${esc(url)}">${iconeDoLink(url)}${loja ? ' ' + esc(loja) : ''}</a>`;
+  return `${esc(titulo)} <a class="link-chip" href="${esc(urlSegura(url))}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="${esc(url)}">${iconeDoLink(url)}${loja ? ' ' + esc(loja) : ''}</a>`;
 }
 
 // --- Comprei: item da lista vira entrega ---
@@ -3525,7 +3533,7 @@ function renderEntregas() {
     const st = STATUS_ENTREGA[o.status] || STATUS_ENTREGA.comprado;
     const atrasada = o.status !== 'entregue' && o.eta && o.eta < hoje;
     ul.innerHTML += `<li class="entrega-item" style="border-left-color:${st[2]}"><div class="transaction-info" style="flex:1">
-        <span>${st[0]} ${esc(o.item)} ${o.url ? `<a class="link-chip" href="${esc(o.url)}" target="_blank" rel="noopener">${iconeDoLink(o.url)}${o.store ? ' ' + esc(o.store) : ''}</a>` : (o.store ? `<small class="item-date">${esc(o.store)}</small>` : '')}</span>
+        <span>${st[0]} ${esc(o.item)} ${o.url ? `<a class="link-chip" href="${esc(urlSegura(o.url))}" target="_blank" rel="noopener">${iconeDoLink(o.url)}${o.store ? ' ' + esc(o.store) : ''}</a>` : (o.store ? `<small class="item-date">${esc(o.store)}</small>` : '')}</span>
         <small class="item-date">${st[1]}${o.amount ? ' · ' + formatCurrency(o.amount) : ''} · comprado ${isoParaBR(o.boughtAt)}${o.eta ? ` · previsão <strong style="color:${atrasada ? '#ff3b30' : 'var(--txt2)'}">${rotuloData(o.eta)}</strong>` : ''}${o.deliveredAt ? ` · entregue ${isoParaBR(o.deliveredAt)}` : ''}</small>
         ${o.tracking ? `<small class="item-notes">🔎 ${esc(o.tracking)}</small>` : ''}</div>
       <div class="item-actions">${o.status !== 'entregue' ? `<button class="mini-btn" title="Avançar status" onclick="avancarEntrega(${o.id})">▶</button>` : ''}<button class="mini-btn ${o.status === 'problema' ? 'on' : ''}" title="Marcar problema" onclick="problemaEntrega(${o.id})">⚠️</button><button class="mini-btn" title="Previsão e rastreio" onclick="editarEntrega(${o.id})">✎</button><button class="mini-btn" title="Voltar para a lista de compras" onclick="devolverParaLista(${o.id})">↩️</button><button class="mini-btn" title="Apagar" onclick="removerEntrega(${o.id})">✕</button></div></li>`;
@@ -3679,7 +3687,7 @@ function renderMidia() {
     const t = TIPOS_MIDIA[m.kind] || TIPOS_MIDIA.outro; const s = STATUS_MIDIA[m.status] || STATUS_MIDIA.quero;
     const serie = m.kind === 'serie' || m.kind === 'anime';
     ul.innerHTML += `<li class="midia-item" style="border-left-color:${s[2]}"><div class="transaction-info" style="flex:1">
-        <span>${t[0]} ${m.url ? `<a href="${esc(m.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(m.title)} ${iconeDoLink(m.url)}</a>` : esc(m.title)} <small class="category-badge" style="color:${s[2]}; background:${s[2]}22">${s[1]}</small></span>
+        <span>${t[0]} ${m.url ? `<a href="${esc(urlSegura(m.url))}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${esc(m.title)} ${iconeDoLink(m.url)}</a>` : esc(m.title)} <small class="category-badge" style="color:${s[2]}; background:${s[2]}22">${s[1]}</small></span>
         <small class="item-date">${t[1]}${m.where ? ' · ' + esc(m.where) : ''}${m.who ? ' · indicou: ' + esc(m.who) : ''}${serie && m.season ? ` · T${m.season}E${m.episode || 0}` : ''}${m.watchedAt ? ' · visto ' + isoParaBR(m.watchedAt) : ''}</small>
         <div class="midia-nota">${estrelas(m)}${serie ? `<span class="ep-ctrl"><button class="mini-btn xs" onclick="event.stopPropagation(); proximoEpisodio(${m.id}, -1)">−</button><small>ep</small><button class="mini-btn xs" onclick="event.stopPropagation(); proximoEpisodio(${m.id}, 1)">+</button></span>` : ''}</div>
         ${m.comment ? `<small class="item-notes">${esc(m.comment)}</small>` : ''}</div>
@@ -3701,7 +3709,7 @@ function renderPlaylists() {
   if (!playlists.length) { el.innerHTML = '<div class="stat-line muted">Cole aqui os links das suas playlists (Spotify, YouTube, o que usar) e organize por momento.</div>'; return; }
   const porMomento = {};
   playlists.forEach(p => { (porMomento[p.moment] = porMomento[p.moment] || []).push(p); });
-  el.innerHTML = Object.entries(MOMENTOS).filter(([k]) => porMomento[k]).map(([k, mm]) => `<div class="play-grupo"><h5>${mm[0]} ${mm[1]}</h5><div class="play-chips">${porMomento[k].map(p => `<span class="play-chip"><a href="${esc(p.url)}" target="_blank" rel="noopener">${iconeDoLink(p.url)} ${esc(p.name)}</a><button class="mini-btn xs" title="Apagar" onclick="removerPlaylist(${p.id})">✕</button></span>`).join('')}</div></div>`).join('');
+  el.innerHTML = Object.entries(MOMENTOS).filter(([k]) => porMomento[k]).map(([k, mm]) => `<div class="play-grupo"><h5>${mm[0]} ${mm[1]}</h5><div class="play-chips">${porMomento[k].map(p => `<span class="play-chip"><a href="${esc(urlSegura(p.url))}" target="_blank" rel="noopener">${iconeDoLink(p.url)} ${esc(p.name)}</a><button class="mini-btn xs" title="Apagar" onclick="removerPlaylist(${p.id})">✕</button></span>`).join('')}</div></div>`).join('');
 }
 
 // --- Música: tocador de arquivos do aparelho ---
@@ -3836,10 +3844,10 @@ function renderViagens() {
         ${t.notas ? `<small class="item-notes">${linkify(esc(t.notas))}</small>` : ''}
         <div class="viagem-cols">
           ${['mala', 'docs'].map(lista => `<div><h5>${lista === 'mala' ? '🧳 Mala' : '📄 Documentos'}</h5>
-            ${(t[lista] || []).map((it, i) => `<div class="subtask ${it.done ? 'done' : ''}"><input type="checkbox" ${it.done ? 'checked' : ''} onclick="itemViagem(${t.id}, '${lista}', ${i})"><span class="sub-txt">${esc(it.text)}</span><button class="mini-btn xs" onclick="removerItemViagem(${t.id}, '${lista}', ${i})">✕</button></div>`).join('')}
-            <div class="note-add add-${lista}"><input type="text" placeholder="+ item" onkeydown="if (event.key === 'Enter') { event.preventDefault(); addItemViagem(${t.id}, '${lista}', this); }"><button class="mini-btn" onclick="addItemViagem(${t.id}, '${lista}', this.previousElementSibling)">＋</button></div></div>`).join('')}
+            ${(t[lista] || []).map((it, i) => `<div class="subtask ${it.done ? 'done' : ''}"><input type="checkbox" ${it.done ? 'checked' : ''} onclick="itemViagem(${t.id}, ${jsa(lista)}, ${i})"><span class="sub-txt">${esc(it.text)}</span><button class="mini-btn xs" onclick="removerItemViagem(${t.id}, ${jsa(lista)}, ${i})">✕</button></div>`).join('')}
+            <div class="note-add add-${lista}"><input type="text" placeholder="+ item" onkeydown="if (event.key === 'Enter') { event.preventDefault(); addItemViagem(${t.id}, ${jsa(lista)}, this); }"><button class="mini-btn" onclick="addItemViagem(${t.id}, ${jsa(lista)}, this.previousElementSibling)">＋</button></div></div>`).join('')}
           <div><h5>🎟️ Reservas</h5>
-            ${(t.reservas || []).map((r, i) => `<div class="reserva">${TIPOS_RESERVA[r.tipo] || '📌'} ${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.desc)} ${iconeDoLink(r.url)}</a>` : esc(r.desc)}${r.valor ? ` <small>${formatCurrency(r.valor)}</small>` : ''}<button class="mini-btn xs" onclick="removerReserva(${t.id}, ${i})">✕</button></div>`).join('') || '<div class="stat-line muted">nenhuma</div>'}
+            ${(t.reservas || []).map((r, i) => `<div class="reserva">${TIPOS_RESERVA[r.tipo] || '📌'} ${r.url ? `<a href="${esc(urlSegura(r.url))}" target="_blank" rel="noopener">${esc(r.desc)} ${iconeDoLink(r.url)}</a>` : esc(r.desc)}${r.valor ? ` <small>${formatCurrency(r.valor)}</small>` : ''}<button class="mini-btn xs" onclick="removerReserva(${t.id}, ${i})">✕</button></div>`).join('') || '<div class="stat-line muted">nenhuma</div>'}
             <button class="mini-btn" style="margin-top:6px" onclick="addReserva(${t.id})">＋ reserva</button></div>
         </div></div>` : ''}
     </div></li>`;
@@ -4719,8 +4727,8 @@ function mostrarCartaoCerebro(n) {
   const viz = [...vizinhosCer(n)].sort((a, b) => ({ centro: 0, area: 1, secao: 2, item: 3 }[a.tipo] - { centro: 0, area: 1, secao: 2, item: 3 }[b.tipo]));
   const podeAbrir = !!(n.abrir && n.abrir.tab);
   el.innerHTML = `<div class="cer-cartao-topo"><span class="cer-ponto" style="background:${esc(n.cor)}"></span><div style="min-width:0; flex:1"><strong>${esc(n.nome)}</strong><small>${TIPO_CEREBRO[n.tipo]}${area && n.tipo !== 'area' ? ' · ' + esc(area.nome) : ''} · ${viz.length} ligaç${viz.length === 1 ? 'ão' : 'ões'}</small></div><button type="button" class="close-modal" onclick="cer.sel=null; esconderCartaoCerebro(); pedirQuadroCerebro()" aria-label="Fechar">✕</button></div>
-    <div class="cer-acoes">${podeAbrir ? `<button type="button" class="btn cer-abrir" onclick="abrirNoCerebro(cer.mapa['${esc(n.id)}'])">Abrir ›</button>` : ''}${n.tipo !== 'item' && n.tipo !== 'centro' ? `<button type="button" class="btn" onclick="novaNotaDoCerebro('${esc(n.id)}')">＋ Nota aqui</button>` : ''}</div>
-    ${viz.length ? `<div class="cer-viz">${viz.slice(0, 24).map(v => `<button type="button" class="chip" onclick="focarNoCerebro(cer.mapa['${esc(v.id)}'])"><span class="cer-ponto sm" style="background:${esc(v.cor)}"></span>${esc(v.nome)}</button>`).join('')}${viz.length > 24 ? `<span class="item-date">+${viz.length - 24}</span>` : ''}</div>` : ''}
+    <div class="cer-acoes">${podeAbrir ? `<button type="button" class="btn cer-abrir" onclick="abrirNoCerebro(cer.mapa[${jsa(n.id)}])">Abrir ›</button>` : ''}${n.tipo !== 'item' && n.tipo !== 'centro' ? `<button type="button" class="btn" onclick="novaNotaDoCerebro(${jsa(n.id)})">＋ Nota aqui</button>` : ''}</div>
+    ${viz.length ? `<div class="cer-viz">${viz.slice(0, 24).map(v => `<button type="button" class="chip" onclick="focarNoCerebro(cer.mapa[${jsa(v.id)}])"><span class="cer-ponto sm" style="background:${esc(v.cor)}"></span>${esc(v.nome)}</button>`).join('')}${viz.length > 24 ? `<span class="item-date">+${viz.length - 24}</span>` : ''}</div>` : ''}
     ${!podeAbrir && n.tipo === 'secao' ? `<p class="hint" style="margin:8px 0 0">Esta seção cresce com as suas notas: crie uma nota aqui (ou use o marcador <strong>${esc(semAcentoCer(n.nome))}</strong>) e ela vira uma bolinha ligada a esta seção.</p>` : ''}`;
   el.hidden = false;
   if (jv.modo === '3d') { document.getElementById('jv-painel').hidden = true; const bt = document.getElementById('jv-abrir-menu'); if (bt) bt.hidden = true; ajustarDeslocamentoJarvis(); } // no 3D, uma janelinha por vez
@@ -4753,7 +4761,7 @@ function buscarNoCerebro(v) {
   const el = document.getElementById('cer-busca-res'); if (!el) return;
   const q = semAcentoCer(v); if (!q) { el.hidden = true; el.innerHTML = ''; return; }
   const achados = cer.nos.filter(n => semAcentoCer(n.nome).includes(q)).sort((a, b) => ({ centro: 0, area: 1, secao: 2, item: 3 }[a.tipo] - { centro: 0, area: 1, secao: 2, item: 3 }[b.tipo])).slice(0, 8);
-  el.innerHTML = achados.length ? achados.map(n => `<button type="button" onclick="document.getElementById('cer-busca').value=''; buscarNoCerebro(''); focarNoCerebro(cer.mapa['${esc(n.id)}'])"><span class="cer-ponto sm" style="background:${esc(n.cor)}"></span>${esc(n.nome)}<small>${TIPO_CEREBRO[n.tipo]}</small></button>`).join('') : '<div class="item-date" style="padding:8px 10px">Nada encontrado</div>';
+  el.innerHTML = achados.length ? achados.map(n => `<button type="button" onclick="document.getElementById('cer-busca').value=''; buscarNoCerebro(''); focarNoCerebro(cer.mapa[${jsa(n.id)}])"><span class="cer-ponto sm" style="background:${esc(n.cor)}"></span>${esc(n.nome)}<small>${TIPO_CEREBRO[n.tipo]}</small></button>`).join('') : '<div class="item-date" style="padding:8px 10px">Nada encontrado</div>';
   el.hidden = false;
 }
 function renderLegendaCerebro() {
@@ -4977,9 +4985,9 @@ function htmlAvisosAgentes() {
   ac.avisos = L; // fase 11: "Responder" (vai para a conversa na página do agente) + a barrinha que manda direto para a conversa dele
   return `<small class="jv-dest-rot jv-ag-rot"><span class="jv-dest-pulso"></span>Os agentes pediram para te avisar</small><div class="jv-ag-lista">${L.map((a, i) => { const nm = esc(a.nome), id = esc(a.id), eco = htmlEcoAviso(a.id), txt = a.txt.length > 190 ? a.txt.slice(0, 187).replace(/\s+\S*$/, '') + '…' : a.txt;
     return `<div class="jv-ag-aviso" style="--urg:${a.u.cor}; --ag:${COR_AGENTE[a.id] || '#8e8e93'}; animation-delay:${(i + 3) * 80}ms"><i aria-hidden="true"></i>
-      <small role="button" tabindex="0" onclick="abrirCentral('primos'); abrirAgenteCentral('${id}')" onkeydown="if (event.key === 'Enter') this.click()">${nm} · ${a.u.nome}</small>
-      <p class="jv-ag-txt"><span role="button" tabindex="0" onclick="abrirCentral('primos'); abrirAgenteCentral('${id}')" onkeydown="if (event.key === 'Enter') this.click()">${esc(txt)}</span> <button type="button" class="jv-ag-resp" onclick="responderAviso('${id}', ${i})" aria-label="Responder ao ${nm}: abre a conversa na página dele">Responder</button></p>
-      <form class="jv-ag-barra" onsubmit="enviarAvisoRapido(event, '${id}', ${i})"><input type="text" placeholder="Escreva para ${nm}…" value="${esc(ac.rascunho[a.id] || '')}" oninput="ac.rascunho['${id}'] = this.value" autocomplete="off" enterkeyhint="send" aria-label="Mensagem rápida para ${nm}"><button type="submit" aria-label="Enviar para ${nm}">↑</button></form>
+      <small role="button" tabindex="0" onclick="abrirCentral('primos'); abrirAgenteCentral(${jsa(id)})" onkeydown="if (event.key === 'Enter') this.click()">${nm} · ${a.u.nome}</small>
+      <p class="jv-ag-txt"><span role="button" tabindex="0" onclick="abrirCentral('primos'); abrirAgenteCentral(${jsa(id)})" onkeydown="if (event.key === 'Enter') this.click()">${esc(txt)}</span> <button type="button" class="jv-ag-resp" onclick="responderAviso(${jsa(id)}, ${i})" aria-label="Responder ao ${nm}: abre a conversa na página dele">Responder</button></p>
+      <form class="jv-ag-barra" onsubmit="enviarAvisoRapido(event, ${jsa(id)}, ${i})"><input type="text" placeholder="Escreva para ${nm}…" value="${esc(ac.rascunho[a.id] || '')}" oninput="ac.rascunho[${jsa(id)}] = this.value" autocomplete="off" enterkeyhint="send" aria-label="Mensagem rápida para ${nm}"><button type="submit" aria-label="Enviar para ${nm}">↑</button></form>
       <p class="jv-ag-eco" id="jvag-eco-${id}" role="status"${eco ? '' : ' hidden'}>${eco}</p></div>`; }).join('')}</div>`;
 }
 function addDiasISO(iso, n) { const [y, m, d] = iso.split('-').map(Number); return isoDe(new Date(y, m - 1, d + n)); }
@@ -5074,7 +5082,7 @@ function abrirDestaque(i) {
   el.innerHTML = `<div class="jvp-janela jvm-janela entrando" style="--area:${cor}">
     <header class="jvp-topo jvm-topo"><span class="jvm-ico jvd-ico">✦</span><div class="jvp-marca"><strong>${esc(d.titulo)}</strong><small>Destaque do J.A.R.V.I.S.${d.ate ? ` · até ${isoParaBR(d.ate).slice(0, 5)}` : ''}</small></div><button type="button" class="jv-x" onclick="fecharDestaque()" aria-label="Fechar">✕</button></header>
     <div class="jvp-corpo">${d.resumo ? falaHTML(esc(d.resumo)) : ''}
-      ${(d.grupos || []).map(g => `<div class="jvd-grupo"><h5>${seloLicenca(g.status || 'verificar')} ${esc(g.nome || '')}</h5><div class="jvd-links">${(g.itens || []).map(it => `<a class="jvd-link" href="${esc(it.url || '#')}" target="_blank" rel="noopener"><div><strong>${esc(it.titulo || '')}</strong><small>${esc([it.autor, it.info].filter(Boolean).join(' · '))}</small></div><em aria-hidden="true">↗</em></a>`).join('')}</div></div>`).join('')}
+      ${(d.grupos || []).map(g => `<div class="jvd-grupo"><h5>${seloLicenca(g.status || 'verificar')} ${esc(g.nome || '')}</h5><div class="jvd-links">${(g.itens || []).map(it => `<a class="jvd-link" href="${esc(urlSegura(it.url) || '#')}" target="_blank" rel="noopener"><div><strong>${esc(it.titulo || '')}</strong><small>${esc([it.autor, it.info].filter(Boolean).join(' · '))}</small></div><em aria-hidden="true">↗</em></a>`).join('')}</div></div>`).join('')}
       ${d.rodape ? `<p class="jv-dica">${esc(d.rodape)}</p>` : ''}
       <button type="button" class="btn jv-mais" onclick="fecharDestaque(); abrirChatJarvis({ contexto: ${JSON.stringify(d.titulo).replace(/"/g, '&quot;')}, area: ${JSON.stringify(d.area || null).replace(/"/g, '&quot;')} })">Conversar com o J.A.R.V.I.S. sobre isso ›</button></div></div>`;
   if (el.hidden) empilharCamada('destaque', fecharDestaque);
@@ -5200,7 +5208,7 @@ function falaHTML(texto) { return `<div class="jv-fala"><span class="jv-glifo"><
 function indicadoresHTML(ind) { return ind.length ? `<div class="jv-ind">${ind.map(([v, r]) => `<div><strong>${esc(v)}</strong><small>${esc(r)}</small></div>`).join('')}</div>` : ''; }
 function setoresHTML(area) {
   const setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === area);
-  return `<div class="jv-setores">${setores.map(s => `<button type="button" class="chip" onclick="irParaNoJarvis('${esc(s.id)}')">${esc(s.nome)}</button>`).join('')}</div>`;
+  return `<div class="jv-setores">${setores.map(s => `<button type="button" class="chip" onclick="irParaNoJarvis(${jsa(s.id)})">${esc(s.nome)}</button>`).join('')}</div>`;
 }
 function htmlArea(area) {
   const a = AREAS_CEREBRO.find(x => x.id === area); if (!a) return '';
@@ -5212,7 +5220,7 @@ function htmlArea(area) {
   if (area === 'familia') return topo + htmlFamilia();
   const an = analiseAreaJarvis(area);
   return topo + falaHTML(an.fala) + linhaNivel(area) + indicadoresHTML(an.ind) + setoresHTML(area)
-    + (an.abrir ? `<button type="button" class="btn jv-abrir" onclick="changeTab('${an.abrir[0]}')">Abrir ${esc(an.abrir[1])} ›</button>` : '');
+    + (an.abrir ? `<button type="button" class="btn jv-abrir" onclick="changeTab(${jsa(an.abrir[0])})">Abrir ${esc(an.abrir[1])} ›</button>` : '');
 }
 /** Resumo das áreas simples (regras locais). */
 function analiseAreaJarvis(area) {
@@ -5316,7 +5324,7 @@ function htmlBarrasAgentes() {
   const av = avisosAgentes(), por = {}; av.forEach((x, k) => { por[x.id] = { ...x, k }; });
   const ags = agentesCentral().slice().sort((a, b) => (por[a.id] ? por[a.id].k : 99) - (por[b.id] ? por[b.id].k : 99));
   return `<div class="ag-barras">${ags.map((a, i) => { const x = por[a.id], st = estadoAgente(a);
-    return `<button type="button" class="ag-barra" style="--k:${i}; --urg:${x ? x.u.cor : st.nivel === 'ok' ? '#30d158' : '#636366'}" onclick="abrirPaginaAgente('${esc(a.id)}')"><i aria-hidden="true"></i><span><b>${esc(a.nome)}</b><small>${x ? '› ' + esc(x.txt) : esc(st.metrica || a.funcao || '')}</small></span><em aria-hidden="true">›</em></button>`; }).join('')}</div>`;
+    return `<button type="button" class="ag-barra" style="--k:${i}; --urg:${x ? x.u.cor : st.nivel === 'ok' ? '#30d158' : '#636366'}" onclick="abrirPaginaAgente(${jsa(a.id)})"><i aria-hidden="true"></i><span><b>${esc(a.nome)}</b><small>${x ? '› ' + esc(x.txt) : esc(st.metrica || a.funcao || '')}</small></span><em aria-hidden="true">›</em></button>`; }).join('')}</div>`;
 }
 /** Visão geral → toque na Primos: o J.A.R.V.I.S. (a luz) vai rapidinho para o canto esquerdo, a Primos aparece ao lado e os agentes em barras. */
 function renderAgentesFoco(a) {
@@ -5327,10 +5335,10 @@ function renderAgentesFoco(a) {
     const h = heroiArea(a.id);
     if (a.id === 'eng') return `<div class="jvf-heroi"><h2>${h.titulo}</h2><p>${h.fala}</p></div><p class="jvf-sub">Seus agentes · toque para abrir</p>${htmlBarrasAgentesEng()}`;
     return `<div class="jvf-heroi"><h2>${h.titulo}</h2><p>${h.fala}</p>${h.ind.length ? `<div class="jvf-ind">${h.ind.map(([v, r]) => `<div><strong>${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</div>` : ''}</div>
-      <p class="jvf-sub">Setores · toque para abrir</p><div class="ag-barras">${(a.secoes || []).map(([nome], i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${a.cor}" onclick="abrirMenuArea('${a.id}')"><i aria-hidden="true"></i><span><b>${esc(nome)}</b></span><em aria-hidden="true">›</em></button>`).join('')}</div>`; };
+      <p class="jvf-sub">Setores · toque para abrir</p><div class="ag-barras">${(a.secoes || []).map(([nome], i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${a.cor}" onclick="abrirMenuArea(${jsa(a.id)})"><i aria-hidden="true"></i><span><b>${esc(nome)}</b></span><em aria-hidden="true">›</em></button>`).join('')}</div>`; };
   if (!el.hidden && el.dataset.area === a.id) { const b = el.querySelector('.jvf-corpo'); if (b) b.innerHTML = corpo(); return; }
   el.dataset.area = a.id;
-  el.innerHTML = `<div class="jvf-topo"><span class="jvf-area" style="--area:${a.id === 'mercado' ? '#ffd60a' : '#ffffff'}">${iconeAreaSVG(a.id)}</span><div class="jvf-tit"><small>J.A.R.V.I.S. › área</small><strong>${esc(a.nome)}</strong></div><button type="button" class="jvf-menu" onclick="abrirMenuArea('${a.id}')">Abrir o menu <em aria-hidden="true">›</em></button></div><div class="jvf-corpo">${corpo()}</div>`;
+  el.innerHTML = `<div class="jvf-topo"><span class="jvf-area" style="--area:${a.id === 'mercado' ? '#ffd60a' : '#ffffff'}">${iconeAreaSVG(a.id)}</span><div class="jvf-tit"><small>J.A.R.V.I.S. › área</small><strong>${esc(a.nome)}</strong></div><button type="button" class="jvf-menu" onclick="abrirMenuArea(${jsa(a.id)})">Abrir o menu <em aria-hidden="true">›</em></button></div><div class="jvf-corpo">${corpo()}</div>`;
   el.hidden = false; cer.classList.add('jv-foco-ag');
 }
 /** A página de menu da área (a Primos 3D abre a página própria dela). */
@@ -5364,11 +5372,11 @@ function renderMenuArea() {
     <header class="jvp-topo jvm-topo"><span class="jvm-ico">${iconeAreaSVG(a.id, '#ffffff')}</span><div class="jvp-marca"><strong>${esc(a.nome)}</strong><small>Menu do J.A.R.V.I.S.</small></div>
       <span class="jvp-nivel${areaAtualizando(a.id) ? ' atualizando' : ''}" style="--status:${COR_NIVEL[nv.n]}" title="J.A.R.V.I.S.: ${NOME_NIVEL[nv.n]}"></span><button type="button" class="jv-x" onclick="fecharMenuArea()" aria-label="Fechar">✕</button></header>
     <div class="jvp-acoes">
-      <label class="jvp-acao"><span class="jvp-ico">${SVG_CLIPE}</span><span>Mandar print</span><input type="file" accept="image/*" multiple hidden onchange="anexarPrintJarvis(this, '${esc(a.nome)}', '${a.id}')"></label>
-      <button type="button" class="jvp-acao jvp-falar" onclick="abrirVozJarvis('${esc(a.nome)}', '${a.id}')"><span class="jvp-ico">${HALO}</span><span>J.A.R.V.I.S.</span></button>
-      <button type="button" class="jvp-acao" onclick="notaMenuArea('${esc(alvoNota)}')"><span class="jvp-ico jvm-mais">＋</span><span>Nova nota</span></button>
+      <label class="jvp-acao"><span class="jvp-ico">${SVG_CLIPE}</span><span>Mandar print</span><input type="file" accept="image/*" multiple hidden onchange="anexarPrintJarvis(this, ${jsa(a.nome)}, ${jsa(a.id)})"></label>
+      <button type="button" class="jvp-acao jvp-falar" onclick="abrirVozJarvis(${jsa(a.nome)}, ${jsa(a.id)})"><span class="jvp-ico">${HALO}</span><span>J.A.R.V.I.S.</span></button>
+      <button type="button" class="jvp-acao" onclick="notaMenuArea(${jsa(alvoNota)})"><span class="jvp-ico jvm-mais">＋</span><span>Nova nota</span></button>
     </div>
-    <nav class="jvp-abas">${abas.map(([k, n]) => `<button type="button" data-aba="${esc(k)}" class="${jv.abaMenu === k ? 'on' : ''}" onclick="abaMenuArea('${esc(k)}')">${esc(n)}</button>`).join('')}</nav>
+    <nav class="jvp-abas">${abas.map(([k, n]) => `<button type="button" data-aba="${esc(k)}" class="${jv.abaMenu === k ? 'on' : ''}" onclick="abaMenuArea(${jsa(k)})">${esc(n)}</button>`).join('')}</nav>
     <div class="jvp-corpo" id="jv-menu-corpo">${eng ? htmlAbaEng(jv.abaMenu) : jv.abaMenu === 'resumo' ? htmlResumoMenu(a) : htmlSetorMenu(cer.mapa[jv.abaMenu])}</div>
   </div>`;
   const c = $j('jv-menu-corpo'); if (c) c.scrollTop = y;
@@ -5380,18 +5388,18 @@ function htmlResumoMenu(a) {
   if (a.id === 'familia') return htmlFamilia(true);
   const an = analiseAreaJarvis(a.id), setores = cer.nos.filter(n => n.tipo === 'secao' && n.area === a.id);
   return falaHTML(an.fala) + linhaNivel(a.id) + indicadoresHTML(an.ind)
-    + `<div class="jv-bloco"><h5>Setores</h5><div class="jvm-setores">${setores.map(s => { const q = [...vizinhosCer(s)].filter(v => v.tipo === 'item').length; return `<button type="button" onclick="abaMenuArea('${esc(s.id)}')"><strong>${esc(s.nome)}</strong><small>${q ? plural(q, 'item', 'itens') : 'nada ainda'}</small><em aria-hidden="true">›</em></button>`; }).join('')}</div></div>`
-    + (an.abrir ? `<button type="button" class="btn jv-abrir" onclick="fecharMenuArea(); changeTab('${an.abrir[0]}')">Abrir ${esc(an.abrir[1])} ›</button>` : '');
+    + `<div class="jv-bloco"><h5>Setores</h5><div class="jvm-setores">${setores.map(s => { const q = [...vizinhosCer(s)].filter(v => v.tipo === 'item').length; return `<button type="button" onclick="abaMenuArea(${jsa(s.id)})"><strong>${esc(s.nome)}</strong><small>${q ? plural(q, 'item', 'itens') : 'nada ainda'}</small><em aria-hidden="true">›</em></button>`; }).join('')}</div></div>`
+    + (an.abrir ? `<button type="button" class="btn jv-abrir" onclick="fecharMenuArea(); changeTab(${jsa(an.abrir[0])})">Abrir ${esc(an.abrir[1])} ›</button>` : '');
 }
 /** Um setor: os itens ligados a ele (tocar abre), "＋ Nota" com o marcador do setor e o atalho para a aba do app. */
 function htmlSetorMenu(s) {
   if (!s) return '';
   const itens = [...vizinhosCer(s)].filter(v => v.tipo === 'item').sort((x, y) => x.nome.localeCompare(y.nome, 'pt-BR'));
   const aba = s.abrir && s.abrir.tab ? nomeDaAba(s.abrir.tab) : '';
-  let h = itens.length ? `<div class="jv-bloco"><h5>${esc(s.nome)} · ${plural(itens.length, 'item', 'itens')}</h5><ul class="jvm-itens">${itens.map(n => `<li><button type="button" onclick="abrirItemMenu('${esc(n.id)}')"><span class="cer-ponto sm" style="background:${esc(n.cor)}"></span><span class="jvm-nome">${esc(n.nome)}</span><em aria-hidden="true">›</em></button></li>`).join('')}</ul></div>`
+  let h = itens.length ? `<div class="jv-bloco"><h5>${esc(s.nome)} · ${plural(itens.length, 'item', 'itens')}</h5><ul class="jvm-itens">${itens.map(n => `<li><button type="button" onclick="abrirItemMenu(${jsa(n.id)})"><span class="cer-ponto sm" style="background:${esc(n.cor)}"></span><span class="jvm-nome">${esc(n.nome)}</span><em aria-hidden="true">›</em></button></li>`).join('')}</ul></div>`
     : falaHTML(`Ainda não há nada em <b>${esc(s.nome)}</b>. Crie a primeira nota aqui: ela entra neste setor e vira uma bolinha no cérebro.`);
-  return h + (aba ? `<button type="button" class="btn jv-abrir" onclick="fecharMenuArea(); abrirNoCerebro(cer.mapa['${esc(s.id)}'])">Abrir ${esc(aba)} ›</button>` : '')
-    + `<button type="button" class="btn jv-mais" onclick="notaMenuArea('${esc(s.id)}')">＋ Nota em ${esc(s.nome)}</button><button type="button" class="btn jv-mais" onclick="verNoCerebroMenu('${esc(s.id)}')">Ver no cérebro</button>`;
+  return h + (aba ? `<button type="button" class="btn jv-abrir" onclick="fecharMenuArea(); abrirNoCerebro(cer.mapa[${jsa(s.id)}])">Abrir ${esc(aba)} ›</button>` : '')
+    + `<button type="button" class="btn jv-mais" onclick="notaMenuArea(${jsa(s.id)})">＋ Nota em ${esc(s.nome)}</button><button type="button" class="btn jv-mais" onclick="verNoCerebroMenu(${jsa(s.id)})">Ver no cérebro</button>`;
 }
 function nomeDaAba(tab) { const b = document.querySelector(`#btn-${tab} .tab-lbl`); return b ? b.textContent.trim() : tab; }
 function abrirItemMenu(id) { const n = cer.mapa[id]; if (!n) return; fecharMenuArea(); if (n.abrir && n.abrir.tab) abrirNoCerebro(n); else irParaNoJarvis(id); }
@@ -5423,7 +5431,7 @@ function agenteEng(id) { return AGENTES_ENG.find(a => a.id === id || a.aba === i
 function htmlBarrasAgentesEng() {
   const d = engenhariaDados || {}, q = { projetos: (d.projetos || []).length, orcamentos: ((d.orcamentos || {}).obras || []).length, estudos: ((d.estudos || {}).disciplinas || []).length, normas: (d.normas || []).length };
   const met = { projetos: q.projetos && plural(q.projetos, 'projeto na cartilha', 'projetos na cartilha'), orcamentos: q.orcamentos && plural(q.orcamentos, 'grupo de obras orçadas', 'grupos de obras orçadas'), estudos: q.estudos && plural(q.estudos, 'bloco de matérias', 'blocos de matérias'), normas: q.normas && plural(q.normas, 'norma de referência', 'normas de referência') };
-  return `<div class="ag-barras">${AGENTES_ENG.map((a, i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${q[a.aba] ? '#30d158' : '#636366'}" onclick="abrirPaginaEng('${a.aba}')"><i aria-hidden="true"></i><span><b>${esc(a.nome)}</b><small>${esc(met[a.aba] || a.funcao)}</small></span><em aria-hidden="true">›</em></button>`).join('')}<button type="button" class="ag-barra" style="--k:${AGENTES_ENG.length}; --urg:#0a84ff" onclick="abrirPaginaEng('curriculo')"><i aria-hidden="true"></i><span><b>Currículo</b><small>Alcance, Laboratório de Solos, Dinâmica, IFMG e UFV</small></span><em aria-hidden="true">›</em></button></div>`;
+  return `<div class="ag-barras">${AGENTES_ENG.map((a, i) => `<button type="button" class="ag-barra" style="--k:${i}; --urg:${q[a.aba] ? '#30d158' : '#636366'}" onclick="abrirPaginaEng(${jsa(a.aba)})"><i aria-hidden="true"></i><span><b>${esc(a.nome)}</b><small>${esc(met[a.aba] || a.funcao)}</small></span><em aria-hidden="true">›</em></button>`).join('')}<button type="button" class="ag-barra" style="--k:${AGENTES_ENG.length}; --urg:#0a84ff" onclick="abrirPaginaEng('curriculo')"><i aria-hidden="true"></i><span><b>Currículo</b><small>Alcance, Laboratório de Solos, Dinâmica, IFMG e UFV</small></span><em aria-hidden="true">›</em></button></div>`;
 }
 function conversarComAgenteEng(id) {
   const a = agenteEng(id); if (!a) return;
@@ -5437,7 +5445,7 @@ function falarComAgenteEng(id) {
 function htmlCabecaAgenteEng(a) {
   return `<div class="jv-bloco eng-agente"><h5>Agente ${esc(a.nome)}</h5><p class="eng-funcao">${esc(a.funcao)}</p>
     <div class="jv-setores">${a.skills.map(s => `<span class="chip">${esc(s)}</span>`).join('')}</div>
-    <div class="eng-acoes"><button type="button" class="btn" onclick="abrirPaginaEng('${a.aba}')">Abrir a página ›</button><button type="button" class="btn" onclick="fecharMenuArea(); conversarComAgenteEng('${a.id}')">Conversar</button><button type="button" class="btn" onclick="fecharMenuArea(); falarComAgenteEng('${a.id}')">Falar por voz</button></div></div>`;
+    <div class="eng-acoes"><button type="button" class="btn" onclick="abrirPaginaEng(${jsa(a.aba)})">Abrir a página ›</button><button type="button" class="btn" onclick="fecharMenuArea(); conversarComAgenteEng(${jsa(a.id)})">Conversar</button><button type="button" class="btn" onclick="fecharMenuArea(); falarComAgenteEng(${jsa(a.id)})">Falar por voz</button></div></div>`;
 }
 function htmlAbaEng(aba) {
   const d = engenhariaDados;
@@ -5535,13 +5543,13 @@ function corpoPaginaEng(aba) {
 function renderPaginaEng(aba) {
   const el = $j('ag-pag'); if (!el) return; const P = PAG_ENG[aba] || PAG_ENG.projetos, ag = agenteEng(aba), nums = numerosEng(aba);
   el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Engenharia Civil${ag ? ' · agente' : ''}</small><strong>${esc(P.titulo)}</strong></div>
-      <button type="button" class="ag-falar" onclick="${ag ? `falarComAgenteEng('${ag.id}')` : `abrirChatJarvis({ contexto: 'Engenharia Civil › currículo', area: 'eng' })`}">${ag ? '🎙 Falar' : '💬 Conversar'}</button></header>
+      <button type="button" class="ag-falar" onclick="${ag ? `falarComAgenteEng(${jsa(ag.id)})` : `abrirChatJarvis({ contexto: 'Engenharia Civil › currículo', area: 'eng' })`}">${ag ? '🎙 Falar' : '💬 Conversar'}</button></header>
     <i class="ag-progresso" id="ag-progresso" style="--cor:#0a84ff"></i>
     <div class="ag-rolo eng-pag" id="ag-rolo" style="--cor:#0a84ff">
       <section class="ag-heroi"><div class="ag-heroi-txt"><small>Engenharia Civil</small><h1>${esc(P.titulo)}</h1><p>${esc(P.sub)}</p></div><div class="ag-palco eng-palco">${palcoEng(aba)}</div><div class="ag-desca">role para ver tudo<i></i></div></section>
       <section class="ag-sec ag-nums">${nums.map(([v, r], k) => `<div class="ag-num" style="--k:${k}"><strong class="ag-conta">${esc(String(v))}</strong><small>${esc(r)}</small></div>`).join('')}</section>
       ${corpoPaginaEng(aba)}
-      <section class="ag-sec ag-corpo"><nav class="eng-outras">${Object.keys(PAG_ENG).filter(k => k !== aba).map(k => `<button type="button" onclick="abrirPaginaEng('${k}')">${esc(PAG_ENG[k].titulo)} ›</button>`).join('')}</nav></section>
+      <section class="ag-sec ag-corpo"><nav class="eng-outras">${Object.keys(PAG_ENG).filter(k => k !== aba).map(k => `<button type="button" onclick="abrirPaginaEng(${jsa(k)})">${esc(PAG_ENG[k].titulo)} ›</button>`).join('')}</nav></section>
       <footer class="ag-fim">J.A.R.V.I.S. · Engenharia Civil</footer>
     </div>`;
   animarPaginaAgente();
@@ -5643,7 +5651,7 @@ function renderPrimosPagina() {
       <button type="button" class="jvp-acao jvp-falar" onclick="abrirVozJarvis('Primos 3D', 'primos')"><span class="jvp-ico">${HALO}</span><span>J.A.R.V.I.S.</span></button>
       <button type="button" class="jvp-acao" onclick="abaPrimos('central'); setTimeout(() => { const b = $j('jvp-busca'); if (b) b.focus(); }, 80)"><span class="jvp-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></svg></span><span>Buscar na Central</span></button>
     </div>
-    <nav class="jvp-abas">${ABAS_PRIMOS.map(([k, n]) => `<button type="button" data-aba="${k}" class="${jv.aba === k ? 'on' : ''}" onclick="abaPrimos('${k}')">${n}</button>`).join('')}</nav>
+    <nav class="jvp-abas">${ABAS_PRIMOS.map(([k, n]) => `<button type="button" data-aba="${k}" class="${jv.aba === k ? 'on' : ''}" onclick="abaPrimos(${jsa(k)})">${n}</button>`).join('')}</nav>
     <div class="jvp-corpo" id="jv-primos-corpo">${corpo}</div>
     <footer class="jvp-rodape">${pc ? `Central de ${isoParaBR(pc.geradoEm.slice(0, 10))} às ${pc.geradoEm.slice(11, 16)}` : 'Central ainda não conectada'} · ${claudeConfigurado() ? `<a href="#" onclick="sincronizarCofre(true); return false">buscar atualização</a>` : `<a href="#" onclick="abrirAjustesJarvis('pc'); return false">conectar ao computador</a>`}</footer>
   </div>`;
@@ -5765,7 +5773,7 @@ function cartoesPrimos(pc) {
     estrategia: [pontos.length, an.manchete ? tirarTags(an.manchete) : 'A leitura completa do analista chega com a análise do computador.', '']
   };
   const aberto = CARTOES_PRIMOS.some(([k]) => k === jv.cartaoPrimos) ? jv.cartaoPrimos : null;
-  let x = `<div class="jvp-cartoes">${CARTOES_PRIMOS.map(([k, nome]) => { const [n, prev, tom] = info[k]; return `<button type="button" class="jvp-cartao c-${k}${aberto === k ? ' on' : ''}${tom ? ' t-' + tom : ''}" onclick="abrirCartaoPrimos('${k}')" aria-expanded="${aberto === k}">
+  let x = `<div class="jvp-cartoes">${CARTOES_PRIMOS.map(([k, nome]) => { const [n, prev, tom] = info[k]; return `<button type="button" class="jvp-cartao c-${k}${aberto === k ? ' on' : ''}${tom ? ' t-' + tom : ''}" onclick="abrirCartaoPrimos(${jsa(k)})" aria-expanded="${aberto === k}">
       <span class="jvp-cartao-topo"><span class="jvp-cartao-ico">${ICONE_CARTAO[k]}</span>${n ? `<em>${n}</em>` : ''}</span><strong>${nome}</strong><small>${esc(prev)}</small></button>`; }).join('')}</div>`;
   if (!aberto) return x;
   let corpo = '';
@@ -5781,7 +5789,7 @@ function cartoesPrimos(pc) {
     + (pontos.length ? `<ul class="jv-lista">${pontos.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : '<p class="jv-dica">A leitura completa do analista chega com a análise do computador.</p>')
     + `<button type="button" class="btn jv-mais" onclick="perguntarPrimos(null, 'Qual deve ser a estratégia da Primos para os próximos 3 meses?')">Perguntar sobre a estratégia ›</button>`;
   const nome = CARTOES_PRIMOS.find(([k]) => k === aberto)[1];
-  return x + `<div class="jvp-cartao-aberto c-${aberto}"><div class="jvp-cartao-cab"><span class="jvp-cartao-ico">${ICONE_CARTAO[aberto]}</span><strong>${nome}</strong><button type="button" class="jv-x" onclick="abrirCartaoPrimos('${aberto}')" aria-label="Fechar">✕</button></div>${corpo}</div>`;
+  return x + `<div class="jvp-cartao-aberto c-${aberto}"><div class="jvp-cartao-cab"><span class="jvp-cartao-ico">${ICONE_CARTAO[aberto]}</span><strong>${nome}</strong><button type="button" class="jv-x" onclick="abrirCartaoPrimos(${jsa(aberto)})" aria-label="Fechar">✕</button></div>${corpo}</div>`;
 }
 function perguntarPrimos(ev, texto) {
   if (ev) ev.preventDefault();
@@ -5860,8 +5868,8 @@ function primosAnalise(pc) {
       <label>Acessórios (R$/peça)<input type="number" inputmode="decimal" min="0" step="0.01" value="${c.aces}" oninput="jv.calc.aces=this.value; atualizarCalc()"></label>
       <label>Preço que pensa cobrar<input type="text" inputmode="decimal" placeholder="opcional" value="${esc(c.preco)}" oninput="jv.calc.preco=this.value; atualizarCalc()"></label>
     </div>
-    <div class="jvp-seg">${['A1', 'Kobra'].map(k => `<button type="button" class="${c.imp === k ? 'on' : ''}" onclick="jv.calc.imp='${k}'; renderPrimosPagina()">${k === 'A1' ? 'Bambu A1' : 'Kobra X'}</button>`).join('')}<button type="button" class="${c.emb ? 'on' : ''}" onclick="jv.calc.emb=!jv.calc.emb; renderPrimosPagina()">Com caixinha</button></div>
-    <div class="jvp-seg">${['Direto', 'Consignado', 'Shopee'].map(k => `<button type="button" class="${c.canal === k ? 'on' : ''}" onclick="jv.calc.canal='${k}'; renderPrimosPagina()">${k}</button>`).join('')}</div>
+    <div class="jvp-seg">${['A1', 'Kobra'].map(k => `<button type="button" class="${c.imp === k ? 'on' : ''}" onclick="jv.calc.imp=${jsa(k)}; renderPrimosPagina()">${k === 'A1' ? 'Bambu A1' : 'Kobra X'}</button>`).join('')}<button type="button" class="${c.emb ? 'on' : ''}" onclick="jv.calc.emb=!jv.calc.emb; renderPrimosPagina()">Com caixinha</button></div>
+    <div class="jvp-seg">${['Direto', 'Consignado', 'Shopee'].map(k => `<button type="button" class="${c.canal === k ? 'on' : ''}" onclick="jv.calc.canal=${jsa(k)}; renderPrimosPagina()">${k}</button>`).join('')}</div>
     <div id="jvp-calc-res">${htmlCalc(pc)}</div></div>`;
   // rentabilidade
   const comCusto = (pc.custoPeca || []).filter(p => p.custo);
@@ -5945,7 +5953,7 @@ function lancamentosPrimos(pc) {
 const SUB_CONTABIL = [['geral', 'Visão geral'], ['caixa', 'Fluxo de caixa'], ['lanc', 'Lançamentos'], ['contas', 'Contas a pagar'], ['mei', 'MEI']];
 function primosContabil(pc) {
   const sub = jv.subContabil || 'geral', ct = contabilidadePrimos(pc), cx = pc.caixa || {}, par = pc.parametros || {};
-  let x = `<div class="jvp-seg jvp-seg-sub">${SUB_CONTABIL.map(([k, n]) => `<button type="button" class="${sub === k ? 'on' : ''}" onclick="jv.subContabil='${k}'; renderPrimosPagina()">${n}</button>`).join('')}</div>`;
+  let x = `<div class="jvp-seg jvp-seg-sub">${SUB_CONTABIL.map(([k, n]) => `<button type="button" class="${sub === k ? 'on' : ''}" onclick="jv.subContabil=${jsa(k)}; renderPrimosPagina()">${n}</button>`).join('')}</div>`;
   if (sub === 'geral') {
     const totalApl = ct.imobilizado + ct.estoques + ct.despesasRealizadas, totalOrig = (cx.aportes || 0) + ct.foraDosPix + ct.vl.total;
     x += falaHTML(`Contabilidade gerencial da Primos (MEI). O dinheiro que entrou (<b>${formatCurrency(totalOrig)}</b>) virou principalmente <b>máquinas e estrutura</b> (${formatCurrency(ct.imobilizado)}) e <b>estoque</b> (${formatCurrency(ct.estoques)}). Resultado acumulado estimado: <b>${formatCurrency(ct.resultado)}</b>${ct.receitaBruta ? ` com ${formatCurrency(ct.receitaBruta)} de vendas registradas — normal no começo, enquanto o investimento ainda é maior que as vendas.` : " — normal numa empresa de 2 meses que ainda não registrou vendas."}`);
@@ -5974,7 +5982,7 @@ function primosContabil(pc) {
   } else if (sub === 'lanc') {
     const L = lancamentosPrimos(pc), cats = ['Todos', ...new Set(L.map(l => l.cat))], f = jv.catLanc || 'Todos';
     x += `<div class="jvp-busca-box"><input type="search" id="jvp-busca-lanc" placeholder="Buscar lançamento (fornecedor, item…)" value="${esc(jv.buscaLanc || '')}" oninput="jv.buscaLanc=this.value; renderLancamentos()" autocomplete="off"></div>`;
-    x += `<div class="jv-setores">${cats.map(c => `<button type="button" class="chip${f === c ? ' on' : ''}" onclick="jv.catLanc='${esc(c)}'; renderPrimosPagina()">${esc(c)}</button>`).join('')}</div><div id="jvp-lanc">${htmlLancamentos(L)}</div>`;
+    x += `<div class="jv-setores">${cats.map(c => `<button type="button" class="chip${f === c ? ' on' : ''}" onclick="jv.catLanc=${jsa(c)}; renderPrimosPagina()">${esc(c)}</button>`).join('')}</div><div id="jvp-lanc">${htmlLancamentos(L)}</div>`;
   } else if (sub === 'contas') {
     const contas = (pc.contasPagar || []).slice().sort((a, b) => String(a.venc).localeCompare(String(b.venc))), hoje = hojeISO();
     const abertas = contas.filter(c => !/pago/i.test(c.status || ''));
@@ -6108,7 +6116,7 @@ function primosChaveiros(pc) {
       <div class="jvk-plano"><div><strong>${pecas}</strong><small>peças</small></div><div><strong>${reais(custo + (Number((an.estrutura || {}).custoEstimado) || 0))}</strong><small>material + expositor</small></div><div><strong>~${Math.round(horas)} h</strong><small>de impressão</small></div><div><strong>${reais(lucro)}</strong><small>lucro se vender tudo</small></div></div>
       <div class="jvk-sugs">${px.sugestoes.map(s => { const c = corChaveiro(s.modelo); return `<div class="jvk-sug"><span class="jvk-bolinha" style="background:${c.cor}"></span><div><strong>${esc(s.modelo)}</strong><small>${esc(s.porque || '')}</small></div><em>${s.qtd} × ${reais(s.preco)}</em>${seloLicenca(s.licenca)}</div>`; }).join('')}</div>
       ${(px.evitar || []).length ? `<p class="jv-dica">Evite: ${px.evitar.map(esc).join(' · ')}.</p>` : ''}
-      <button type="button" class="btn jv-mais" onclick="perguntarPrimos(null, ${JSON.stringify(`Monte comigo o expositor da ${px.local}${px.pessoa ? ' (' + px.pessoa + ')' : ''}: quais chaveiros imprimir, quantos de cada e em que ordem.`).replace(/"/g, '&quot;')})">Montar com o J.A.R.V.I.S. ›</button></div>`;
+      <button type="button" class="btn jv-mais" onclick="perguntarPrimos(null, ${jsa(`Monte comigo o expositor da ${px.local}${px.pessoa ? ' (' + px.pessoa + ')' : ''}: quais chaveiros imprimir, quantos de cada e em que ordem.`)})">Montar com o J.A.R.V.I.S. ›</button></div>`;
   }
   // estoque por modelo (cartões com a cor, e não tabela)
   if (e.itens.length) h += `<div class="jv-bloco"><h5>Estoque por modelo · ${e.itens.length}</h5><div class="jvk-modelos">${e.andares.map(a => a.itens.map(i => { const p = (i.vendidos || 0) / Math.max(1, i.restante + i.vendidos); return `<div class="jvk-modelo"><span class="jvk-bolinha${i.metal ? ' metal' : ''}" style="background:${i.cor}"></span><div><strong>${esc(i.nome)}</strong><small>${reais(a.preco)} · ${i.restante} no expositor${i.vendidos ? ` · ${i.vendidos} vendidos` : ''}</small><i style="--p:${(p * 100).toFixed(0)}%"></i></div>${i.licenca !== 'ok' ? seloLicenca(i.licenca) : ''}</div>`; }).join('')).join('')}</div></div>`;
@@ -6425,7 +6433,7 @@ function htmlFamilia(noMenu) {
   const fotos = familia.filter(f => f.tipo === 'foto'), datas = familia.filter(f => f.tipo === 'data').map(f => ({ ...f, prox: proximaOcorrencia(f.data) })).sort((a, b) => (a.prox || '9').localeCompare(b.prox || '9')), recados = familia.filter(f => f.tipo === 'recado');
   const hoje = hojeISO(); const perto = datas.find(d => d.prox && diasEntre(hoje, d.prox) <= 30);
   let html = falaHTML(perto ? `${diasEntre(hoje, perto.prox) === 0 ? 'Hoje' : 'Em ' + plural(diasEntre(hoje, perto.prox), 'dia', 'dias')}: <b>${esc(perto.texto)}</b>. Quer que eu lembre de um presente ou uma mensagem?` : 'O lugar do que importa de verdade. Guarde aqui fotos, aniversários e recados: eu lembro das datas por você.') + linhaNivel('familia');
-  html += `<div class="jv-bloco"><h5>Fotos</h5><div class="jv-fotos">${fotos.map(f => { const d = f.imgId ? imgPorId(f.imgId) : null; return `<figure>${d ? `<img src="${d}" alt="${esc(f.texto)}" onclick="verImagem('${f.imgId}', '${esc(f.texto || '').replace(/'/g, '')}')">` : f.url ? `<a href="${esc(f.url)}" target="_blank" rel="noopener" class="jv-foto-link">🔗</a>` : '<span class="jv-foto-link">🖼️</span>'}<figcaption>${esc(f.texto || '')}</figcaption><button type="button" class="jv-x mini" onclick="removerFamilia(${f.id})" aria-label="Tirar">✕</button></figure>`; }).join('')}<label class="jv-foto-add">＋<input type="file" accept="image/*" hidden onchange="addFotoFamilia(this)"></label></div><p class="jv-dica">A foto fica guardada neste aparelho. Para aparecer nos dois, cole um link do Google Fotos/Drive abaixo.</p></div>`;
+  html += `<div class="jv-bloco"><h5>Fotos</h5><div class="jv-fotos">${fotos.map(f => { const d = f.imgId ? imgPorId(f.imgId) : null; return `<figure>${d ? `<img src="${d}" alt="${esc(f.texto)}" onclick="verImagem(${jsa(f.imgId)}, ${jsa(f.texto || '')})">` : f.url ? `<a href="${esc(urlSegura(f.url))}" target="_blank" rel="noopener" class="jv-foto-link">🔗</a>` : '<span class="jv-foto-link">🖼️</span>'}<figcaption>${esc(f.texto || '')}</figcaption><button type="button" class="jv-x mini" onclick="removerFamilia(${f.id})" aria-label="Tirar">✕</button></figure>`; }).join('')}<label class="jv-foto-add">＋<input type="file" accept="image/*" hidden onchange="addFotoFamilia(this)"></label></div><p class="jv-dica">A foto fica guardada neste aparelho. Para aparecer nos dois, cole um link do Google Fotos/Drive abaixo.</p></div>`;
   html += `<div class="jv-bloco"><h5>Datas especiais</h5><ul class="jv-tabela">${datas.map(d => `<li><span>${esc(d.texto)}</span><em>${isoParaBR(d.data).slice(0, 5)}</em><small>${d.prox ? (diasEntre(hoje, d.prox) === 0 ? 'hoje!' : 'em ' + plural(diasEntre(hoje, d.prox), 'dia', 'dias')) : ''} <a href="#" onclick="removerFamilia(${d.id}); return false">tirar</a></small></li>`).join('') || '<li><span>Nenhuma ainda</span></li>'}</ul></div>`;
   if (recados.length) html += `<div class="jv-bloco"><h5>Recados</h5><ul class="jv-lista">${recados.map(r => `<li>${esc(r.texto)} <a href="#" onclick="removerFamilia(${r.id}); return false">tirar</a></li>`).join('')}</ul></div>`;
   html += `<form class="jv-form" onsubmit="addFamilia(event)"><input id="jv-fam-texto" placeholder="Nome / legenda / recado / link" autocomplete="off"><input id="jv-fam-data" type="date" title="Data (para aniversários)"><div class="jv-form-botoes"><button type="submit" class="btn" data-tipo="data" onclick="this.form.dataset.tipo='data'">＋ Data</button><button type="submit" class="btn" onclick="this.form.dataset.tipo='recado'">＋ Recado</button><button type="submit" class="btn" onclick="this.form.dataset.tipo='link'">＋ Foto por link</button></div></form>`;
@@ -6799,7 +6807,7 @@ function htmlMsgChat(m, mapa) {
   }
   const quem = m.de === 'pc' ? '<small class="jvc-quem">Claude · no computador</small>' : '';
   const corpo = m.pensando && !m.t ? '<div class="jvc-digitando"><i></i><i></i><i></i></div>' : `<div class="jvc-texto">${mdJarvis(desanonimizar(m.t || '', mapa))}</div>`;
-  const fontes = (m.fontes || []).length ? `<div class="jvc-fontes">${m.fontes.map(f => `<a href="${esc(f[1])}" target="_blank" rel="noopener">${esc(String(f[0]).replace(/^www\./, '').slice(0, 40))}</a>`).join('')}</div>` : '';
+  const fontes = (m.fontes || []).length ? `<div class="jvc-fontes">${m.fontes.map(f => `<a href="${esc(urlSegura(f[1]))}" target="_blank" rel="noopener">${esc(String(f[0]).replace(/^www\./, '').slice(0, 40))}</a>`).join('')}</div>` : '';
   const acoes = (m.acoes || []).map((a, k) => `<button type="button" class="jvc-acao${k === 0 ? ' prim' : ''}" onclick="${a[1]}">${esc(a[0])}</button>`).join('');
   const card = m.cartao ? `<div class="jvc-cartao">${m.cartao}</div>` : '';
   const ferr = !m.pensando && m.t ? `<div class="jvc-ferr"><button type="button" onclick="falarMsgJarvis(${m.id})" aria-label="Ouvir">🔊</button><button type="button" onclick="copiarMsgJarvis(${m.id})" aria-label="Copiar">⧉</button>${m.de === 'jv' && claudeConfigurado() && !m.escalou ? `<button type="button" onclick="escalarMsgJarvis(${m.id})" title="Mandar para o Claude no computador">↗ computador</button>` : ''}</div>` : '';
@@ -6887,7 +6895,7 @@ async function conversarJarvis(texto, anexos = []) {
   if (jv.iaPensando && jv.controle) { try { jv.controle.abort(); } catch (e) { } }
   const eu = msgChat({ de: 'eu', t: texto, img: anexos.length, ctx: jv.contexto });
   const pf = !anexos.length && detectarFila(texto);
-  if (pf) { const it = adicionarFila(pf, 'chat'); const m = msgChat({ de: 'jv', t: `🖨️ Anotei na **fila de impressão**: **${it.titulo}** · ${it.qtd} un.${it.material || it.cor ? ' · ' + [it.material, it.cor].filter(Boolean).join(' ') : ''}. O agente de Produção encaixa na fila do dia.` });
+  if (pf) { const it = adicionarFila(pf, 'chat'); if (!it) { msgChat({ de: 'jv', t: '⚠️ Não consegui pôr na fila: o aparelho está sem espaço. Apague fotos ou anexos antigos e peça de novo.' }); gravarChat(); renderChatJarvis(); return; } const m = msgChat({ de: 'jv', t: `🖨️ Anotei na **fila de impressão**: **${it.titulo}** · ${it.qtd} un.${it.material || it.cor ? ' · ' + [it.material, it.cor].filter(Boolean).join(' ') : ''}. O agente de Produção encaixa na fila do dia.` });
     m.acoes = [['Ver a fila', `fecharChatJarvis(); abrirCentral('primos'); abrirAgenteCentral('producao')`], ['Desfazer', `desfazerFila(${it.id}, ${m.id})`]]; gravarChat(); renderChatJarvis(); return; }
   if (anexos.length) jv.miniaturas[eu.id] = anexos.map(a => a.dados);
   jv.rolarChat = true; gravarChat(); renderChatJarvis();
@@ -7337,7 +7345,7 @@ function executarFerramentasVoz(chamadas) {
     try {
       if (c.name === 'abrir_tela' && DESTINOS_JARVIS[a.destino]) { const d = a.destino; setTimeout(() => irDestinoJarvis(d), 0); r = { ok: true, aberto: DESTINOS_JARVIS[d][0] }; }
       else if (c.name === 'pedir_modelo_desenvolvedor' && a.pedido) { pedirAoDesenvolvedor(desanonimizar(String(a.pedido), vz.mapa), 'voz').then(pd => toast(pd ? '🧩 Pedido enviado ao Desenvolvedor.' : '⚠️ O pedido ao Desenvolvedor não saiu — mande de novo pelo chat.', 5000)); r = { ok: true, aviso: 'Pedido indo para a fila do Desenvolvedor; ele faz na próxima rodada do PC (10h, 15h ou 20h) e o 3MF aparece na página dele.' }; }
-      else if (c.name === 'adicionar_fila_impressao' && a.titulo) { const it = adicionarFila({ titulo: String(a.titulo), qtd: a.qtd, material: a.material, cor: a.cor, obs: a.obs }, 'voz'); toast(`🖨️ Na fila: ${it.titulo} · ${it.qtd} un.`, 4000); r = { ok: true, aviso: 'Anotado na fila de impressão; o agente de Produção vai encaixar na fila do dia.' }; }
+      else if (c.name === 'adicionar_fila_impressao' && a.titulo) { const it = adicionarFila({ titulo: String(a.titulo), qtd: a.qtd, material: a.material, cor: a.cor, obs: a.obs }, 'voz'); if (it) { toast(`🖨️ Na fila: ${it.titulo} · ${it.qtd} un.`, 4000); r = { ok: true, aviso: 'Anotado na fila de impressão; o agente de Produção vai encaixar na fila do dia.' }; } else r = { ok: false, erro: 'Não gravou: o aparelho está sem espaço. Diga ao Rafael que NÃO entrou na fila.' }; }
       else if (c.name === 'avisar_agentes' && a.resumo) { const rec = registrarRecado(a.agentes, a.resumo, a.tipo, 'voz'); r = rec ? { ok: true, avisados: rec.agentes } : { ok: false, erro: 'agente desconhecido' }; }
       else if (c.name === 'registrar_compra_filamento') r = registrarCompraFilamento(a, 'voz');
       else if (c.name === 'registrar_contagem_estoque') { const f = contagemEstoque(a.itens, 'voz'); r = !f ? { ok: false, erro: 'o aparelho está sem espaço: a contagem não foi salva' } : f.length ? { ok: true, atualizado: f } : { ok: false, erro: 'não entendi as cores/pesos' }; }
@@ -7493,7 +7501,7 @@ function htmlSubplano() {
   let html = cabecalhoPainel('Subplano', `${plural(memorias.length, 'memória', 'memórias')} · em segundo plano, só para você`, '<span class="jv-sub-mini"></span>');
   html += falaHTML(iaLigada() ? 'Curiosidades, ideias, desabafos: pode falar. Eu respondo na hora e guardo aqui, longe do palco principal.' : 'Aqui ficam curiosidades, ideias e desabafos, longe do palco principal. Para eu responder na hora, <a href="#" onclick="abrirAjustesJarvis(\'ia\'); return false">ligue meu cérebro (grátis)</a>.');
   html += `<form class="jv-form jv-sub-form" onsubmit="enviarSubplano(event)"><input id="jv-sub-texto" placeholder="Uma curiosidade, uma ideia, um desabafo…" autocomplete="off" enterkeyhint="send"><button type="button" class="jv-mic mini" onclick="ditarNoSubplano()" aria-label="Falar">${SVG_MIC}</button><button type="submit" class="jv-enviar mini" aria-label="Enviar">↑</button></form>`;
-  html += `<div class="jv-setores">${[['', 'Tudo'], ...Object.entries(TIPOS_MEMORIA).map(([k, v]) => [k, v[1]])].map(([k, n]) => `<button type="button" class="chip${filtro === k ? ' on' : ''}" onclick="jv.filtroSub='${k}'; renderPainelJarvis()">${n}</button>`).join('')}</div>`;
+  html += `<div class="jv-setores">${[['', 'Tudo'], ...Object.entries(TIPOS_MEMORIA).map(([k, v]) => [k, v[1]])].map(([k, n]) => `<button type="button" class="chip${filtro === k ? ' on' : ''}" onclick="jv.filtroSub=${jsa(k)}; renderPainelJarvis()">${n}</button>`).join('')}</div>`;
   if (jv.iaPensando) html += '<p class="jv-dica"><span class="spin"></span> pensando…</p>';
   html += lista.length ? `<ul class="jv-memorias">${lista.map(m => `<li><div class="jv-mem-topo"><span>${(TIPOS_MEMORIA[m.tipo] || TIPOS_MEMORIA.nota)[0]} ${(TIPOS_MEMORIA[m.tipo] || TIPOS_MEMORIA.nota)[1]}</span><small>${isoParaBR(m.quando.slice(0, 10)).slice(0, 5)} ${m.quando.slice(11, 16)}</small><button type="button" class="jv-x mini" onclick="removerMemoria(${m.id})" aria-label="Apagar">✕</button></div><p class="eu">${esc(m.texto)}</p>${m.resposta ? `<p class="ele">${linkify(esc(m.resposta))}</p>` : ''}</li>`).join('')}</ul>` : '<p class="jv-dica">Nada guardado ainda.</p>';
   return html;
@@ -7558,7 +7566,7 @@ function sugerirJarvis(v) {
   const ordem = { area: 0, secao: 1, item: 2 };
   const achados = cer.nos.filter(n => n.tipo !== 'centro' && semAcentoCer(n.nome).includes(q)).sort((a, b) => ordem[a.tipo] - ordem[b.tipo]).slice(0, 4);
   el.innerHTML = `<button type="button" class="jv-sug-jarvis" onclick="comandoJarvis()"><span class="jv-sug-halo">${HALO}</span><span class="jv-sug-nome">Perguntar ao J.A.R.V.I.S.</span><small>Enter</small></button>`
-    + achados.map(n => `<button type="button" onclick="irParaNoJarvis('${esc(n.id)}')"><span class="jv-sug-ponto"></span><span class="jv-sug-nome">${esc(n.nome)}</span><small>${TIPO_CEREBRO[n.tipo]}</small></button>`).join('')
+    + achados.map(n => `<button type="button" onclick="irParaNoJarvis(${jsa(n.id)})"><span class="jv-sug-ponto"></span><span class="jv-sug-nome">${esc(n.nome)}</span><small>${TIPO_CEREBRO[n.tipo]}</small></button>`).join('')
     + `<button type="button" onclick="registrarPelaBarra()"><span>✎</span><span class="jv-sug-nome">Registrar direto no app</span><small>pedido, gasto, tarefa…</small></button>`;
   el.hidden = false;
 }
@@ -7577,7 +7585,7 @@ function comandoJarvis(ev) {
 // --- a "base": as abas de sempre + ajustes do J.A.R.V.I.S., num menu discreto (botão de grade no canto) ---
 function abrirBaseJarvis() {
   const botoes = [...document.querySelectorAll('.tabs .tab-btn')].filter(b => b.id !== 'btn-cerebro' && !b.hidden);
-  $j('jv-base-grade').innerHTML = botoes.map(b => `<button type="button" class="jv-app" onclick="fecharBaseJarvis(); changeTab('${b.id.slice(4)}')">${b.querySelector('.tab-ico').outerHTML.replace(' id="sync-dot"', '')}<span>${esc(b.querySelector('.tab-lbl').textContent)}</span></button>`).join('');
+  $j('jv-base-grade').innerHTML = botoes.map(b => `<button type="button" class="jv-app" onclick="fecharBaseJarvis(); changeTab(${jsa(b.id.slice(4))})">${b.querySelector('.tab-ico').outerHTML.replace(' id="sync-dot"', '')}<span>${esc(b.querySelector('.tab-lbl').textContent)}</span></button>`).join('');
   $j('jv-base-extra').innerHTML = `<button type="button" class="btn" onclick="fecharBaseJarvis(); abrirCentral()">◈ Central de Comando (agentes)</button><button type="button" class="btn" onclick="fecharBaseJarvis(); abrirAjustesJarvis()">⚙︎ Ajustes do J.A.R.V.I.S. (cérebro, computador, temas)</button>`;
   if ($j('jv-base').style.display !== 'flex') empilharCamada('base', fecharBaseJarvis);
   $j('jv-base').style.display = 'flex';
@@ -7751,7 +7759,7 @@ function renderConversa() {
   const filtros = [['todos', 'Tudo'], ['conversa', 'Conversas'], ['consenso', 'Item da vez'], ['relatorio', 'Relatórios'], ['recado', 'Recados'], ['pedido', 'Pedidos']].filter(([k]) => k === 'todos' || L.some(m => m.tipo === k || (k === 'conversa' && m.tipo === 'aovivo')));
   const rolagem = el.querySelector('.cvs-lista') ? el.querySelector('.cvs-lista').scrollTop : 0;
   el.innerHTML = `<header class="cvs-topo"><div><b>Conversa dos agentes</b><small><i class="cvs-vivo"></i>últimas 48 h · ${plural(L.length, 'mensagem', 'mensagens')}</small></div><button type="button" class="cvs-pag" onclick="abrirPaginaConversas()">Página ›</button><button type="button" onclick="alternarConversa()" aria-label="Fechar a conversa">✕</button></header>
-    <div class="cvs-filtros">${filtros.map(([k, t]) => `<button type="button" class="${k === f ? 'on' : ''}" onclick="filtrarConversa('${k}')">${t}</button>`).join('')}</div>
+    <div class="cvs-filtros">${filtros.map(([k, t]) => `<button type="button" class="${k === f ? 'on' : ''}" onclick="filtrarConversa(${jsa(k)})">${t}</button>`).join('')}</div>
     <ol class="cvs-lista">${h || '<li class="cvs-vazio">Ainda não há conversa nas últimas 48 h. O J.A.R.V.I.S. do dia conversa com um agente por hora (8h–21h) e a rodada dos agentes é às 7h.</li>'}</ol>`;
   const nl = el.querySelector('.cvs-lista'); if (nl) nl.scrollTop = rolagem;
   novas.forEach(m => cc.convVistos.add(m.id));
@@ -7810,7 +7818,7 @@ function redeConversas(L) {
     const mxp = (A.x + B.x) / 2, myp = (A.y + B.y) / 2, cx = mxp - (B.y - A.y) * 0.12, cy = myp + (B.x - A.x) * 0.12;
     return `<g class="cp-fio${dim ? ' dim' : ''}"><path id="cpf${i}" d="M${A.x.toFixed(1)},${A.y.toFixed(1)} Q${cx.toFixed(1)},${cy.toFixed(1)} ${B.x.toFixed(1)},${B.y.toFixed(1)}" stroke="${cor}" stroke-width="${w.toFixed(1)}"/>${Array.from({ length: Math.min(3, Math.ceil(p.n / Math.max(1, mx / 3))) }, (_, k) => `<circle r="${(2 + w / 3).toFixed(1)}" fill="${cor}"><animateMotion dur="${(2.6 + k * 0.7 + i * 0.13).toFixed(2)}s" begin="${(k * 0.9).toFixed(1)}s" repeatCount="indefinite"${k % 2 ? ' keyPoints="1;0" keyTimes="0;1" calcMode="linear"' : ''}><mpath href="#cpf${i}"/></animateMotion></circle>`).join('')}</g>`; }).join('');
   const nos = ids.map(id => { const p = pos[id], v = vol(id), r = 14 + 12 * v / vmx, a = agentesCentral().find(x => x.id === id), sel = cpEst.agente === id, dim = cpEst.agente && !sel;
-    return `<g class="cp-no${sel ? ' sel' : ''}${dim ? ' dim' : ''}" style="--c:${corConv(id)}" onclick="filtrarAgenteConversas('${esc(id)}')" role="button" tabindex="0" aria-label="${esc(a ? a.nome : id)}"><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}" class="halo"/><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(r * 0.62).toFixed(1)}" class="miolo"/><text x="${p.x.toFixed(1)}" y="${(p.y + 4).toFixed(1)}" text-anchor="middle" class="ini">${esc((a ? a.nome : id).slice(0, 2))}</text><text x="${p.x.toFixed(1)}" y="${(p.y + r + 13).toFixed(1)}" text-anchor="middle" class="nm">${esc((a ? a.nome : id).split(' ')[0])}${v ? ` · ${v}` : ''}</text></g>`; }).join('');
+    return `<g class="cp-no${sel ? ' sel' : ''}${dim ? ' dim' : ''}" style="--c:${corConv(id)}" onclick="filtrarAgenteConversas(${jsa(id)})" role="button" tabindex="0" aria-label="${esc(a ? a.nome : id)}"><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r.toFixed(1)}" class="halo"/><circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${(r * 0.62).toFixed(1)}" class="miolo"/><text x="${p.x.toFixed(1)}" y="${(p.y + 4).toFixed(1)}" text-anchor="middle" class="ini">${esc((a ? a.nome : id).slice(0, 2))}</text><text x="${p.x.toFixed(1)}" y="${(p.y + r + 13).toFixed(1)}" text-anchor="middle" class="nm">${esc((a ? a.nome : id).split(' ')[0])}${v ? ` · ${v}` : ''}</text></g>`; }).join('');
   return `<div class="cp-rede"><svg viewBox="-215 -205 430 420" aria-hidden="false">${fios}${nos}<g class="cp-no cp-j" onclick="filtrarAgenteConversas(null)" role="button" tabindex="0" aria-label="Todos"><circle r="30" class="halo"/><circle r="17" class="miolo"/><text y="4" text-anchor="middle" class="ini">J</text></g></svg></div>`;
 }
 function filtrarAgenteConversas(id) { cpEst.agente = cpEst.agente === id ? null : id; cpEst.palavra = null; renderPaginaConversas(true); }
@@ -7819,7 +7827,7 @@ function tipoConversas(t) { cpEst.tipo = t; const el = $j('cp-linha'); if (el) e
 function palavraConversas(p) { cpEst.palavra = cpEst.palavra === p ? null : p; const el = $j('cp-linha'), as = $j('cp-assuntos'), L = msgsConversa(); if (el) el.innerHTML = htmlLinhaConversas(L); if (as) as.innerHTML = htmlAssuntosConversas(L); }
 function abrirMsgConversa(i) { cpEst.aberta = cpEst.aberta === i ? null : i; document.querySelectorAll('#cp-linha .cp-msg').forEach((li, k) => li.classList.toggle('aberta', k === cpEst.aberta)); }
 function htmlPlacarConversas(P) {
-  return `<ol class="cp-placar">${P.map((d, k) => `<li style="--c:${d.cor}; --w:${d.nota}%; --k:${k}" class="${cpEst.agente === d.a.id ? 'sel' : ''}" onclick="filtrarAgenteConversas('${esc(d.a.id)}')">
+  return `<ol class="cp-placar">${P.map((d, k) => `<li style="--c:${d.cor}; --w:${d.nota}%; --k:${k}" class="${cpEst.agente === d.a.id ? 'sel' : ''}" onclick="filtrarAgenteConversas(${jsa(d.a.id)})">
     <span class="cp-pos">${k + 1}</span><div class="cp-pl-txt"><b>${esc(d.a.nome)}</b><small>${esc(d.motivos.join(' · ') || 'sem atividade no período')}</small>
     <i class="cp-barra"><u></u></i><span class="cp-chips"><em>↗ ${d.env} enviadas</em><em>↘ ${d.rec} recebidas</em>${d.conv ? `<em>💬 ${d.conv} c/ J.A.R.V.I.S.</em>` : ''}${d.consenso ? `<em>🔥 ${d.consenso} no consenso</em>` : ''}${d.urg.hoje ? `<em class="u">${d.urg.hoje} urgente(s)</em>` : ''}</span>
     ${d.ultima ? `<p>“${esc(d.ultima.texto.slice(0, 150))}${d.ultima.texto.length > 150 ? '…' : ''}”</p>` : ''}</div><strong class="ag-conta">${d.nota}</strong></li>`).join('')}</ol>
@@ -7836,7 +7844,7 @@ function htmlMatrizConversas(L) {
 function htmlAssuntosConversas(L) {
   const cont = {}; L.forEach(m => semAcentoCer(m.texto + ' ' + m.extra).split(/[^a-z0-9]+/).forEach(w => { if (w.length >= 5 && !PARADAS_CONV.has(w) && !/^\d+$/.test(w)) cont[w] = (cont[w] || 0) + 1; }));
   const top = Object.entries(cont).sort((a, b) => b[1] - a[1]).slice(0, 16), mx = Math.max(1, ...top.map(t => t[1]));
-  return top.length ? `<div class="cp-assuntos">${top.map(([w, n]) => `<button type="button" class="${cpEst.palavra === w ? 'on' : ''}" style="--s:${(0.78 + 0.5 * n / mx).toFixed(2)}" onclick="palavraConversas('${esc(w)}')">${esc(w)} <small>${n}</small></button>`).join('')}</div><p class="cc-nota">Toque num assunto para ver só as mensagens dele.</p>` : '<p class="cc-txt">Sem assuntos no período.</p>';
+  return top.length ? `<div class="cp-assuntos">${top.map(([w, n]) => `<button type="button" class="${cpEst.palavra === w ? 'on' : ''}" style="--s:${(0.78 + 0.5 * n / mx).toFixed(2)}" onclick="palavraConversas(${jsa(w)})">${esc(w)} <small>${n}</small></button>`).join('')}</div><p class="cc-nota">Toque num assunto para ver só as mensagens dele.</p>` : '<p class="cc-txt">Sem assuntos no período.</p>';
 }
 function htmlLinhaConversas(L) {
   let lista = L; if (cpEst.tipo !== 'todos') lista = lista.filter(m => m.tipo === cpEst.tipo || (cpEst.tipo === 'conversa' && m.tipo === 'aovivo'));
@@ -7847,8 +7855,8 @@ function htmlLinhaConversas(L) {
     const j = m.de === 'jarvis';
     h += `<li class="cp-msg ${esc(m.tipo)}${j ? ' j' : ''}${cpEst.aberta === i ? ' aberta' : ''}" style="--de:${corConv(m.de)}; --para:${corConv(m.para)}" onclick="abrirMsgConversa(${i})"><span class="cp-av">${m.de === 'jarvis' ? 'J' : esc(nomeConv(m.de).slice(0, 2))}</span>
       <div class="cp-bolha"><header><b>${esc(nomeConv(m.de))}</b><i>→</i><b class="p">${esc(nomeConv(m.para))}</b><em>${esc(TIPOS_CONV[m.tipo] || m.tipo)}</em><time>${esc(m.quando.slice(11, 16))}</time></header><p>${esc(m.texto)}</p>${m.extra ? `<p class="ex">${esc(m.extra)}</p>` : ''}</div></li>`; });
-  return `<div class="cvs-filtros cp-tipos">${tipos.map(([k, t]) => `<button type="button" class="${cpEst.tipo === k ? 'on' : ''}" onclick="tipoConversas('${k}')">${esc(t)}</button>`).join('')}</div>
-    ${cpEst.palavra ? `<p class="cc-nota">Assunto: <b>${esc(cpEst.palavra)}</b> · <a href="#" onclick="palavraConversas('${esc(cpEst.palavra)}'); return false">limpar</a></p>` : ''}
+  return `<div class="cvs-filtros cp-tipos">${tipos.map(([k, t]) => `<button type="button" class="${cpEst.tipo === k ? 'on' : ''}" onclick="tipoConversas(${jsa(k)})">${esc(t)}</button>`).join('')}</div>
+    ${cpEst.palavra ? `<p class="cc-nota">Assunto: <b>${esc(cpEst.palavra)}</b> · <a href="#" onclick="palavraConversas(${jsa(cpEst.palavra)}); return false">limpar</a></p>` : ''}
     <ol class="cp-linha">${h || '<li class="cvs-vazio">Nada neste filtro.</li>'}</ol>`;
 }
 /** Como a troca acontece: de onde vêm as mensagens (tipo) e o ritmo por hora do dia. */
@@ -8178,7 +8186,9 @@ function detectarFila(texto) {
 }
 function adicionarFila(it, origem) {
   const novo = { id: novoId(), titulo: String(it.titulo).slice(0, 80), qtd: Math.max(1, Math.min(9999, Number(it.qtd) || 1)), material: it.material || '', cor: it.cor || '', origem: origem || 'app', status: 'fila', criado: new Date().toISOString(), obs: String(it.obs || '').slice(0, 200) };
-  filaImpressao.push(novo); salvar('filaimpressao', filaImpressao); publicarFilaCofre(); replanejarProducao(); if (cc.agente === 'producao') renderCentral(); return novo;
+  const proxima = filaImpressao.concat(novo);
+  if (!salvar('filaimpressao', proxima)) return null; // não gravou: quem chamou não anuncia nada
+  filaImpressao = proxima; publicarFilaCofre(); replanejarProducao(); if (cc.agente === 'producao') renderCentral(); return novo;
 }
 /** fase 9: o que o Rafael põe na fila entra no PLANO do dia — o agente de Produção replaneja na nuvem (1 pedido a cada 20 min, no máximo). */
 function replanejarProducao() {
@@ -8224,12 +8234,12 @@ function htmlAgenteProducao(a) {
     : ccBloco('Fila do dia', '<p class="cc-txt">A fila do dia sai na rodada da manhã. Para adiantar, fale “quero imprimir …” ou toque em <b>▶ Reanalisar agora</b>.</p>');
   const datas = (r.datas || []).length ? ccBloco('Datas que vêm aí', `<ul class="cc-lista">${r.datas.map(d => `<li><span><b>${esc(d.tema)}</b><small>${esc(isoParaBR(d.data || ''))}${d.comecarEm ? ` · começar a imprimir até ${esc(isoParaBR(d.comecarEm))}` : ''}</small></span></li>`).join('')}</ul>`) : '';
   const linha = f => `<li class="${f.status}">${miniFilaHTML(f.titulo, COR_FILA[semAcentoCer(f.cor)] || '#8e8e93')}<span><b>${esc(f.titulo)} · ${f.qtd} un.</b><small>${esc([f.material, f.cor, ORIGEM_FILA[f.origem] || ''].filter(Boolean).join(' · '))}</small></span>
-    ${f.status === 'feito' ? '<em>✓</em>' : `<button type="button" class="cc-mini${f.status === 'imprimindo' ? '' : ' sec'}" onclick="mudarFila(${f.id}, '${f.status === 'imprimindo' ? 'feito' : 'imprimindo'}')">${f.status === 'imprimindo' ? '✓ Pronto' : '▶ Imprimir'}</button>`}<button type="button" class="cc-mini sec" onclick="removerFila(${f.id})" aria-label="Tirar da fila">✕</button></li>`;
+    ${f.status === 'feito' ? '<em>✓</em>' : `<button type="button" class="cc-mini${f.status === 'imprimindo' ? '' : ' sec'}" onclick="mudarFila(${f.id}, ${jsa(f.status === 'imprimindo' ? 'feito' : 'imprimindo')})">${f.status === 'imprimindo' ? '✓ Pronto' : '▶ Imprimir'}</button>`}<button type="button" class="cc-mini sec" onclick="removerFila(${f.id})" aria-label="Tirar da fila">✕</button></li>`;
   return cabecalhoAgente(a) + htmlGarimpo() // fase 11: o GARIMPO DO DIA no topo (espaço reservado)
     + `<section class="cc-bloco cc-fab-bloco"><h4>Fábrica · ao vivo</h4><div id="cc-fab" class="cc-fab"><div class="cc-seca-carregando"><span class="spin"></span> Ligando as impressoras…</div></div><p class="cc-nota">${impressoesBambu ? `As A1 mostram o que está imprimindo DE VERDADE (conta Bambu, lida às ${esc(String(impressoesBambu.lidoEm || '').slice(11, 16))}); a Kobra X mostra o que você marcou como "imprimindo" ou o 1º da fila do dia.` : 'As impressoras mostram o que está em "imprimindo" (ou o 1º da fila do dia).'}</p></section>`
     + htmlConsenso('producao') + dia + htmlRelatorioAgente('producao')
     + ccBloco(`Sua fila · ${plural(abertos.length, 'item', 'itens')}`, `<ul class="cc-fila">${abertos.map(linha).join('') || '<li><span><small>Vazia. Fale “quero imprimir …” para o J.A.R.V.I.S. ou anote aqui embaixo.</small></span></li>'}${feitos.map(linha).join('')}</ul>
-      <form class="cc-form cc-fila-form" onsubmit="event.preventDefault(); const t = document.getElementById('cc-fila-txt'); const d = detectarFila('imprimir ' + t.value) || { titulo: t.value, qtd: 1 }; if (d.titulo) { adicionarFila(d, 'app'); t.value = ''; }"><input id="cc-fila-txt" placeholder="Ex.: 20 chaveiros Nossa Senhora em PLA dourado" maxlength="120" required><button type="submit" class="cc-btn">＋ Pôr na fila</button></form>`)
+      <form class="cc-form cc-fila-form" onsubmit="event.preventDefault(); const t = document.getElementById('cc-fila-txt'); const d = detectarFila('imprimir ' + t.value) || { titulo: t.value, qtd: 1 }; if (d.titulo && adicionarFila(d, 'app')) t.value = '';"><input id="cc-fila-txt" placeholder="Ex.: 20 chaveiros Nossa Senhora em PLA dourado" maxlength="120" required><button type="submit" class="cc-btn">＋ Pôr na fila</button></form>`)
     + datas + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('producao')">Abrir Produção na Primos</button>` + botaoConversarAgente(a);
 }
 // =====================================================================================================================
@@ -8261,20 +8271,21 @@ function aprovarGarimpo(id) {
   const g = garimpoDoDia(), it = g && g.itens.find(x => x.id === id); if (!it || decisaoGarimpo(id)) return;
   if (it.licenca === 'nao' && !confirm(`A licença de “${it.titulo}” não permite vender a impressão (${it.licencaNome || 'só referência'}).\n\nPôr na fila mesmo assim (teste, uso próprio ou para o Desenvolvedor criar uma versão própria)?`)) return;
   const f = adicionarFila({ titulo: it.titulo, qtd: it.qtd || 1, cor: (it.cores || []).join(' + ').slice(0, 60), obs: [it.link, it.licencaNome ? 'licença: ' + it.licencaNome : ''].filter(Boolean).join(' · ') }, 'garimpo');
-  garimpoAprov.push({ id, titulo: it.titulo, link: it.link || '', dia: g.dia, decisao: 'aprovado', quando: new Date().toISOString(), filaId: f.id });
-  gravarGarimpo(); toast(`✓ ${it.titulo} foi para a fila de impressão.`, 3500);
+  if (!f) return;
+  if (!gravarGarimpo(garimpoAprov.concat({ id, titulo: it.titulo, link: it.link || '', dia: g.dia, decisao: 'aprovado', quando: new Date().toISOString(), filaId: f.id }))) { removerFila(f.id); return; }
+  toast(`✓ ${it.titulo} foi para a fila de impressão.`, 3500);
 }
 function recusarGarimpo(id) {
   const g = garimpoDoDia(), it = g && g.itens.find(x => x.id === id); if (!it || decisaoGarimpo(id)) return;
-  garimpoAprov.push({ id, titulo: it.titulo, dia: g.dia, decisao: 'recusado', quando: new Date().toISOString() });
-  gravarGarimpo();
+  gravarGarimpo(garimpoAprov.concat({ id, titulo: it.titulo, dia: g.dia, decisao: 'recusado', quando: new Date().toISOString() }));
 }
 function desfazerGarimpo(id) {
   const d = decisaoGarimpo(id); if (!d) return;
   if (d.filaId) { const f = filaImpressao.find(x => x.id === d.filaId); if (f && f.status === 'fila') removerFila(f.id); }
-  garimpoAprov = garimpoAprov.filter(x => x.id !== id); gravarGarimpo();
+  gravarGarimpo(garimpoAprov.filter(x => x.id !== id));
 }
-function gravarGarimpo() { garimpoAprov = garimpoAprov.slice(-200); salvar('garimpoaprov', garimpoAprov); publicarFilaCofre(); renderGarimpoTela(); renderDestaquesJarvis(); }
+/** Grava o PRÓXIMO estado; só se o aparelho guardou de verdade troca a memória, publica e redesenha (fase 12, achado 4). */
+function gravarGarimpo(proximo = garimpoAprov) { proximo = proximo.slice(-200); if (!salvar('garimpoaprov', proximo)) return false; garimpoAprov = proximo; publicarFilaCofre(); renderGarimpoTela(); renderDestaquesJarvis(); return true; }
 /** Redesenha só os blocos do garimpo que estão na tela (painel da Central e/ou página da Produção), sem mexer na rolagem. */
 function renderGarimpoTela() {
   document.querySelectorAll('.gm').forEach(el => {
@@ -8295,10 +8306,10 @@ function htmlCartaoGarimpo(it, k) {
   const pop = [it.curtidas ? `♥ ${mil(it.curtidas)}` : '', it.downloads ? `⬇ ${mil(it.downloads)}` : '', it.impressoes ? `🖨 ${mil(it.impressoes)}` : ''].filter(Boolean).join(' · ');
   const quem = (it.indicadoPor || []).map(a => `<span style="--c:${COR_AGENTE[a] || '#8e8e93'}">${esc(nomeConv(a))}</span>`).join('');
   const votos = Object.entries(it.votos || {}).filter(([, v]) => v).map(([a, v]) => `<li style="--c:${COR_AGENTE[a] || '#8e8e93'}"><b>${esc(nomeConv(a))}</b><span>${esc(v)}</span></li>`).join('');
-  const links = it.link ? `<a class="gm-link" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">Abrir no ${esc(site || 'site')} ↗</a>${it.parecido ? '<small class="gm-aviso">arquivo parecido, achado pelo nome — confira se é o mesmo</small>' : it.linkOk === null && it.site !== 'makerworld' ? '<small class="gm-aviso">link da busca, ainda não conferido</small>' : ''}`
-    : `<span class="gm-buscar">Buscar o arquivo: ${Object.entries(it.buscas || {}).map(([s, u]) => `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(SITES_GARIMPO[s] || s)}</a>`).join(' · ')}</span>`;
-  const acoes = !d ? `<button type="button" class="gm-aprovar" onclick="aprovarGarimpo('${esc(it.id)}')">✓ Aprovar → fila</button><button type="button" class="gm-recusar" onclick="recusarGarimpo('${esc(it.id)}')">Agora não</button>`
-    : `<p class="gm-feito ${d.decisao}">${d.decisao === 'aprovado' ? '✓ Na fila de impressão' : '✕ Recusado — não volta'}<button type="button" onclick="desfazerGarimpo('${esc(it.id)}')">Desfazer</button></p>`;
+  const links = it.link ? `<a class="gm-link" href="${esc(urlSegura(it.link))}" target="_blank" rel="noopener noreferrer">Abrir no ${esc(site || 'site')} ↗</a>${it.parecido ? '<small class="gm-aviso">arquivo parecido, achado pelo nome — confira se é o mesmo</small>' : it.linkOk === null && it.site !== 'makerworld' ? '<small class="gm-aviso">link da busca, ainda não conferido</small>' : ''}`
+    : `<span class="gm-buscar">Buscar o arquivo: ${Object.entries(it.buscas || {}).map(([s, u]) => `<a href="${esc(urlSegura(u))}" target="_blank" rel="noopener noreferrer">${esc(SITES_GARIMPO[s] || s)}</a>`).join(' · ')}</span>`;
+  const acoes = !d ? `<button type="button" class="gm-aprovar" onclick="aprovarGarimpo(${jsa(it.id)})">✓ Aprovar → fila</button><button type="button" class="gm-recusar" onclick="recusarGarimpo(${jsa(it.id)})">Agora não</button>`
+    : `<p class="gm-feito ${d.decisao}">${d.decisao === 'aprovado' ? '✓ Na fila de impressão' : '✕ Recusado — não volta'}<button type="button" onclick="desfazerGarimpo(${jsa(it.id)})">Desfazer</button></p>`;
   return `<article class="gm-card lic-${esc(it.licenca || 'verificar')}${d ? ' ' + d.decisao : ''}" style="--k:${k}; --lic:${lic[1]}; --rede:${rede[1]}">
     <div class="gm-midia">${midia}<span class="gm-n">${k + 1}</span><span class="gm-rede">🔥 ${esc(rede[0])}</span><span class="gm-lic" title="${esc(it.licencaNome || '')}">● ${esc(lic[0])}</span></div>
     <div class="gm-corpo"><h5>${esc(it.titulo)}</h5>${it.tituloOriginal || site ? `<small class="gm-orig">${esc([it.tituloOriginal, site].filter(Boolean).join(' · '))}</small>` : ''}
@@ -8407,14 +8418,14 @@ function renderPaginaJarvis() {
   const orbita = `<svg class="jvpg-orbita" viewBox="-230 -210 460 420" aria-hidden="false">
     <defs><radialGradient id="jvpg-luz"><stop offset="0" stop-color="#fff"/><stop offset=".25" stop-color="#fff" stop-opacity=".55"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs>
     ${ags.map((a, k) => { const ang = k / N * Math.PI * 2 - Math.PI / 2, x = Math.cos(ang) * R0, y = Math.sin(ang) * R0 * 0.82, st = estadoAgente(a), u = (aa.find(v => v.id === a.id) || {}).u;
-      return `<g class="jvpg-ag" style="--k:${k}" onclick="abrirPaginaAgente('${esc(a.id)}')" role="button" tabindex="0" aria-label="${esc(a.nome)}">
+      return `<g class="jvpg-ag" style="--k:${k}" onclick="abrirPaginaAgente(${jsa(a.id)})" role="button" tabindex="0" aria-label="${esc(a.nome)}">
         <path id="jvpg-f${k}" d="M0,0 L${x.toFixed(1)},${y.toFixed(1)}" class="jvpg-fio"/>
         <circle r="2.6" class="jvpg-pulso"><animateMotion dur="${(2.4 + k * 0.37).toFixed(2)}s" repeatCount="indefinite"><mpath href="#jvpg-f${k}"/></animateMotion></circle>
         <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="21" class="jvpg-no"/><circle cx="${(x + 15).toFixed(1)}" cy="${(y - 15).toFixed(1)}" r="4.5" fill="${u ? u.cor : cor[st.nivel] || '#636366'}"/>
         <text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" text-anchor="middle" class="jvpg-ini">${esc(a.nome.slice(0, 2))}</text>
         <text x="${x.toFixed(1)}" y="${(y + 38).toFixed(1)}" text-anchor="middle" class="jvpg-nome">${esc(a.nome.split(' ')[0])}</text></g>`; }).join('')}
     <circle r="46" fill="url(#jvpg-luz)" class="jvpg-sol"/><circle r="9" fill="#fff"/></svg>`;
-  const cartao = (p, k) => { const u = URGENCIA_JV[p.urgencia] || URGENCIA_JV.semana; return `<article class="jvpg-prio" style="--k:${k}; --u:${u[1]}"${p.agente ? ` onclick="abrirPaginaAgente('${esc(p.agente)}')"` : ''}><small>${u[0]}${p.agente ? ` · ${esc(nomeAg(p.agente))}` : ''}</small><p>${textoAgente(p.texto)}</p></article>`; };
+  const cartao = (p, k) => { const u = URGENCIA_JV[p.urgencia] || URGENCIA_JV.semana; return `<article class="jvpg-prio" style="--k:${k}; --u:${u[1]}"${p.agente ? ` onclick="abrirPaginaAgente(${jsa(p.agente)})"` : ''}><small>${u[0]}${p.agente ? ` · ${esc(nomeAg(p.agente))}` : ''}</small><p>${textoAgente(p.texto)}</p></article>`; };
   el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Comando central</small><strong id="jvpg-marca">J.A.R.V.I.S.</strong></div>
       <button type="button" class="ag-falar" onclick="iniciarConversaVoz('Página do J.A.R.V.I.S.')">🎙 Falar</button></header>
     <i class="ag-progresso" id="ag-progresso" style="--cor:#ffffff"></i>
@@ -8429,7 +8440,7 @@ function renderPaginaJarvis() {
       ${hoje.length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">O que importa hoje</h2><div class="jvpg-prios">${hoje.map(cartao).join('')}</div></section>` : ''}
       ${htmlDiarioJarvis()}
       <section class="ag-sec ag-corpo jvpg-sec-orb"><h2 class="jvpg-tit">Como estou organizando os agentes</h2><p class="ag-sub">Cada fio é um agente me mandando o relatório. A bolinha mostra a urgência do recado dele. Toque para abrir a página do agente.</p>${orbita}
-        ${aa.length ? `<ul class="jvpg-recados">${aa.map(a => `<li style="--urg:${a.u.cor}" onclick="abrirPaginaAgente('${esc(a.id)}')"><i></i><b>${esc(a.nome)}</b><span>${esc(a.txt)}</span></li>`).join('')}</ul>` : ''}</section>
+        ${aa.length ? `<ul class="jvpg-recados">${aa.map(a => `<li style="--urg:${a.u.cor}" onclick="abrirPaginaAgente(${jsa(a.id)})"><i></i><b>${esc(a.nome)}</b><span>${esc(a.txt)}</span></li>`).join('')}</ul>` : ''}</section>
       ${resto.length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">Para esta semana e este mês</h2><div class="jvpg-prios">${resto.map(cartao).join('')}</div></section>` : ''}
       ${av.length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">Pensando na sua vida</h2><div class="jvpg-prios">${av.map((a, k) => `<article class="jvpg-prio" style="--k:${k}; --u:#ffffff" onclick="fecharPaginaAgente(); ${a.acao}"><small>${esc(a.rot)}</small><p>${esc(a.txt)}</p></article>`).join('')}</div></section>` : ''}
       ${j.valuation || j.retorno || (j.podeEsperar || []).length ? `<section class="ag-sec ag-corpo"><h2 class="jvpg-tit">Visão do negócio</h2>${j.valuation ? `<p class="jvpg-txt"><b>Quanto vale.</b> ${textoAgente(j.valuation)}</p>` : ''}${j.retorno ? `<p class="jvpg-txt"><b>Retorno.</b> ${textoAgente(j.retorno)}</p>` : ''}${(j.podeEsperar || []).length ? `<h3 class="jvpg-sub">Pode esperar</h3><ul class="jvpg-espera">${j.podeEsperar.map(p => `<li>${textoAgente(p)}</li>`).join('')}</ul>` : ''}</section>` : ''}
@@ -8624,7 +8635,7 @@ function progressoMeta(m) {
 }
 function htmlMetasFin() {
   const L = metasPrimos.slice().sort((a, b) => (a.prazo || '9').localeCompare(b.prazo || '9'));
-  const lista = L.length ? `<ul class="fin-metas">${L.map(m => { const p = progressoMeta(m); return `<li><div><small>${esc(QUEM_META[m.quem] || 'Primos 3D')} · ${esc(TIPO_META[m.tipo] || 'Meta')}${m.prazo ? ` · até ${esc(isoParaBR(m.prazo))}` : ''}</small><b>${esc(m.titulo)}</b>${p ? `<div class="fin-barra fina"><i style="--w:${Math.min(100, Math.max(0, p.f * 100)).toFixed(1)}%"></i></div><small>${esc(p.txt)}</small>` : ''}${m.obs ? `<p>${esc(m.obs)}</p>` : ''}</div><button type="button" class="cc-mini sec" onclick="removerMetaPrimos('${m.id}')" aria-label="Apagar meta">✕</button></li>`; }).join('')}</ul>`
+  const lista = L.length ? `<ul class="fin-metas">${L.map(m => { const p = progressoMeta(m); return `<li><div><small>${esc(QUEM_META[m.quem] || 'Primos 3D')} · ${esc(TIPO_META[m.tipo] || 'Meta')}${m.prazo ? ` · até ${esc(isoParaBR(m.prazo))}` : ''}</small><b>${esc(m.titulo)}</b>${p ? `<div class="fin-barra fina"><i style="--w:${Math.min(100, Math.max(0, p.f * 100)).toFixed(1)}%"></i></div><small>${esc(p.txt)}</small>` : ''}${m.obs ? `<p>${esc(m.obs)}</p>` : ''}</div><button type="button" class="cc-mini sec" onclick="removerMetaPrimos(${jsa(m.id)})" aria-label="Apagar meta">✕</button></li>`; }).join('')}</ul>`
     : '<p class="cc-txt">Ainda sem metas. Conte para o J.A.R.V.I.S. a sua realidade, a do seu sócio e onde vocês querem chegar — ou anote aqui. O Financeiro lê as metas todo dia e monta o caminho.</p>';
   return `${lista}
     <form class="fin-meta-form" onsubmit="salvarMeta(event)">
@@ -8663,8 +8674,8 @@ function htmlCalcFin() {
   const campo = (rot, k, passo, modo) => `<label>${rot}<input type="number" inputmode="${modo || 'decimal'}" min="0" step="${passo}" value="${esc(String(c[k]))}" oninput="jv.calcF.${k}=this.value; atualizarCalcFin()"></label>`;
   return `<p class="cc-txt">Pegue o tempo e as gramas no Bambu Studio depois de fatiar. Os custos (filamento, energia, máquina, falhas, embalagem, taxas) vêm da sua planilha.</p>
     <div class="jvp-calc fin-calc">${campo('Filamento (g)', 'g', 0.1)}${campo('Tempo (h)', 'h', 0.05)}${campo('Peças no lote', 'n', 1, 'numeric')}${campo('Acabamento (min/peça)', 'acab', 1, 'numeric')}${campo('Acessórios (R$/peça)', 'aces', 0.01)}${campo('Quantidade do pedido', 'qtd', 1, 'numeric')}</div>
-    <div class="jvp-seg">${['A1', 'Kobra'].map(k => `<button type="button" class="${c.imp === k ? 'on' : ''}" onclick="jv.calcF.imp='${k}'; refazerCalcFin()">${k === 'A1' ? 'Bambu A1' : 'Kobra X'}</button>`).join('')}<button type="button" class="${c.emb ? 'on' : ''}" onclick="jv.calcF.emb=!jv.calcF.emb; refazerCalcFin()">Com caixinha</button></div>
-    <div class="jvp-seg">${['Direto', 'Shopee', 'Consignado'].map(k => `<button type="button" class="${c.canal === k ? 'on' : ''}" onclick="jv.calcF.canal='${k}'; refazerCalcFin()">${k === 'Direto' ? 'Cliente direto' : k}</button>`).join('')}</div>
+    <div class="jvp-seg">${['A1', 'Kobra'].map(k => `<button type="button" class="${c.imp === k ? 'on' : ''}" onclick="jv.calcF.imp=${jsa(k)}; refazerCalcFin()">${k === 'A1' ? 'Bambu A1' : 'Kobra X'}</button>`).join('')}<button type="button" class="${c.emb ? 'on' : ''}" onclick="jv.calcF.emb=!jv.calcF.emb; refazerCalcFin()">Com caixinha</button></div>
+    <div class="jvp-seg">${['Direto', 'Shopee', 'Consignado'].map(k => `<button type="button" class="${c.canal === k ? 'on' : ''}" onclick="jv.calcF.canal=${jsa(k)}; refazerCalcFin()">${k === 'Direto' ? 'Cliente direto' : k}</button>`).join('')}</div>
     <div id="fin-calc-res">${htmlCalcFinRes()}</div>`;
 }
 function htmlCalcFinRes() {
@@ -8677,7 +8688,7 @@ function htmlCalcFinRes() {
     return `<div class="fin-cen ${k}"><small>${nome}</small><strong>${reais(p)}</strong><span>por peça · lucro <b>${reais(lucro)}</b> (${pctFr(lucro / p)})</span>${qtd > 1 ? `<span>pedido de ${qtd}: <b>${reais(p * qtd)}</b> · lucro ${reais(lucro * qtd)}</span>` : ''}<em>${desc}</em><span class="fin-cen-meta">${lucro > 0 ? `${Math.ceil(fixos / lucro)} peças/mês pagam os custos fixos${meta ? ` · ${Math.ceil(meta.valor / lucro)} para a meta de lucro` : ''}` : 'prejuízo neste preço'}</span></div>`; }).join('');
   return `<div class="fin-cens">${cards}</div>
     <p class="cc-nota">Custo da peça ${reais(base.custo)} (filamento ${reais(base.fil)} · máquina ${reais(base.maq)} · mão de obra ${reais(base.mao)} · falhas ${reais(base.fal)}${base.emb ? ` · caixinha ${reais(base.emb)}` : ''}${base.aces ? ` · acessórios ${reais(base.aces)}` : ''}) + ${reais(rateio)} de custo fixo rateado (DAS + site ÷ ${pecasMes} peças/mês).${c.canal === 'Shopee' ? ' Shopee: 20% + R$ 4 por item.' : c.canal === 'Consignado' ? ' Expositor: 30% de comissão.' : ''}</p>
-    <button type="button" class="cc-btn" onclick="abrirChatJarvis({ contexto: 'Calculadora do Financeiro: ${esc(`${c.g} g, ${c.h} h (${c.imp}), lote ${c.n}, ${c.canal}, custo ${reais(custo)}`)} — me ajude a escolher o preço', area: 'primos' })">Perguntar ao J.A.R.V.I.S. qual cenário usar</button>`;
+    <button type="button" class="cc-btn" onclick="abrirChatJarvis({ contexto: ${jsa(`Calculadora do Financeiro: ${c.g} g, ${c.h} h (${c.imp}), lote ${c.n}, ${c.canal}, custo ${reais(custo)} — me ajude a escolher o preço`)}, area: 'primos' })">Perguntar ao J.A.R.V.I.S. qual cenário usar</button>`;
 }
 function atualizarCalcFin() { const el = $j('fin-calc-res'); if (el) el.innerHTML = htmlCalcFinRes(); }
 /** Cifrão de ouro em 3D (camadas empilhadas = espessura), no lugar da moeda com a logo (pedido do Rafael). */
@@ -8731,8 +8742,8 @@ function htmlCalcCompleta() {
   const campo = (rot, k, passo, dica) => `<label>${rot}<input type="number" inputmode="decimal" min="0" step="${passo}" value="${esc(String(c[k] ?? ''))}" oninput="jv.calcF.${k}=this.value; atualizarCalcCompleta()">${dica ? `<small>${dica}</small>` : ''}</label>`;
   return `<div class="calc-grid">
       <div class="calc-caixa"><h3>A peça</h3><div class="jvp-calc fin-calc">${campo('Filamento (g)', 'g', 0.1, 'do Bambu Studio, da placa toda')}${campo('Tempo (h)', 'h', 0.05, 'tempo da placa')}${campo('Peças na placa', 'n', 1)}${campo('Acabamento (min/peça)', 'acab', 1)}${campo('Acessórios (R$/peça)', 'aces', 0.01, 'argola, ímã, LED…')}${campo('Quantidade do pedido', 'qtd', 1)}</div>
-        <div class="jvp-seg">${['A1', 'Kobra'].map(k => `<button type="button" class="${c.imp === k ? 'on' : ''}" onclick="jv.calcF.imp='${k}'; refazerCalcCompleta()">${k === 'A1' ? 'Bambu A1' : 'Kobra X'}</button>`).join('')}<button type="button" class="${c.emb ? 'on' : ''}" onclick="jv.calcF.emb=!jv.calcF.emb; refazerCalcCompleta()">Com caixinha</button></div></div>
-      <div class="calc-caixa"><h3>A venda</h3><div class="jvp-seg">${['Direto', 'Shopee', 'Consignado'].map(k => `<button type="button" class="${c.canal === k ? 'on' : ''}" onclick="jv.calcF.canal='${k}'; refazerCalcCompleta()">${k === 'Direto' ? 'Cliente direto' : k}</button>`).join('')}</div>
+        <div class="jvp-seg">${['A1', 'Kobra'].map(k => `<button type="button" class="${c.imp === k ? 'on' : ''}" onclick="jv.calcF.imp=${jsa(k)}; refazerCalcCompleta()">${k === 'A1' ? 'Bambu A1' : 'Kobra X'}</button>`).join('')}<button type="button" class="${c.emb ? 'on' : ''}" onclick="jv.calcF.emb=!jv.calcF.emb; refazerCalcCompleta()">Com caixinha</button></div></div>
+      <div class="calc-caixa"><h3>A venda</h3><div class="jvp-seg">${['Direto', 'Shopee', 'Consignado'].map(k => `<button type="button" class="${c.canal === k ? 'on' : ''}" onclick="jv.calcF.canal=${jsa(k)}; refazerCalcCompleta()">${k === 'Direto' ? 'Cliente direto' : k}</button>`).join('')}</div>
         <div class="jvp-calc fin-calc">${campo('Desconto/cupom (%)', 'desc', 1)}${campo('Frete que você paga (R$/pedido)', 'frete', 0.5)}${campo('Anúncio/Ads (% do preço)', 'ads', 1)}${campo('Preço que pensa cobrar', 'preco', 0.1, 'opcional')}</div></div>
     </div>
     <div id="calc-res">${htmlCalcCompletaRes()}</div>`;
@@ -8765,7 +8776,7 @@ function htmlCalcCompletaRes() {
     <div class="calc-caixa"><h3>O Financeiro conferiu os dados</h3><ul class="calc-aud">${aud.map(([t, x]) => `<li class="${t}"><i>${t === 'ok' ? '✓' : t === 'aviso' ? '!' : '＋'}</i><span>${esc(x)}</span></li>`).join('')}</ul></div>
     ${viz.length ? `<div class="calc-caixa"><h3>Peças parecidas (pelo peso)</h3><ul class="cc-lista">${viz.map(p => `<li><span><b>${esc(p.produto)}</b><small>${p.g.toFixed(0)} g · custo ${reais(p.custo)} · ${esc(p.canal || '')}</small></span><em class="cc-pct">${reais(p.preco || p.precoMin)}</em></li>`).join('')}</ul></div>` : ''}
     <div class="calc-acoes"><button type="button" class="cc-btn fin-conversa" onclick="salvarOrcamentoCalc()">Mandar este orçamento ao Financeiro</button>
-      <button type="button" class="cc-btn" onclick="abrirChatJarvis({ contexto: 'Calculadora completa: ${esc(`${c.g} g, ${c.h} h (${c.imp}), placa com ${c.n}, ${c.canal}, custo ${reais(custo)}/peça, qtd ${qtd}`)} — analise o preço comigo', area: 'primos' })">Analisar com o J.A.R.V.I.S.</button></div>`;
+      <button type="button" class="cc-btn" onclick="abrirChatJarvis({ contexto: ${jsa(`Calculadora completa: ${c.g} g, ${c.h} h (${c.imp}), placa com ${c.n}, ${c.canal}, custo ${reais(custo)}/peça, qtd ${qtd} — analise o preço comigo`)}, area: 'primos' })">Analisar com o J.A.R.V.I.S.</button></div>`;
 }
 function atualizarCalcCompleta() { const el = $j('calc-res'); if (el) el.innerHTML = htmlCalcCompletaRes(); }
 function refazerCalcCompleta() { const el = $j('calc-corpo'); if (el) el.innerHTML = htmlCalcCompleta(); }
@@ -8825,7 +8836,7 @@ function renderPaginaAgente() {
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
   el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
-      ${VOZ_AGENTES[id] ? `<button type="button" class="ag-falar" onclick="falarComAgente('${id}')">🎙 Falar</button>` : agentePrimos(id) ? '' : `<button type="button" class="ag-falar" onclick="conversarComAgente('${id}')">💬 Conversar</button>`}</header>
+      ${VOZ_AGENTES[id] ? `<button type="button" class="ag-falar" onclick="falarComAgente(${jsa(id)})">🎙 Falar</button>` : agentePrimos(id) ? '' : `<button type="button" class="ag-falar" onclick="conversarComAgente(${jsa(id)})">💬 Conversar</button>`}</header>
     <i class="ag-progresso" id="ag-progresso" style="--cor:${s.cor}"></i>
     <div class="ag-rolo" id="ag-rolo" style="--cor:${s.cor}">
       <section class="ag-heroi"><div class="ag-heroi-txt"><small>${esc(s.nome)} · agente</small><h1>${esc(a.nome)}</h1><p>${esc(a.funcao || '')}</p></div><div class="ag-palco">${palcoPagina(id)}</div><div class="ag-desca">role para ver tudo<i></i></div></section>
@@ -8892,7 +8903,7 @@ function itensAgente(id) {
   if (id === 'marketing') ((conteudoMkt && conteudoMkt.videos) || []).slice(0, 6).forEach(v => add({ id: `mkt:${v.video}`, tipo: 'novidade', texto: `Vídeo pronto: ${v.produto}${v.vinheta ? ' · com vinheta' : ''}`, quando: v.data, origem: 'estúdio no PC' }));
   if (id === 'dev') {
     ((pedidosDev && pedidosDev.pedidos) || []).slice(0, 10).forEach(p => add({ id: `pd:${p.id}:${p.status}`, tipo: p.status === 'duvida' ? 'pendencia' : 'novidade', prio: 1, texto: `${p.status === 'feito' ? 'Pronto' : p.status === 'duvida' ? 'Precisa de você' : p.status === 'andamento' ? 'Modelando' : 'Pedido na fila'}: ${String(p.texto).slice(0, 110)}${p.resposta ? ' — ' + p.resposta : ''}`, quando: p.quando, origem: p.origem === 'voz' ? 'voz' : p.origem === 'chat' ? 'chat' : 'app' }));
-    ((devDados && devDados.projetos) || []).forEach(p => add({ id: `proj:${p.codigo}:${p.status}:${p.versao || ''}`, tipo: 'novidade', texto: `${p.nome} → ${(ETAPAS_DEV[p.status] || ETAPAS_DEV.ideia)[0]}`, quando: p.atualizadoEm || '', origem: 'Desenvolvedor no PC', acao: ['Ver projeto', `abrirProjetoDev('${esc(p.codigo)}')`] }));
+    ((devDados && devDados.projetos) || []).forEach(p => add({ id: `proj:${p.codigo}:${p.status}:${p.versao || ''}`, tipo: 'novidade', texto: `${p.nome} → ${(ETAPAS_DEV[p.status] || ETAPAS_DEV.ideia)[0]}`, quando: p.atualizadoEm || '', origem: 'Desenvolvedor no PC', acao: ['Ver projeto', `abrirProjetoDev(${jsa(p.codigo)})`] }));
   }
   if (id === 'digital') ((ebookDados && ebookDados.capitulos) || []).forEach(c => add({ id: `cap:${c.id}:${c.status}`, tipo: 'novidade', texto: `Capítulo ${c.n}: ${c.titulo} → ${ESTADOS_CAP[c.status] || c.status}`, quando: c.atualizadoEm || (ebookDados && ebookDados.atualizadoEm) || '', origem: 'e-book (PC)' }));
   return out;
@@ -8912,7 +8923,7 @@ function htmlNovidades(id) {
   const n = novidadesAgente(id, cc.vistoBase), ult = cc.vistoBase && cc.vistoBase.quando;
   cc.novidadesN = n.novas; cc.novidadesIds = n.ids;
   const tag = { pendencia: 'Pendência', novidade: 'Novidade', oportunidade: 'Oportunidade' };
-  const item = x => `<li class="agn-item agn-${x.tipo}"><span class="agn-tag">${tag[x.tipo]}${x.nomeAg ? ' · ' + esc(x.nomeAg) : ''}</span><b>${esc(x.texto)}</b><small>${esc(quandoTxt(x.quando) || 'sem data')} · ${esc(x.origem || '')}</small>${x.agente ? `<button type="button" class="agn-acao" onclick="abrirPaginaAgente('${esc(x.agente)}')">Abrir ›</button>` : x.acao ? `<button type="button" class="agn-acao" onclick="${x.acao[1]}">${esc(x.acao[0])} ›</button>` : ''}</li>`;
+  const item = x => `<li class="agn-item agn-${x.tipo}"><span class="agn-tag">${tag[x.tipo]}${x.nomeAg ? ' · ' + esc(x.nomeAg) : ''}</span><b>${esc(x.texto)}</b><small>${esc(quandoTxt(x.quando) || 'sem data')} · ${esc(x.origem || '')}</small>${x.agente ? `<button type="button" class="agn-acao" onclick="abrirPaginaAgente(${jsa(x.agente)})">Abrir ›</button>` : x.acao ? `<button type="button" class="agn-acao" onclick="${x.acao[1]}">${esc(x.acao[0])} ›</button>` : ''}</li>`;
   return `<div class="agn-topo"><h2>O que mudou</h2><small>desde sua última visita${ult ? ' (' + esc(quandoTxt(new Date(ult - new Date().getTimezoneOffset() * 60000).toISOString())) + ')' : ''}</small></div>
     ${n.lista.length ? `<ul class="agn-lista">${n.lista.map(item).join('')}</ul>` : `<p class="agn-vazio">Nenhuma novidade desde a sua última visita.</p>`}
     <p class="agn-status" id="agn-status" role="status" aria-live="polite">${esc(cc.puxarStatus || '')}</p>`;
@@ -9108,7 +9119,7 @@ function palcoLivro() {
 }
 function htmlAgenteDigital(a) {
   const d = ebookDados || {}, cs = d.capitulos || [], pr = d.produto || {};
-  const sumario = cs.length ? `<ol class="dg-sumario">${cs.map(c => `<li style="--c:${COR_CAP[c.status] || '#8e8e93'}"${c.texto ? ` class="lerc" role="button" tabindex="0" onclick="abrirLeitorEbook('${esc(c.id)}')"` : ''}><span><b>${esc(c.titulo)}</b><small>${esc(c.resumo || '')}</small></span><em>${esc(ESTADOS_CAP[c.status] || c.status)}${c.palavras ? ' · ' + Number(c.palavras).toLocaleString('pt-BR') + ' pal.' : ''}</em></li>`).join('')}</ol>` : '<p class="cc-txt">O sumário chega do computador (o Claude escreve o e-book na pasta 11 Produto Digital da Central).</p>';
+  const sumario = cs.length ? `<ol class="dg-sumario">${cs.map(c => `<li style="--c:${COR_CAP[c.status] || '#8e8e93'}"${c.texto ? ` class="lerc" role="button" tabindex="0" onclick="abrirLeitorEbook(${jsa(c.id)})"` : ''}><span><b>${esc(c.titulo)}</b><small>${esc(c.resumo || '')}</small></span><em>${esc(ESTADOS_CAP[c.status] || c.status)}${c.palavras ? ' · ' + Number(c.palavras).toLocaleString('pt-BR') + ' pal.' : ''}</em></li>`).join('')}</ol>` : '<p class="cc-txt">O sumário chega do computador (o Claude escreve o e-book na pasta 11 Produto Digital da Central).</p>';
   const escritos = cs.filter(c => c.texto).length;
   const ler = `<button type="button" class="dg-ler" onclick="abrirLeitorEbook()"><i aria-hidden="true">📖</i><span><b>Ler a prévia do e-book</b><small>${escritos ? `${plural(escritos, 'capítulo escrito', 'capítulos escritos')} · versão de ${esc(quandoTxt(d.atualizadoEm))}` : 'a versão mais nova que o agente gerou'}</small></span><em aria-hidden="true">›</em></button>`;
   const etapas = (pr.etapas || []).length ? `<ol class="dg-etapas">${pr.etapas.map((e, k) => `<li class="${e.feito ? 'ok' : ''}" style="--k:${k}"><b>${esc(e.titulo)}</b><small>${esc(e.como || '')}</small></li>`).join('')}</ol>` : '';
@@ -9200,7 +9211,7 @@ function renderLeitorEbook(manterRolagem) {
     corpo = `<article class="eb-papel eb-capa"><small>Primos 3D apresenta</small><h1>${esc(d.titulo || 'J.A.R.V.I.S.')}</h1><p class="eb-sub">${esc(d.subtitulo || '')}</p><p class="eb-autor">${esc(d.autor || 'Rafael Martins · Primos 3D')}</p><em>rascunho vivo · ${escritos.length} de ${cs.length} capítulos · ${pal.toLocaleString('pt-BR')} palavras</em></article>
       ${d.proximo ? `<p class="eb-agora"><b>Agora:</b> ${esc(d.proximo)}</p>` : ''}
       <h2 class="eb-h-sum">Sumário</h2>
-      <ol class="eb-sumario">${cs.map(x => `<li class="${x.texto ? 'ok' : 'breve'}" style="--c:${COR_CAP[x.status] || '#8e8e93'}"${x.texto ? ` role="button" tabindex="0" onclick="irCapEbook('${esc(x.id)}')"` : ''}><span class="n">${x.n}</span><span><b>${esc(x.titulo)}</b><small>${esc(x.resumo || '')}</small></span><em>${x.texto ? esc(ESTADOS_CAP[x.status] || x.status) : 'em breve'}</em></li>`).join('')}</ol>`;
+      <ol class="eb-sumario">${cs.map(x => `<li class="${x.texto ? 'ok' : 'breve'}" style="--c:${COR_CAP[x.status] || '#8e8e93'}"${x.texto ? ` role="button" tabindex="0" onclick="irCapEbook(${jsa(x.id)})"` : ''}><span class="n">${x.n}</span><span><b>${esc(x.titulo)}</b><small>${esc(x.resumo || '')}</small></span><em>${x.texto ? esc(ESTADOS_CAP[x.status] || x.status) : 'em breve'}</em></li>`).join('')}</ol>`;
   } else {
     const k = escritos.indexOf(c), ant = escritos[k - 1], prox = escritos[k + 1], env = ebLeitor.enviados[c.id];
     corpo = `<div class="eb-chips"><span style="--c:${COR_CAP[c.status] || '#8e8e93'}">${esc(ESTADOS_CAP[c.status] || c.status)}</span>${c.palavras ? `<span>${Number(c.palavras).toLocaleString('pt-BR')} palavras · ~${Math.max(1, Math.round(c.palavras / 200))} min de leitura</span>` : ''}${c.atualizadoEm ? `<span>mexido em ${esc(quandoTxt(c.atualizadoEm))}</span>` : ''}</div>
@@ -9208,8 +9219,8 @@ function renderLeitorEbook(manterRolagem) {
       <section class="eb-acoes"><h3>Este capítulo</h3>
         ${env ? `<p class="eb-ok">${env === 'aprovado' ? '✔ Aprovação' : '✎ Pedido de ajuste'} ${claudeConfigurado() ? 'enviado ao agente. Quando ele terminar no computador, esta prévia se atualiza sozinha e a resposta aparece no chat do J.A.R.V.I.S.' : 'guardado: vai ao computador quando o app estiver conectado (Ajustes do J.A.R.V.I.S. → 2 Computador).'}</p>` : ''}
         <textarea id="eb-pedido" rows="3" placeholder="O que mudar? Ex.: tirar o trecho do sócio, explicar melhor o cofre, trocar o exemplo…"></textarea>
-        <div class="eb-btns"><button type="button" class="eb-btn" onclick="pedirAjusteEbook('${esc(c.id)}')">✎ Pedir ajuste</button><button type="button" class="eb-btn ok" onclick="aprovarCapEbook('${esc(c.id)}')">✔ Aprovar capítulo</button></div></section>
-      <nav class="eb-nav">${ant ? `<button type="button" onclick="irCapEbook('${esc(ant.id)}')"><small>‹ anterior</small><b>${ant.n}. ${esc(ant.titulo)}</b></button>` : '<span></span>'}${prox ? `<button type="button" class="dir" onclick="irCapEbook('${esc(prox.id)}')"><small>próximo ›</small><b>${prox.n}. ${esc(prox.titulo)}</b></button>` : `<button type="button" class="dir" onclick="irCapEbook(null)"><small>fim do que já está escrito</small><b>Voltar ao sumário</b></button>`}</nav>`;
+        <div class="eb-btns"><button type="button" class="eb-btn" onclick="pedirAjusteEbook(${jsa(c.id)})">✎ Pedir ajuste</button><button type="button" class="eb-btn ok" onclick="aprovarCapEbook(${jsa(c.id)})">✔ Aprovar capítulo</button></div></section>
+      <nav class="eb-nav">${ant ? `<button type="button" onclick="irCapEbook(${jsa(ant.id)})"><small>‹ anterior</small><b>${ant.n}. ${esc(ant.titulo)}</b></button>` : '<span></span>'}${prox ? `<button type="button" class="dir" onclick="irCapEbook(${jsa(prox.id)})"><small>próximo ›</small><b>${prox.n}. ${esc(prox.titulo)}</b></button>` : `<button type="button" class="dir" onclick="irCapEbook(null)"><small>fim do que já está escrito</small><b>Voltar ao sumário</b></button>`}</nav>`;
   }
   el.innerHTML = `<header class="eb-topo"><button type="button" class="ag-voltar" onclick="${c ? 'irCapEbook(null)' : 'fecharLeitorEbook()'}" aria-label="Voltar">‹</button><div><small>Prévia do e-book</small><strong>${c ? `Capítulo ${c.n}` : esc(d.titulo || 'E-book')}</strong></div>${c ? '<button type="button" class="eb-sum" onclick="irCapEbook(null)">Sumário</button>' : '<button type="button" class="eb-sum" onclick="fecharLeitorEbook()">Fechar</button>'}</header>
     <div class="eb-rolo" id="eb-rolo">${versao ? `<p class="eb-versao">${versao}</p>` : ''}${corpo}<footer class="eb-fim">J.A.R.V.I.S. · Produto Digital</footer></div>`;
@@ -9441,7 +9452,7 @@ async function publicarProspCofre(m) {
 function radarProsp(m) {
   const ks = Object.keys(CANAIS_PROSP), vals = ks.map(k => Math.max(0, somaArr(m.rea.canais[k].lucro, 36))), mx = Math.max(1, ...vals);
   const pts = ks.map((k, i) => { const ang = -Math.PI / 2 + i / ks.length * Math.PI * 2, rr = 34 + 112 * Math.sqrt(vals[i] / mx), x = Math.cos(ang) * rr, y = Math.sin(ang) * rr, ve = Math.max(0, somaArr(m.esc.canais[k].lucro, 36)), raio = 5 + 9 * Math.sqrt(ve / Math.max(1, ...ks.map(q => somaArr(m.esc.canais[q].lucro, 36))));
-    return `<g class="pr-ponto" style="--k:${i}; --c:${CANAIS_PROSP[k][1]}; --a:${((ang + Math.PI / 2) / (Math.PI * 2)).toFixed(3)}" onclick="abrirCanalProsp('${k}')"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${raio.toFixed(1)}" class="halo"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" class="miolo"/><text x="${x.toFixed(1)}" y="${(y + raio + 13).toFixed(1)}" text-anchor="middle">${esc(CANAIS_PROSP[k][0].split(' ·')[0])}</text></g>`; }).join('');
+    return `<g class="pr-ponto" style="--k:${i}; --c:${CANAIS_PROSP[k][1]}; --a:${((ang + Math.PI / 2) / (Math.PI * 2)).toFixed(3)}" onclick="abrirCanalProsp(${jsa(k)})"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${raio.toFixed(1)}" class="halo"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" class="miolo"/><text x="${x.toFixed(1)}" y="${(y + raio + 13).toFixed(1)}" text-anchor="middle">${esc(CANAIS_PROSP[k][0].split(' ·')[0])}</text></g>`; }).join('');
   return `<div class="pr-radar"><svg viewBox="-170 -170 340 340" aria-hidden="true"><defs><radialGradient id="pr-var" cx="0" cy="0" r="1"><stop offset="0" stop-color="${COR_PROSP}" stop-opacity=".0"/><stop offset="1" stop-color="${COR_PROSP}" stop-opacity=".35"/></radialGradient></defs>
     ${[[50, '3 meses'], [100, '12 meses'], [150, '3 anos']].map(([r, t]) => `<circle r="${r}" class="anel"/><text y="${-r + 12}" text-anchor="middle" class="anel-t">${t}</text>`).join('')}
     <line x1="-160" y1="0" x2="160" y2="0" class="cruz"/><line x1="0" y1="-160" x2="0" y2="160" class="cruz"/>
@@ -9453,9 +9464,9 @@ function htmlHorizProsp(m) {
   const H = prospEstado.horiz, S = prospEstado.cen === 'escala' ? m.esc : m.rea, ks = Object.keys(CANAIS_PROSP), vals = ks.map(k => somaArr(S.canais[k].lucro, H)), tot = vals.reduce((a, b) => a + b, 0), mx = Math.max(1, ...vals.map(v => Math.abs(v)));
   const outro = prospEstado.cen === 'escala' ? m.rea.total(H) : m.esc.total(H);
   return `<div class="pr-seg">${HORIZ_PROSP.map(([h, t]) => `<button type="button" class="${h === H ? 'on' : ''}" onclick="prospEstado.horiz=${h}; atualizarProsp()">${t}</button>`).join('')}</div>
-    <div class="pr-seg cen">${[['realista', 'Realista'], ['escala', 'Em escala']].map(([c, t]) => `<button type="button" class="${c === prospEstado.cen ? 'on' : ''}" onclick="prospEstado.cen='${c}'; atualizarProsp()">${t}</button>`).join('')}</div>
+    <div class="pr-seg cen">${[['realista', 'Realista'], ['escala', 'Em escala']].map(([c, t]) => `<button type="button" class="${c === prospEstado.cen ? 'on' : ''}" onclick="prospEstado.cen=${jsa(c)}; atualizarProsp()">${t}</button>`).join('')}</div>
     <div class="pr-total"><small>Lucro ${prospEstado.cen === 'escala' ? 'em escala' : 'realista'} em ${esc((HORIZ_PROSP.find(x => x[0] === H) || [, ''])[1])}</small><strong class="ag-conta">${reaisK(tot)}</strong><span>${prospEstado.cen === 'escala' ? 'realista' : 'em escala'}: ${reaisK(outro)} · faturamento ${reaisK(S.receitaTotal(H))}</span></div>
-    <ul class="pr-barras">${ks.map((k, i) => `<li style="--c:${CANAIS_PROSP[k][1]}; --w:${(Math.abs(vals[i]) / mx * 100).toFixed(1)}%; --k:${i}" onclick="abrirCanalProsp('${k}')"><span>${CANAIS_PROSP[k][2]} ${esc(CANAIS_PROSP[k][0])}</span><b>${reaisK(vals[i])}</b><i class="${vals[i] < 0 ? 'neg' : ''}"></i></li>`).join('')}</ul>
+    <ul class="pr-barras">${ks.map((k, i) => `<li style="--c:${CANAIS_PROSP[k][1]}; --w:${(Math.abs(vals[i]) / mx * 100).toFixed(1)}%; --k:${i}" onclick="abrirCanalProsp(${jsa(k)})"><span>${CANAIS_PROSP[k][2]} ${esc(CANAIS_PROSP[k][0])}</span><b>${reaisK(vals[i])}</b><i class="${vals[i] < 0 ? 'neg' : ''}"></i></li>`).join('')}</ul>
     <p class="cc-nota">Lucro = o que sobra depois de filamento, máquina, taxas, comissões, embalagem e anúncios${prospEstado.cen === 'escala' ? ' (já descontado o investimento nos expositores novos)' : ''}. Não inclui o seu salário nem custos fixos da empresa.</p>`;
 }
 function medidorProsp(rot, v, sub, alerta) { const p = Math.max(0, Math.min(1, v)); return `<div class="pr-med${alerta ? ' alerta' : ''}" style="--p:${p.toFixed(3)}"><svg viewBox="0 0 120 70" aria-hidden="true"><path d="M10,62 A50,50 0 0,1 110,62" class="f"/><path d="M10,62 A50,50 0 0,1 110,62" class="v" pathLength="1"/></svg><strong>${Math.round(v * 100)}%</strong><b>${esc(rot)}</b><small>${esc(sub)}</small></div>`; }
@@ -9475,7 +9486,7 @@ function htmlCanaisProsp(m) {
   return Object.keys(CANAIS_PROSP).map((k, i) => {
     const t = textoCanalProsp(k, m), [nome, cor, ico] = CANAIS_PROSP[k], aberto = prospEstado.canal === k;
     return `<article class="pr-canal${aberto ? ' aberto' : ''}" id="pr-canal-${k}" style="--c:${cor}; --k:${i}">
-      <button type="button" class="pr-canal-topo" onclick="abrirCanalProsp('${k}')" aria-expanded="${aberto}"><i>${ico}</i><span><b>${esc(nome)}</b><small>confiança ${esc(m.confianca[k])} · ${esc(t.hz)}</small></span><em><b>${reaisK(t.r)}</b><small>realista</small></em></button>
+      <button type="button" class="pr-canal-topo" onclick="abrirCanalProsp(${jsa(k)})" aria-expanded="${aberto}"><i>${ico}</i><span><b>${esc(nome)}</b><small>confiança ${esc(m.confianca[k])} · ${esc(t.hz)}</small></span><em><b>${reaisK(t.r)}</b><small>realista</small></em></button>
       ${aberto ? `<div class="pr-canal-corpo">
         <div class="pr-4">${[['Até agora', reais(m.jaDeu[k]), t.ate], [`Realista · ${t.hz}`, reaisK(t.r), `${reaisK(t.porMesR)}/mês no fim do período. ${t.rea}`], [`Em escala · ${t.hz}`, reaisK(t.e), `${reaisK(t.porMesE)}/mês no fim do período. ${t.esc}`]].map(([a, b, c]) => `<div><small>${esc(a)}</small><strong>${b}</strong><p>${esc(c)}</p></div>`).join('')}
           <div class="como"><small>Como majorar</small><ul>${t.como.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div></div>
@@ -9486,7 +9497,7 @@ function htmlCanaisProsp(m) {
 //     controles e o resultado ficam lado a lado, tudo recalcula enquanto ele arrasta, com a diferença para o cenário de hoje) ---
 function htmlSimProsp() {
   const P = premissasProsp(), mudou = k => P[k] !== PROSP_PADRAO[k];
-  return `<div class="pr-sim">${GRUPOS_SIM.map(([g, nome]) => `<fieldset class="pr-grupo"><legend>${esc(nome)}</legend>${PROSP_SIM.filter(x => x[6] === g).map(([k, rot, a, b, p, f]) => `<label class="${mudou(k) ? 'mudou' : ''}" id="pr-l-${k}"><span>${esc(rot)}<b id="pr-v-${k}">${esc(f(P[k]))}</b></span><input type="range" min="${a}" max="${b}" step="${p}" value="${P[k]}" oninput="mudarPremissaProsp('${k}', Number(this.value))" aria-label="${esc(rot)}"></label>`).join('')}
+  return `<div class="pr-sim">${GRUPOS_SIM.map(([g, nome]) => `<fieldset class="pr-grupo"><legend>${esc(nome)}</legend>${PROSP_SIM.filter(x => x[6] === g).map(([k, rot, a, b, p, f]) => `<label class="${mudou(k) ? 'mudou' : ''}" id="pr-l-${k}"><span>${esc(rot)}<b id="pr-v-${k}">${esc(f(P[k]))}</b></span><input type="range" min="${a}" max="${b}" step="${p}" value="${P[k]}" oninput="mudarPremissaProsp(${jsa(k)}, Number(this.value))" aria-label="${esc(rot)}"></label>`).join('')}
       ${g === 'canais' ? `<label class="pr-chk"><input type="checkbox" ${P.shopeeAds ? 'checked' : ''} onchange="mudarPremissaProsp('shopeeAds', this.checked)"> Shopee Ads (em escala)</label><label class="pr-chk"><input type="checkbox" ${P.b2bAtivo ? 'checked' : ''} onchange="mudarPremissaProsp('b2bAtivo', this.checked)"> Prospecção ativa de empresas (em escala)</label>` : ''}</fieldset>`).join('')}
     <button type="button" class="cc-btn pr-reset" onclick="voltarPremissasProsp()">↺ Voltar ao cenário de hoje</button></div>`;
 }
@@ -9559,7 +9570,7 @@ function consensoAtual() { const c = relatoriosAgentes && relatoriosAgentes.cons
 function consensoNaFila(c) { return filaImpressao.some(f => f.status !== 'feito' && semAcentoCer(f.titulo) === semAcentoCer(c.item)); }
 function porConsensoNaFila() {
   const c = consensoAtual(); if (!c) return; if (consensoNaFila(c)) { toast('Já está na fila de impressão.'); return; }
-  adicionarFila({ titulo: c.item, qtd: c.qtd || 1, cor: (c.cores || []).join(' + '), obs: `Item da vez (consenso) · ${c.dias || ''}` }, 'consenso');
+  if (!adicionarFila({ titulo: c.item, qtd: c.qtd || 1, cor: (c.cores || []).join(' + '), obs: `Item da vez (consenso) · ${c.dias || ''}` }, 'consenso')) return;
   toast(`🔥 ${c.item} entrou na fila de impressão.`, 5000); atualizarTelasSincronizadas('central', 'agente');
 }
 function htmlConsenso(modo) {
@@ -9652,7 +9663,7 @@ function htmlPedidosDev() {
   const ps = ((pedidosDev && pedidosDev.pedidos) || []).filter(p => p.status !== 'feito' || (p.quando || '') >= new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)).slice(0, 8);
   if (!ps.length) return ccBloco('Seus pedidos', '<p class="cc-txt">Peça um modelo pelo J.A.R.V.I.S. (voz ou chat): <i>“faz uma placa de mesa para a Dra. Ana, dentista, em branco e dourado”</i>. Ele entra aqui e o Desenvolvedor faz na próxima rodada do PC (10h, 15h e 20h).</p>');
   const st = { novo: ['Na fila', '#ff9f0a'], andamento: ['Modelando', '#0a84ff'], feito: ['Pronto', '#30d158'], duvida: ['Precisa de você', '#ff453a'] };
-  return ccBloco('Seus pedidos', `<ul class="dev-lista">${ps.map(p => { const e = st[p.status] || st.novo; return `<li${p.codigo ? ` class="dev-item" onclick="abrirProjetoDev('${esc(p.codigo)}')"` : ''}><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(String(p.texto).slice(0, 160))}</b><small>${esc(isoParaBR(String(p.quando || '').slice(0, 10)).slice(0, 5))} · ${esc(p.origem || '')}${p.codigo ? ' · ' + esc(p.codigo) : ''}${p.resposta ? ' · ' + esc(p.resposta) : ''}</small></li>`; }).join('')}</ul>`);
+  return ccBloco('Seus pedidos', `<ul class="dev-lista">${ps.map(p => { const e = st[p.status] || st.novo; return `<li${p.codigo ? ` class="dev-item" onclick="abrirProjetoDev(${jsa(p.codigo)})"` : ''}><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(String(p.texto).slice(0, 160))}</b><small>${esc(isoParaBR(String(p.quando || '').slice(0, 10)).slice(0, 5))} · ${esc(p.origem || '')}${p.codigo ? ' · ' + esc(p.codigo) : ''}${p.resposta ? ' · ' + esc(p.resposta) : ''}</small></li>`; }).join('')}</ul>`);
 }
 const ABAS_DEV = [['agro', 'Agro'], ['empresas', 'Empresas'], ['religioso', 'Religioso'], ['esportes', 'Esportes'], ['kids', 'Kids'], ['pet', 'Pet']];
 const ETAPAS_DEV = { ideia: ['Ideia', '#8e8e93'], imagem: ['Imagem para aprovar', '#ff9f0a'], aprovado: ['Aprovado', '#0a84ff'], '3mf': ['3MF pronto', '#bf5af2'], feito: ['Feito', '#30d158'] };
@@ -9670,7 +9681,7 @@ function htmlAgenteDev(a) {
     + ccNums([[ps.filter(p => p.status === 'imagem').length, 'para você aprovar'], [ps.filter(p => p.status === '3mf').length, '3MF prontos'], [ps.length, 'projetos'], [(r.ideias || []).length, 'ideias']])
     + htmlPedidosDev()
     + tarefa
-    + `<nav class="dev-abas">${ABAS_DEV.map(([k, n]) => `<button type="button" data-nicho="${k}" class="${aba === k ? 'on' : ''}" onclick="abaDev('${k}')">${esc(n)}<small>${conta(k)}</small></button>`).join('')}</nav>`
+    + `<nav class="dev-abas">${ABAS_DEV.map(([k, n]) => `<button type="button" data-nicho="${k}" class="${aba === k ? 'on' : ''}" onclick="abaDev(${jsa(k)})">${esc(n)}<small>${conta(k)}</small></button>`).join('')}</nav>`
     + `<div class="dev-nicho">${htmlDevNicho(aba)}</div>`
     + htmlRelatorioAgente('dev')
     + ccBloco('Como ele trabalha', `<p class="cc-txt">${esc((devDados && devDados.fluxo) || 'ideia → imagem (você aprova) → 3MF editável → feito')}. Todo dia de manhã ele traz 3 ideias novas e escolhe a tarefa do PC; o Claude modela, gera o 3MF e as prévias. Toque num projeto para girar o modelo, dar zoom e baixar o arquivo.</p>`)
@@ -9682,7 +9693,7 @@ function htmlDevNicho(aba) {
   const ordem = ['imagem', 'aprovado', '3mf', 'ideia', 'feito'], lista = ps.filter(p => (p.categoria || 'empresas') === aba).sort((x, y) => ordem.indexOf(x.status || 'ideia') - ordem.indexOf(y.status || 'ideia'));
   const ideias = (r.ideias || []).filter(i => semAcentoCer(i.nicho || '') === aba);
   return ccBloco(`${nomeAba} · ${plural(lista.length, 'projeto', 'projetos')}`, lista.length ? `<ul class="dev-lista">${lista.map(p => { const e = ETAPAS_DEV[p.status || 'ideia'] || ETAPAS_DEV.ideia;
-        return `<li class="dev-item" onclick="abrirProjetoDev('${esc(p.codigo)}')">${previaDevHTML(p, e)}<div class="dev-info"><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b>${p.personaliza ? `<small>Personaliza: ${esc(p.personaliza)}</small>` : ''}<small>${esc(p.codigo)} ${esc(p.versao || '')} · falta: ${esc(p.falta || '—')}</small>${(p.arquivos || []).length ? `<em class="dev-arqs">⬇ ${plural(p.arquivos.length, 'arquivo', 'arquivos')}</em>` : ''}</div><em class="dev-abrir" aria-hidden="true">›</em></li>`; }).join('')}</ul>`
+        return `<li class="dev-item" onclick="abrirProjetoDev(${jsa(p.codigo)})">${previaDevHTML(p, e)}<div class="dev-info"><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b>${p.personaliza ? `<small>Personaliza: ${esc(p.personaliza)}</small>` : ''}<small>${esc(p.codigo)} ${esc(p.versao || '')} · falta: ${esc(p.falta || '—')}</small>${(p.arquivos || []).length ? `<em class="dev-arqs">⬇ ${plural(p.arquivos.length, 'arquivo', 'arquivos')}</em>` : ''}</div><em class="dev-abrir" aria-hidden="true">›</em></li>`; }).join('')}</ul>`
       : '<p class="cc-txt">Nenhum projeto neste nicho ainda. Peça uma ideia ao Desenvolvedor.</p>')
     + (ideias.length ? ccBloco(`Ideias do Desenvolvedor · ${nomeAba}`, `<ul class="cc-lista">${ideias.map(i => `<li><span><b>${esc(i.titulo)}</b><small>${esc(i.porque || '')}</small><small class="cc-sub">${i.personaliza ? 'Personaliza: ' + esc(i.personaliza) + ' · ' : ''}${esc(i.complexidade || '')} · ${esc(isoParaBR(i.dia || '').slice(0, 5))}</small></span></li>`).join('')}</ul>`) : '')
     + htmlDatasDev(aba);
@@ -9736,12 +9747,12 @@ function cartaoPendenciaDev(x, k) {
   const cor = { aprovar: '#ff9f0a', responder: '#ff3b30', testar: '#0071e3' }[x.tipo], p = x.p;
   const titulo = p ? p.nome : tituloPedidoDev(x.pedido.texto).titulo;
   const img = p && p.previa ? `<img data-cofre="${esc(p.previa)}" alt="" loading="lazy">` : `<span class="dvs-ico" aria-hidden="true">${x.tipo === 'responder' ? '?' : '✦'}</span>`;
-  const acao = p ? `abrirProjetoDev('${esc(p.codigo)}')` : `abrirChatAgente('dev', { ref: ${esc(JSON.stringify(String(x.pedido.texto).slice(0, 200)))} })`;
+  const acao = p ? `abrirProjetoDev(${jsa(p.codigo)})` : `abrirChatAgente('dev', { ref: ${esc(JSON.stringify(String(x.pedido.texto).slice(0, 200)))} })`;
   return `<button type="button" class="dvs-pend" style="--c:${cor}; --k:${k}" onclick="${acao}"><span class="dvs-pend-img">${img}</span><span class="dvs-pend-txt"><em>${esc(x.rot)}</em><b>${esc(titulo)}</b><small>${esc(x.txt)}</small></span><i aria-hidden="true">›</i></button>`;
 }
 function cartaoVitrineDev(p, k) {
   const e = ETAPAS_DEV[p.status || 'ideia'] || ETAPAS_DEV.ideia, selo = selosProjetoDev(p), arqs = (p.arquivos || []).length;
-  return `<button type="button" class="dvs-modelo" data-nicho="${esc(p.categoria || 'empresas')}" style="--k:${k}" onclick="abrirProjetoDev('${esc(p.codigo)}')" aria-label="Abrir ${esc(p.nome)}">
+  return `<button type="button" class="dvs-modelo" data-nicho="${esc(p.categoria || 'empresas')}" style="--k:${k}" onclick="abrirProjetoDev(${jsa(p.codigo)})" aria-label="Abrir ${esc(p.nome)}">
     <span class="dvs-palco">${p.previa ? `<img data-cofre="${esc(p.previa)}" alt="" loading="lazy">` : '<span class="dvs-ico" aria-hidden="true">✦</span>'}${p.folha ? '<span class="dvs-3d">3D · girar</span>' : ''}${selo ? `<span class="dvs-selo ${selo[1]}">${esc(selo[0])}</span>` : ''}${candidatosPatentes().some(c => c.codigo === p.codigo) ? '<span class="dvs-pat">🛡 Candidato a registro</span>' : ''}</span>
     <span class="dvs-modelo-txt"><span class="dvs-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b><small>${esc(NICHOS_DEV[p.categoria] || 'Empresas')} · ${esc(p.codigo)}${p.versao ? ' ' + esc(p.versao) : ''}${arqs ? ` · ⬇ ${plural(arqs, 'arquivo', 'arquivos')}` : ''}</small>${proximaAcaoDev(p) ? `<span class="dvs-prox">Próximo: ${esc(proximaAcaoDev(p))}</span>` : ''}</span></button>`;
 }
@@ -9753,7 +9764,7 @@ function quadroPedidosDev() {
   return `<div class="dvs-quadro">${COLUNAS_DEV.map(([st, nome, cor]) => { const L = pd.filter(x => (x.status || 'novo') === st);
     const card = x => { const t = tituloPedidoDev(x.texto);
       return `<details class="dvs-ped"><summary>${t.chip ? `<em>${esc(t.chip)}</em>` : ''}<b>${esc(t.titulo)}</b><small>${esc(isoParaBR(String(x.quando || '').slice(0, 10)).slice(0, 5))}${x.origem ? ' · ' + esc(x.origem) : ''}${x.codigo ? ' · ' + esc(x.codigo) : ''}</small></summary>
-        <p>${esc(t.completo)}</p>${x.resposta ? `<p class="dvs-resp"><b>Desenvolvedor:</b> ${esc(x.resposta)}</p>` : ''}${x.codigo && projetosDev().some(p => p.codigo === x.codigo) ? `<button type="button" onclick="abrirProjetoDev('${esc(x.codigo)}')">Ver o modelo ›</button>` : ''}</details>`; };
+        <p>${esc(t.completo)}</p>${x.resposta ? `<p class="dvs-resp"><b>Desenvolvedor:</b> ${esc(x.resposta)}</p>` : ''}${x.codigo && projetosDev().some(p => p.codigo === x.codigo) ? `<button type="button" onclick="abrirProjetoDev(${jsa(x.codigo)})">Ver o modelo ›</button>` : ''}</details>`; };
     return `<section class="dvs-col" style="--c:${cor}"><h3><i></i>${esc(nome)}<span>${L.length}</span></h3>${L.length ? L.slice(0, 5).map(card).join('') + (L.length > 5 ? `<details class="dvs-mais"><summary>Mais ${plural(L.length - 5, 'pedido', 'pedidos')}</summary>${L.slice(5).map(card).join('')}</details>` : '') : '<p class="dvs-col-vazia">—</p>'}</section>`; }).join('')}</div>`;
 }
 function ideiasDev() {
@@ -9768,7 +9779,7 @@ function filtrarDev(lista, k) {
 }
 function filtrosDev(lista, itens) {
   const conta = k => itens.filter(x => x === k).length, k0 = ((cc.devFiltro || {})[lista]) || 'todos';
-  return `<div class="dvs-filtros" data-lista="${lista}" role="tablist">${[['todos', 'Todos', itens.length], ...ABAS_DEV.map(([k, n]) => [k, n, conta(k)]).filter(x => x[2])].map(([k, n, q]) => `<button type="button" role="tab" data-k="${k}" class="${k === k0 ? 'on' : ''}" onclick="filtrarDev('${lista}', '${k}')">${esc(n)}<span>${q}</span></button>`).join('')}</div>`;
+  return `<div class="dvs-filtros" data-lista="${lista}" role="tablist">${[['todos', 'Todos', itens.length], ...ABAS_DEV.map(([k, n]) => [k, n, conta(k)]).filter(x => x[2])].map(([k, n, q]) => `<button type="button" role="tab" data-k="${k}" class="${k === k0 ? 'on' : ''}" onclick="filtrarDev(${jsa(lista)}, ${jsa(k)})">${esc(n)}<span>${q}</span></button>`).join('')}</div>`;
 }
 async function pedirIdeiaDev(i) {
   const x = ideiasDev()[i]; if (!x) return;
@@ -9794,7 +9805,7 @@ function renderPaginaDev() {
     <div class="ag-rolo dvs" id="ag-rolo">
       <section class="dvs-heroi"><div class="dvs-heroi-txt"><small>Estúdio de produtos · Primos 3D</small><h1>Desenvolvedor</h1><p>${esc(a.funcao || 'Cria os produtos da Primos 3D')}. O Claude modela no PC e entrega o 3MF pronto para o Bambu Studio.</p>
         <ul class="dvs-nums">${nums.map(([v, t], k) => `<li style="--k:${k}"><b>${v}</b><span>${esc(t)}</span></li>`).join('')}</ul></div>
-        ${destaque ? `<figure class="dvs-destaque"><div class="dvs-pedestal"><div class="dev-giro dvs-giro" id="dvs-giro" data-folha="${esc(destaque.folha)}"></div></div><figcaption><span class="dvs-etapa" style="--c:${(ETAPAS_DEV[destaque.status] || ETAPAS_DEV.ideia)[1]}">${esc((ETAPAS_DEV[destaque.status] || ETAPAS_DEV.ideia)[0])}</span><b>${esc(destaque.nome)}</b><small>Arraste para girar · <button type="button" onclick="abrirProjetoDev('${esc(destaque.codigo)}')">abrir e baixar o 3MF ›</button></small></figcaption></figure>` : ''}</section>
+        ${destaque ? `<figure class="dvs-destaque"><div class="dvs-pedestal"><div class="dev-giro dvs-giro" id="dvs-giro" data-folha="${esc(destaque.folha)}"></div></div><figcaption><span class="dvs-etapa" style="--c:${(ETAPAS_DEV[destaque.status] || ETAPAS_DEV.ideia)[1]}">${esc((ETAPAS_DEV[destaque.status] || ETAPAS_DEV.ideia)[0])}</span><b>${esc(destaque.nome)}</b><small>Arraste para girar · <button type="button" onclick="abrirProjetoDev(${jsa(destaque.codigo)})">abrir e baixar o 3MF ›</button></small></figcaption></figure>` : ''}</section>
       <section class="dvs-sec"><header class="dvs-tit"><h2>Precisa de você</h2><p>${pend.length ? 'O que está parado esperando uma decisão ou um teste seu.' : 'Nada esperando você agora.'}</p></header>
         ${pend.length ? `<div class="dvs-pends">${pend.map(cartaoPendenciaDev).join('')}</div>` : '<p class="dvs-vazio">Tudo em dia. Quando houver imagem para aprovar, dúvida ou modelo para testar, aparece aqui.</p>'}</section>
       <section class="dvs-sec"><header class="dvs-tit"><h2>Vitrine</h2><p>${plural(vitrine.length, 'modelo com prévia', 'modelos com prévia')}. Toque num modelo para girar, dar zoom e baixar o arquivo.</p></header>
@@ -9824,23 +9835,23 @@ const ETAPAS_PAT = { avaliando: ['Avaliando', '#8e8e93'], dossie: ['Montando o d
 const INSTRUMENTOS_PAT = { 'desenho industrial': ['DI', 'a forma nova do objeto'], 'modelo de utilidade': ['MU', 'melhoria funcional'], 'patente de invenção': ['PI', 'solução técnica nova'], 'direito autoral': ['DA', 'a obra e o arquivo'], marca: ['®', 'nome e logo'], 'não proteger': ['—', 'não vale agora'] };
 function candidatosPatentes() { return (relatorioAgente('patentes') || {}).candidatos || []; }
 function modelosProtegiveis() { return projetosDev().filter(p => ['3mf', 'feito'].includes(p.status) && !/ficou ruim|n[aã]o usar/i.test(p.falta || '')); }
-function gravarPatentes() { salvar('patentes', registrosPatentes); publicarFilaCofre(); atualizarTelasSincronizadas('central', 'agente'); }
+/** Mesmo padrão do garimpo: grava o próximo estado e só então troca a memória e publica. */
+function gravarPatentes(proximo = registrosPatentes) { if (!salvar('patentes', proximo)) return false; registrosPatentes = proximo; publicarFilaCofre(); atualizarTelasSincronizadas('central', 'agente'); return true; }
 function acompanharPatente(codigo, produto, instrumento) {
   if (registrosPatentes.some(r => r.codigo === codigo && codigo)) { toast('Este modelo já está sendo acompanhado.'); return; }
   const c = candidatosPatentes().find(x => x.codigo === codigo) || {};
-  registrosPatentes = registrosPatentes.concat({ id: novoId(), codigo: codigo || '', produto: produto || c.produto || '', instrumento: instrumento || c.instrumento || 'desenho industrial', status: 'avaliando', numero: '', prazo: c.prazo || '', obs: '', criado: hojeISO() });
-  gravarPatentes(); toast('Acompanhando. Mude o andamento quando avançar.', 3500);
+  if (gravarPatentes(registrosPatentes.concat({ id: novoId(), codigo: codigo || '', produto: produto || c.produto || '', instrumento: instrumento || c.instrumento || 'desenho industrial', status: 'avaliando', numero: '', prazo: c.prazo || '', obs: '', criado: hojeISO() }))) toast('Acompanhando. Mude o andamento quando avançar.', 3500);
 }
-function mudarPatente(id, campo, valor) { const r = registrosPatentes.find(x => x.id === id); if (!r) return; r[campo] = String(valor || '').slice(0, 120); gravarPatentes(); }
-function tirarPatente(id) { if (!confirm('Parar de acompanhar este registro?')) return; registrosPatentes = registrosPatentes.filter(x => x.id !== id); gravarPatentes(); }
+function mudarPatente(id, campo, valor) { if (!registrosPatentes.some(x => x.id === id)) return; gravarPatentes(registrosPatentes.map(x => x.id === id ? { ...x, [campo]: String(valor || '').slice(0, 120) } : x)); }
+function tirarPatente(id) { if (!confirm('Parar de acompanhar este registro?')) return; gravarPatentes(registrosPatentes.filter(x => x.id !== id)); }
 function chipInstrumento(i) { const k = INSTRUMENTOS_PAT[String(i || '').toLowerCase()] || ['?', String(i || '')]; return `<span class="pt-inst" title="${esc(k[1])}"><b>${esc(k[0])}</b>${esc(i || '')}</span>`; }
 function htmlAgentePatentes(a) {
   const r = relatorioAgente('patentes') || {}, cand = candidatosPatentes(), prontos = modelosProtegiveis(), acomp = registrosPatentes;
-  const ver = cod => cod && projetosDev().some(p => p.codigo === cod) ? `<button type="button" class="cc-mini sec" onclick="abrirProjetoDev('${esc(cod)}')">Ver o modelo</button>` : '';
+  const ver = cod => cod && projetosDev().some(p => p.codigo === cod) ? `<button type="button" class="cc-mini sec" onclick="abrirProjetoDev(${jsa(cod)})">Ver o modelo</button>` : '';
   const cartaoCand = c => { const ja = acomp.some(x => x.codigo && x.codigo === c.codigo);
     return `<li class="pt-cand pr-${esc(c.prioridade || 'media')}"><div class="pt-cand-top">${chipInstrumento(c.instrumento)}<span class="pt-pr">${esc(c.prioridade || '')}</span></div><b>${esc(c.produto)}</b><small>${esc(c.codigo || '')}${c.original ? ' · criação própria: ' + esc(c.original) : ''}${c.testado ? ' · impresso e aprovado: ' + esc(c.testado) : ''}</small>
       ${c.porque ? `<p>${esc(c.porque)}</p>` : ''}${c.prazo ? `<p class="pt-prazo">⏳ Prazo: ${esc(c.prazo)}</p>` : ''}${c.retorno ? `<p class="pt-ret">💰 ${esc(c.retorno)}</p>` : ''}${c.proximoPasso ? `<p class="pt-passo">Próximo passo: ${esc(c.proximoPasso)}</p>` : ''}
-      <div class="pt-acoes">${ja ? '<span class="pt-ok">✓ Acompanhando</span>' : `<button type="button" class="cc-mini" onclick="acompanharPatente('${esc(c.codigo || '')}', ${esc(JSON.stringify(c.produto || ''))}, ${esc(JSON.stringify(c.instrumento || ''))})">Acompanhar registro</button>`}${ver(c.codigo)}</div></li>`; };
+      <div class="pt-acoes">${ja ? '<span class="pt-ok">✓ Acompanhando</span>' : `<button type="button" class="cc-mini" onclick="acompanharPatente(${jsa(c.codigo || '')}, ${jsa(c.produto || '')}, ${jsa(c.instrumento || '')})">Acompanhar registro</button>`}${ver(c.codigo)}</div></li>`; };
   const linhaReg = x => { const e = ETAPAS_PAT[x.status] || ETAPAS_PAT.avaliando;
     return `<li class="pt-reg" style="--c:${e[1]}"><div><b>${esc(x.produto || x.codigo)}</b><small>${esc(x.codigo || '')}${x.criado ? ' · desde ' + esc(isoParaBR(x.criado).slice(0, 5)) : ''}${x.prazo ? ' · prazo ' + esc(x.prazo) : ''}</small>${chipInstrumento(x.instrumento)}</div>
       <label class="pt-etapa"><span class="sr-only">Andamento</span><select onchange="mudarPatente(${x.id}, 'status', this.value)">${Object.entries(ETAPAS_PAT).map(([k, v]) => `<option value="${k}"${k === x.status ? ' selected' : ''}>${esc(v[0])}</option>`).join('')}</select></label>
@@ -9851,7 +9862,7 @@ function htmlAgentePatentes(a) {
     + ccBloco(`Candidatos a registro${cand.length ? ' · ' + cand.length : ''}`, cand.length ? `<ul class="pt-lista">${cand.map(cartaoCand).join('')}</ul>`
       : `<p class="cc-txt">Por enquanto ele atua pouco: entra em ação quando o Desenvolvedor tem um modelo PRÓPRIO, impresso e aprovado por você. ${prontos.length ? `Hoje há ${plural(prontos.length, 'modelo pronto', 'modelos prontos')} para ele avaliar na próxima rodada (a cada 3 dias ou quando o Desenvolvedor muda algo) — ou toque em ▶ Reanalisar agora.` : 'Ainda não há modelo próprio pronto.'}</p>`)
     + ccBloco(`Registros que você acompanha${acomp.length ? ' · ' + acomp.length : ''}`, acomp.length ? `<ul class="pt-regs">${acomp.map(linhaReg).join('')}</ul>` : '<p class="cc-txt">Nenhum ainda. Em “Candidatos”, toque em <b>Acompanhar registro</b>; ou escolha um modelo pronto abaixo.</p>')
-      + (prontos.filter(p => !acomp.some(x => x.codigo === p.codigo)).length ? `<details class="pt-prontos"><summary>Modelos próprios prontos (${prontos.filter(p => !acomp.some(x => x.codigo === p.codigo)).length})</summary><ul class="cc-lista">${prontos.filter(p => !acomp.some(x => x.codigo === p.codigo)).map(p => `<li><span><b>${esc(p.nome)}</b><small>${esc(p.codigo)} · ${esc((ETAPAS_DEV[p.status] || ETAPAS_DEV.ideia)[0])}</small></span><button type="button" class="cc-mini sec" onclick="acompanharPatente('${esc(p.codigo)}', ${esc(JSON.stringify(p.nome))}, 'desenho industrial')">Acompanhar</button></li>`).join('')}</ul></details>` : '')
+      + (prontos.filter(p => !acomp.some(x => x.codigo === p.codigo)).length ? `<details class="pt-prontos"><summary>Modelos próprios prontos (${prontos.filter(p => !acomp.some(x => x.codigo === p.codigo)).length})</summary><ul class="cc-lista">${prontos.filter(p => !acomp.some(x => x.codigo === p.codigo)).map(p => `<li><span><b>${esc(p.nome)}</b><small>${esc(p.codigo)} · ${esc((ETAPAS_DEV[p.status] || ETAPAS_DEV.ideia)[0])}</small></span><button type="button" class="cc-mini sec" onclick="acompanharPatente(${jsa(p.codigo)}, ${jsa(p.nome)}, 'desenho industrial')">Acompanhar</button></li>`).join('')}</ul></details>` : '')
     + htmlRelatorioAgente('patentes')
     + ccBloco('Guia rápido (Brasil · INPI)', `<ul class="pt-guia">${Object.entries(INSTRUMENTOS_PAT).filter(([k]) => k !== 'não proteger').map(([k, v]) => `<li><b>${esc(v[0])}</b><span><b>${esc(k.charAt(0).toUpperCase() + k.slice(1))}</b> — ${esc(v[1])}</span></li>`).join('')}</ul>
       <p class="cc-txt">⚠️ <b>Novidade:</b> postar, vender ou expor antes de depositar pode tirar a novidade. Para desenho industrial existe um período de graça de 180 dias depois da 1ª divulgação (confira as regras atuais). Modelo baixado de terceiro nunca se registra. Quem deposita e paga a taxa é você (o MEI tem desconto no INPI) — confirme com um especialista em propriedade industrial.</p>`)
@@ -9909,8 +9920,8 @@ function abrirProjetoDev(codigo) {
     <span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span>
     <h3>${esc(p.nome)}</h3><p class="dev-cod">${esc(p.codigo)} ${esc(p.versao || '')}${p.etapa ? ' · ' + esc(p.etapa) : ''}${p.atualizadoEm ? ' · ' + esc(isoParaBR(p.atualizadoEm)) : ''}</p>
     ${p.personaliza ? `<p class="dev-txt"><b>Personaliza:</b> ${esc(p.personaliza)}</p>` : ''}<p class="dev-txt"><b>Falta:</b> ${esc(p.falta || '—')}</p>
-    ${arqs.length ? `<div class="dev-baixar">${arqs.map((a, i) => `<button type="button" onclick="baixarArquivoDev('${esc(p.codigo)}', ${i})"><span>${ico(a.nome)}</span><b>${esc(a.nome)}</b><small>${a.kb >= 1024 ? (a.kb / 1024).toFixed(1).replace('.', ',') + ' MB' : a.kb + ' KB'} · ${/\.3mf$/i.test(a.nome) ? 'baixar e abrir no Bambu Studio' : 'baixar'}</small></button>`).join('')}</div>${arqs.some(a => /\.3mf$/i.test(a.nome)) ? '<p class="dev-nota">No computador, o 3MF baixado abre no Bambu Studio com dois cliques (fica na pasta Downloads).</p>' : ''}` : '<p class="dev-txt dev-nota">Os arquivos aparecem aqui quando o 3MF ficar pronto.</p>'}
-    ${p.pastaPC ? `<button type="button" class="dev-pasta" onclick="copiarPastaDev('${esc(p.codigo)}')">📁 Copiar o caminho da pasta no PC</button><p class="dev-nota" title="${esc(p.pastaPC)}">No computador: cole na barra de endereço do Explorador de Arquivos (Win + E) e dê Enter.<br>${esc(p.pastaPC.split('\\').slice(-2).join(' › '))}</p>` : ''}
+    ${arqs.length ? `<div class="dev-baixar">${arqs.map((a, i) => `<button type="button" onclick="baixarArquivoDev(${jsa(p.codigo)}, ${i})"><span>${ico(a.nome)}</span><b>${esc(a.nome)}</b><small>${a.kb >= 1024 ? (a.kb / 1024).toFixed(1).replace('.', ',') + ' MB' : a.kb + ' KB'} · ${/\.3mf$/i.test(a.nome) ? 'baixar e abrir no Bambu Studio' : 'baixar'}</small></button>`).join('')}</div>${arqs.some(a => /\.3mf$/i.test(a.nome)) ? '<p class="dev-nota">No computador, o 3MF baixado abre no Bambu Studio com dois cliques (fica na pasta Downloads).</p>' : ''}` : '<p class="dev-txt dev-nota">Os arquivos aparecem aqui quando o 3MF ficar pronto.</p>'}
+    ${p.pastaPC ? `<button type="button" class="dev-pasta" onclick="copiarPastaDev(${jsa(p.codigo)})">📁 Copiar o caminho da pasta no PC</button><p class="dev-nota" title="${esc(p.pastaPC)}">No computador: cole na barra de endereço do Explorador de Arquivos (Win + E) e dê Enter.<br>${esc(p.pastaPC.split('\\').slice(-2).join(' › '))}</p>` : ''}
   </div>`;
   if (el.hidden) empilharCamada('devprojeto', fecharProjetoDev);
   el.hidden = false; carregarMidiasCofre(el);
@@ -9984,7 +9995,7 @@ function miniFilaHTML(titulo, cor) {
   return m ? `<span class="cc-giro${m.giro ? ' gira' : ''}" title="${esc(m.nome)}"><img data-cofre="${esc(m.src)}" alt="" loading="lazy">${dot}</span>` : dot;
 }
 function ccBloco(titulo, corpo) { return `<section class="cc-bloco"><h4>${titulo}</h4>${corpo}</section>`; }
-function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente('${esc(a.id)}')">Perguntar a este agente</button>`; }
+function botaoConversarAgente(a) { return `<button type="button" class="cc-btn" onclick="conversarComAgente(${jsa(a.id)})">Perguntar a este agente</button>`; }
 const VOZ_AGENTES = {
   patentes: { voz: 'Iapetus', persona: 'Homem, voz calma e precisa de consultor de propriedade industrial; cuidadoso e organizado. Diz qual proteção cabe (desenho industrial, modelo de utilidade, direito autoral ou marca) e por quê, controla o prazo da novidade (avise antes de postar um modelo candidato) e mostra como o registro vira dinheiro. Nunca promete o que depende do INPI, não paga nem protocola nada e lembra de confirmar com um especialista em propriedade industrial.' },
   prospeccao: { voz: 'Sadaltager', persona: 'Homem, voz serena e precisa de analista de negócios. Fala de retorno com números e com a confiança de cada estimativa (alta, média, baixa); separa o realista do que dá em escala; mede tudo em lucro por hora de máquina e no gargalo (máquinas, horas do Rafael, filamento, demanda). Nunca promete dinheiro: mostra o caminho e o primeiro passo.' },
@@ -10058,7 +10069,7 @@ function montarChatAgente() {
   el.innerHTML = `<div class="agc-fundo" onclick="fecharChatAgente()"></div>
     <section class="agc-caixa" role="dialog" aria-label="Conversa com ${nm}">
       <header class="agc-topo"><span class="agc-bola" aria-hidden="true"></span><div><b>${nm}</b><small id="agc-status"></small></div>
-        ${voz ? `<button type="button" class="agc-voz" onclick="falarComAgente('${esc(id)}')" aria-label="Falar com ${nm} por voz">🎙 Falar</button>` : ''}
+        ${voz ? `<button type="button" class="agc-voz" onclick="falarComAgente(${jsa(id)})" aria-label="Falar com ${nm} por voz">🎙 Falar</button>` : ''}
         <button type="button" class="agc-pag" onclick="irPaginaDoChat()" aria-label="Abrir a página de ${nm}" id="agc-pag">Página ›</button>
         <button type="button" class="agc-x" onclick="fecharChatAgente()" aria-label="Fechar a conversa">✕</button></header>
       <div class="agc-filtros" id="agc-filtros" role="tablist"></div>
@@ -10079,7 +10090,7 @@ function renderChatAgente(rolarFim) {
   const box = $j('agc-msgs'); if (!box) return;
   const a = agentePrimos(id), todos = linhaAgente(id), f = ac.filtro || 'tudo', mapa = mapaAnonimo();
   const nNos = todos.filter(m => m.fonte === 'nos').length, nJv = todos.length - nNos;
-  $j('agc-filtros').innerHTML = [['tudo', 'Tudo', todos.length], ['nos', 'Só nós dois', nNos], ['jv', 'Do J.A.R.V.I.S.', nJv]].map(([k, t, n]) => `<button type="button" role="tab" aria-selected="${k === f}" class="${k === f ? 'on' : ''}" onclick="filtrarChatAgente('${k}')">${t}<i>${n}</i></button>`).join('');
+  $j('agc-filtros').innerHTML = [['tudo', 'Tudo', todos.length], ['nos', 'Só nós dois', nNos], ['jv', 'Do J.A.R.V.I.S.', nJv]].map(([k, t, n]) => `<button type="button" role="tab" aria-selected="${k === f}" class="${k === f ? 'on' : ''}" onclick="filtrarChatAgente(${jsa(k)})">${t}<i>${n}</i></button>`).join('');
   const st = $j('agc-status'); if (st) st.innerText = ac.pensando[id] ? 'pensando…' : jv.ouvindo && jv.campo && jv.campo.id === 'agc-texto' ? 'ouvindo… toque no microfone para enviar' : iaLigada() ? `${a.funcao || 'agente da Primos 3D'} · a conversa fica salva` : 'cérebro desligado · ligue em Ajustes do J.A.R.V.I.S.';
   const L = todos.filter(m => f === 'tudo' || m.fonte === f), hoje = hojeISO(), ontem = isoDe(new Date(Date.now() - 864e5));
   const noFim = box.scrollHeight - box.scrollTop - box.clientHeight < 90;
@@ -10213,7 +10224,7 @@ function htmlEcoAviso(id) {
   const e = ac.eco[id]; if (!e || Date.now() - e.desde > 30 * 60000) return '';
   const ult = fioAgente(id).slice().reverse().find(m => m.de === 'ag'), nm = esc(nomeConv(id));
   const txt = ac.pensando[id] ? `<i class="agc-pontos"><i></i><i></i><i></i></i> ${nm} está respondendo…` : ult && ult.t ? `<b>${nm}:</b> ${esc(desanonimizar(String(ult.t).replace(/⟦[^⟧]*⟧/g, '').replace(/[*_#`>]/g, '').replace(/\s+/g, ' ').trim()).slice(0, 170))}${String(ult.t).length > 170 ? '…' : ''}` : 'Enviado.';
-  return `${txt} <button type="button" onclick="responderAviso('${esc(id)}', -1)">Abrir a conversa ›</button>`;
+  return `${txt} <button type="button" onclick="responderAviso(${jsa(id)}, -1)">Abrir a conversa ›</button>`;
 }
 function ecoAviso(id) { const el = $j('jvag-eco-' + id); if (!el) return; const h = htmlEcoAviso(id); el.hidden = !h; el.innerHTML = h; }
 /** Conversa por voz com um agente: cada turno entra na conversa dele (não no chat do J.A.R.V.I.S.). */
@@ -10246,20 +10257,20 @@ function publicarConversasCofre() {
 /** O andamento na nuvem, a caixa de comando e a resposta ao último comando (painel da Central e páginas próprias, como a do Desenvolvedor). */
 function partesComandoAgente(id) {
   const t = ((cc.execucao || {}).tarefas || {})[id], r = relatorioAgente(id), pausado = ((cc.execucao || {}).pausados || []).includes(id);
-  const est = t && (t.status === 'rodando' || t.status === 'fila') ? `<p class="cc-exec rodando"><span class="spin"></span>${t.status === 'fila' ? 'Na fila do GitHub…' : 'Trabalhando agora…'}${t.instrucao ? ` <b>“${esc(t.instrucao)}”</b>` : ''}<button type="button" class="cc-mini sec" onclick="controlarAgente('cancelar', '${id}')">Cancelar</button></p>`
-    : pausado ? `<p class="cc-exec">⏸ Pausado: fora da rodada das 7h. <button type="button" class="cc-mini" onclick="controlarAgente('retomar', '${id}')">Retomar</button></p>` : '';
+  const est = t && (t.status === 'rodando' || t.status === 'fila') ? `<p class="cc-exec rodando"><span class="spin"></span>${t.status === 'fila' ? 'Na fila do GitHub…' : 'Trabalhando agora…'}${t.instrucao ? ` <b>“${esc(t.instrucao)}”</b>` : ''}<button type="button" class="cc-mini sec" onclick="controlarAgente('cancelar', ${jsa(id)})">Cancelar</button></p>`
+    : pausado ? `<p class="cc-exec">⏸ Pausado: fora da rodada das 7h. <button type="button" class="cc-mini" onclick="controlarAgente('retomar', ${jsa(id)})">Retomar</button></p>` : '';
   const resp = r && r.resposta ? ccBloco('Resposta ao seu comando', `<div class="cc-relatorio cc-resp"><p class="cc-nota">Você pediu: “${esc(r.comando || '')}”</p><p class="cc-txt">${textoAgente(r.resposta)}</p></div>`) : '';
-  const cmd = `<form class="cc-cmd" onsubmit="enviarComandoAgente(event, '${id}')"><input id="cc-cmd" placeholder="Comando para o agente (ex.: refaça o payback com 30 vendas/mês)" maxlength="400" autocomplete="off" enterkeyhint="send"><button type="submit" aria-label="Enviar comando">↑</button></form>
-    <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', '${id}')" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Reanalisar agora</button><button type="button" onclick="controlarAgente('${pausado ? 'retomar' : 'pausar'}', '${id}')">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="conversarComAgente('${id}')">💬 Escrever</button></div>`;
+  const cmd = `<form class="cc-cmd" onsubmit="enviarComandoAgente(event, ${jsa(id)})"><input id="cc-cmd" placeholder="Comando para o agente (ex.: refaça o payback com 30 vendas/mês)" maxlength="400" autocomplete="off" enterkeyhint="send"><button type="submit" aria-label="Enviar comando">↑</button></form>
+    <div class="cc-cmd-acoes"><button type="button" onclick="controlarAgente('rodar', ${jsa(id)})" ${t && (t.status === 'rodando' || t.status === 'fila') ? 'disabled' : ''}>▶ Reanalisar agora</button><button type="button" onclick="controlarAgente(${jsa(pausado ? 'retomar' : 'pausar')}, ${jsa(id)})">${pausado ? '⏵ Retomar' : '⏸ Pausar'}</button><button type="button" onclick="conversarComAgente(${jsa(id)})">💬 Escrever</button></div>`;
   return { est, cmd, resp };
 }
 function htmlPainelAgente(id) {
   const html = htmlPainelAgenteBase(id); if (!AGENTES_NUVEM.includes(id)) return html;
   const { est, cmd, resp } = partesComandoAgente(id);
-  const agv = todosAgentes().find(x => x.id === id), falar = VOZ_AGENTES[id] && agv ? `<button type="button" class="cc-falar" style="--ag:${COR_AGENTE[id] || '#0a84ff'}" onclick="falarComAgente('${id}')"><i></i>Falar com ${esc(agv.nome)}</button>` : '';
+  const agv = todosAgentes().find(x => x.id === id), falar = VOZ_AGENTES[id] && agv ? `<button type="button" class="cc-falar" style="--ag:${COR_AGENTE[id] || '#0a84ff'}" onclick="falarComAgente(${jsa(id)})"><i></i>Falar com ${esc(agv.nome)}</button>` : '';
   const ag = todosAgentes().find(x => x.id === id), sk = ((ag && ag.skills) || []).filter(k => SKILLS_DESC[k]);
   const skills = sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '';
-  const i = html.indexOf('</header>') + 9, abrir = cc.pagina ? '' : `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('${id}')">Abrir a página completa de ${esc(ag ? ag.nome : '')} ›</button>`;
+  const i = html.indexOf('</header>') + 9, abrir = cc.pagina ? '' : `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente(${jsa(id)})">Abrir a página completa de ${esc(ag ? ag.nome : '')} ›</button>`;
   const limpo = html.slice(i).replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const recs = recadosAgentes.filter(x => (x.agentes || []).includes(id)).slice(0, 6); // fase 7: o que o Rafael contou ao J.A.R.V.I.S. e ele passou a este agente
   const recados = recs.length ? ccBloco('Recados que o J.A.R.V.I.S. me passou', `<ul class="cc-lista">${recs.map(x => `<li><span><b>${esc(x.texto)}</b><small>${esc(isoParaBR(x.quando.slice(0, 10)))} · ${x.origem === 'voz' ? '🎙 voz' : '💬 chat'}${x.tipo ? ' · ' + esc(x.tipo) : ''}</small></span></li>`).join('')}</ul><p class="cc-nota">Eu leio estes recados na próxima rodada (todo dia às 7h ou ao tocar em Reanalisar agora).</p>`) : '';
@@ -10272,7 +10283,7 @@ function htmlPainelAgenteBase(id) {
       + '<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaJarvis()">Abrir a página do J.A.R.V.I.S. ›</button>'
       + '<button type="button" class="cc-btn" onclick="abrirPaginaConversas()">💬 Conversa dos agentes (desempenho de cada um) ›</button>'
       + htmlMastermind()
-      + ccBloco('Situação dos agentes', `<ul class="cc-lista">${ag.map(a => { const st = estadoAgente(a); return `<li onclick="cc.setor='${a.setor}'; abrirAgenteCentral('${esc(a.id)}')"><i class="cc-luz ${st.nivel}"></i><span><b>${esc(a.nome)}</b><small>${esc(setorCentral(a.setor).nome)} · ${esc(st.metrica)}</small></span><em>›</em></li>`; }).join('')}</ul>`)
+      + ccBloco('Situação dos agentes', `<ul class="cc-lista">${ag.map(a => { const st = estadoAgente(a); return `<li onclick="cc.setor=${jsa(a.setor)}; abrirAgenteCentral(${jsa(a.id)})"><i class="cc-luz ${st.nivel}"></i><span><b>${esc(a.nome)}</b><small>${esc(setorCentral(a.setor).nome)} · ${esc(st.metrica)}</small></span><em>›</em></li>`; }).join('')}</ul>`)
       + ccBloco('🛡️ Regras de segurança', `<ul class="cc-regras"><li>Ler e analisar: automático</li><li>Gravar ou alterar: só com o seu OK</li><li>Compras, pagamentos, Pix, e-mails, mensagens e posts: nunca</li></ul>`);
   }
   const a = todosAgentes().find(x => x.id === id); if (!a) return '';
@@ -10282,7 +10293,7 @@ function htmlPainelAgenteBase(id) {
   if (a.id === 'producao') return htmlAgenteProducao(a);
   if (a.id === 'digital') return htmlAgenteDigital(a);
   if (a.id === 'prospeccao') return htmlAgenteProspeccao(a);
-  if (a.aba) return cabecalhoAgente(a) + htmlRelatorioAgente(a.id) + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos('${a.aba}')">Abrir ${esc(a.nome)} na Primos</button>` + botaoConversarAgente(a);
+  if (a.aba) return cabecalhoAgente(a) + htmlRelatorioAgente(a.id) + `<button type="button" class="cc-btn" onclick="fecharCentral(); abrirPrimos(${jsa(a.aba)})">Abrir ${esc(a.nome)} na Primos</button>` + botaoConversarAgente(a);
   if (a.id === 'mercado') return cabecalhoAgente(a) + `<div class="cc-embed">${typeof htmlMercado === 'function' ? htmlMercado(true) : ''}</div>` + botaoConversarAgente(a);
   if (a.id === 'treino') {
     const sem = workouts.filter(w => { const d = w.date || w.data; return d && diasEntre(d, hojeISO()) <= 7; });
@@ -10294,7 +10305,7 @@ function htmlPainelAgenteBase(id) {
   if (a.id === 'shopee') return htmlAgenteShopee(a);
   return cabecalhoAgente(a) + ccBloco('Missão', `<p class="cc-txt">${esc(a.missao || 'Sem missão definida.')}</p>`)
     + ccBloco('Situação', `<p class="cc-txt">Este agente já existe e conversa pelo chat com as skills acima. Os painéis próprios dele (números e rotinas) eu monto quando você pedir.</p>`)
-    + botaoConversarAgente(a) + (a.proprio ? `<button type="button" class="cc-btn perigo" onclick="removerAgente('${esc(a.id)}')">Remover agente</button>` : '');
+    + botaoConversarAgente(a) + (a.proprio ? `<button type="button" class="cc-btn perigo" onclick="removerAgente(${jsa(a.id)})">Remover agente</button>` : '');
 }
 
 // --- J.A.R.V.I.S. MASTERMIND: o filtro do dia (relatoriosAgentes.jarvis, feito na nuvem depois dos agentes) ---
@@ -10303,7 +10314,7 @@ function htmlMastermind() {
   const j = relatoriosAgentes && relatoriosAgentes.jarvis; if (!j) return ccBloco('O que importa hoje', '<p class="cc-txt">O meu primeiro filtro sai na próxima rodada dos agentes (todo dia às 7h).</p>');
   const nome = id => { const a = todosAgentes().find(x => x.id === id); return a ? a.nome : ''; };
   return ccBloco(`O que importa · ${esc(isoParaBR(j.dia || ''))}${j.velho ? ' (anterior)' : ''}`, `<div class="cc-relatorio cc-mm"><p class="cc-txt">${textoAgente(j.manchete)}</p>
-    <ul class="cc-prio">${(j.prioridades || []).map(p => { const u = URGENCIA_JV[p.urgencia] || URGENCIA_JV.semana; return `<li${p.agente ? ` onclick="abrirAgenteCentral('${esc(p.agente)}')"` : ''}><em style="--u:${u[1]}">${u[0]}</em><span>${textoAgente(p.texto)}${p.agente ? `<small>${esc(nome(p.agente))} ›</small>` : ''}</span></li>`; }).join('')}</ul>
+    <ul class="cc-prio">${(j.prioridades || []).map(p => { const u = URGENCIA_JV[p.urgencia] || URGENCIA_JV.semana; return `<li${p.agente ? ` onclick="abrirAgenteCentral(${jsa(p.agente)})"` : ''}><em style="--u:${u[1]}">${u[0]}</em><span>${textoAgente(p.texto)}${p.agente ? `<small>${esc(nome(p.agente))} ›</small>` : ''}</span></li>`; }).join('')}</ul>
     ${j.valuation ? `<h5>Quanto vale</h5><p class="cc-txt">${textoAgente(j.valuation)}</p>` : ''}${j.retorno ? `<h5>Retorno</h5><p class="cc-txt">${textoAgente(j.retorno)}</p>` : ''}
     ${(j.podeEsperar || []).length ? `<h5>Pode esperar</h5><ul class="cc-regras cc-espera">${j.podeEsperar.map(p => `<li>${textoAgente(p)}</li>`).join('')}</ul>` : ''}</div>`);
 }
@@ -10540,7 +10551,7 @@ function dicaContagem(m) { return m === 'bal' ? `Ponha o carretel na balança e 
 function htmlContagemEstoque(e) {
   const m = modoContagem(), cores = e.cores.filter(c => c.comprado > 0 || c.kg > 0.01).sort((x, y) => y.kg - x.kg), g = kg => Math.round(Math.max(0, kg) * 1000).toLocaleString('pt-BR');
   return `<section class="ag-sec est-sec estc-sec"><div class="estc-topo"><div><h2 class="jvpg-tit">Atualizar o estoque</h2><p class="ag-sub">Diga quanto tem <b>agora</b> de cada cor. Depois disso eu sigo sozinho: compras da planilha somam e cada impressão da Bambu desconta.</p></div>
-      <div class="estc-modo" role="group" aria-label="Como você vai digitar">${[['liq', 'Só o filamento'], ['bal', 'Na balança']].map(([k, n]) => `<button type="button" data-m="${k}" class="${m === k ? 'on' : ''}" onclick="trocarModoContagem('${k}')">${n}</button>`).join('')}</div></div>
+      <div class="estc-modo" role="group" aria-label="Como você vai digitar">${[['liq', 'Só o filamento'], ['bal', 'Na balança']].map(([k, n]) => `<button type="button" data-m="${k}" class="${m === k ? 'on' : ''}" onclick="trocarModoContagem(${jsa(k)})">${n}</button>`).join('')}</div></div>
     <p class="estc-dica" id="estc-dica">${dicaContagem(m)}</p>
     <form class="estc" onsubmit="salvarContagemForm(event)" oninput="rascunhoContagem()">
       <div class="estc-cab" aria-hidden="true"><span></span><span>Cor</span><span>No sistema</span><span>Agora</span><span>Fica</span></div>
@@ -10724,7 +10735,7 @@ function renderAjustesJarvis() {
     <p id="jv-conexao-status" class="jva-st">${comp ? '🟢 Conectado neste aparelho.' : ''}</p></section>`;
   // aparência
   h += `<section class="jva-sec" id="jva-tema"><h4>3 · Aparência</h4><p class="jva-txt">Escolha o tema do J.A.R.V.I.S. Muda na hora (a esfera, a página inicial e o chat).</p>
-    <div class="jva-temas">${Object.entries(TEMAS_JARVIS).map(([k, t]) => `<button type="button" class="jva-tema${k === tema ? ' on' : ''}${t.escuro ? ' esc' : ''}" onclick="escolherTemaJarvis('${k}')" style="--fundo:${t.fundo}; --luz:${t.luz}"><span class="jva-bola" style="background:${t.bola}"></span><b>${t.nome}</b><small>${t.desc}</small></button>`).join('')}</div>
+    <div class="jva-temas">${Object.entries(TEMAS_JARVIS).map(([k, t]) => `<button type="button" class="jva-tema${k === tema ? ' on' : ''}${t.escuro ? ' esc' : ''}" onclick="escolherTemaJarvis(${jsa(k)})" style="--fundo:${t.fundo}; --luz:${t.luz}"><span class="jva-bola" style="background:${t.bola}"></span><b>${t.nome}</b><small>${t.desc}</small></button>`).join('')}</div>
     <label class="jva-linha"><input type="checkbox" ${prefs.jvSemAbertura ? '' : 'checked'} onchange="prefs.jvSemAbertura = !this.checked; salvarPrefsJarvis()"> <span>Vinheta de abertura (o feixe de luz ao abrir o app)</span></label>
     <label class="jva-linha"><input type="checkbox" ${prefs.jvSemSomAbertura ? '' : 'checked'} onchange="prefs.jvSemSomAbertura = !this.checked; salvarPrefsJarvis()"> <span>Som da abertura (2 s, corte seco · no iPhone a vinheta espera o seu toque para tocar)</span></label>
     <label class="jva-linha"><input type="checkbox" ${prefs.jvSomRespeitaSilencioso ? 'checked' : ''} onchange="prefs.jvSomRespeitaSilencioso = this.checked; salvarPrefsJarvis()"> <span>Respeitar o modo silencioso do iPhone (sem som quando a chave estiver no silencioso)</span></label></section>`;
@@ -10732,7 +10743,7 @@ function renderAjustesJarvis() {
   const mv = jvConfig.iaModeloVoz;
   h += `<section class="jva-sec" id="jva-voz"><h4>4 · Voz</h4>
     <p class="jva-txt">Toque no ícone do J.A.R.V.I.S. e <b>converse falando</b>: ele ouve, responde com voz na hora (português com leve sotaque britânico) e você pode interromper tocando na esfera. Usa o mesmo cérebro grátis (Gemini).</p>
-    <div class="jva-vozes">${VOZES_JARVIS.map(([v, d]) => `<button type="button" class="${(jvConfig.vozNome || VOZES_JARVIS[0][0]) === v ? 'on' : ''}" onclick="jvConfig.vozNome='${v}'; salvarJvConfig(); renderAjustesJarvis()"><strong>${v}</strong><small>${d}</small></button>`).join('')}</div>
+    <div class="jva-vozes">${VOZES_JARVIS.map(([v, d]) => `<button type="button" class="${(jvConfig.vozNome || VOZES_JARVIS[0][0]) === v ? 'on' : ''}" onclick="jvConfig.vozNome=${jsa(v)}; salvarJvConfig(); renderAjustesJarvis()"><strong>${v}</strong><small>${d}</small></button>`).join('')}</div>
     <div class="jva-botoes"><button type="button" class="jva-bt2" onclick="fecharAjustesJarvis(); iniciarConversaVoz('Ajustes → Voz', null, { saudar: true })">▶ Testar esta voz (ele cumprimenta)</button></div>
     <label class="jva-linha"><input type="checkbox" ${jvConfig.vozInterromper ? 'checked' : ''} onchange="jvConfig.vozInterromper = this.checked; salvarJvConfig()"> <span>Interromper falando (use com fone de ouvido — sem fone, ele pode se ouvir pelo alto-falante)</span></label>
     <label class="jva-linha"><input type="checkbox" ${jvConfig.vozModo === 'classica' ? 'checked' : ''} onchange="jvConfig.vozModo = this.checked ? 'classica' : 'aovivo'; salvarJvConfig()"> <span>Modo clássico: o ícone abre o chat escrito com o ditado do iPhone (sem conversa ao vivo)</span></label>
@@ -11086,7 +11097,7 @@ function renderPerfilTrabalho() {
   const el = document.getElementById('perfil-trabalho'); if (!el) return;
   const atual = (profile && profile.trabalho) || 'geral';
   el.innerHTML = Object.entries(PERFIS_TRABALHO).map(([k, p]) =>
-    `<span class="${atual === k ? 'active' : ''}" onclick="escolherPerfilTrabalho('${k}')" title="${esc(p.dica)}">${p.ic} ${esc(p.nome)}</span>`).join('');
+    `<span class="${atual === k ? 'active' : ''}" onclick="escolherPerfilTrabalho(${jsa(k)})" title="${esc(p.dica)}">${p.ic} ${esc(p.nome)}</span>`).join('');
   const d = document.getElementById('perfil-trabalho-dica');
   if (d) d.innerText = vt().dica;
 }
@@ -11210,17 +11221,17 @@ function renderConfigAba() {
   const c = cfgAba(id);
   const lista = notasDev(id);
   const abertas = lista.filter(x => !x.done); const feitas = lista.filter(x => x.done);
-  const linha = n => `<li class="dev-item ${n.done ? 'feito' : ''}"><input type="checkbox" ${n.done ? 'checked' : ''} onclick="marcarNotaDev('${id}', ${n.id})">
+  const linha = n => `<li class="dev-item ${n.done ? 'feito' : ''}"><input type="checkbox" ${n.done ? 'checked' : ''} onclick="marcarNotaDev(${jsa(id)}, ${n.id})">
       <span>${esc(n.text)}</span>
-      <select class="dev-mover" title="Mover para outra aba" onchange="moverNotaDev('${id}', ${n.id}, this.value)">${opcoesAbas(id)}</select>
-      <button class="mini-btn xs" title="Apagar" onclick="removerNotaDev('${id}', ${n.id})">✕</button></li>`;
+      <select class="dev-mover" title="Mover para outra aba" onchange="moverNotaDev(${jsa(id)}, ${n.id}, this.value)">${opcoesAbas(id)}</select>
+      <button class="mini-btn xs" title="Apagar" onclick="removerNotaDev(${jsa(id)}, ${n.id})">✕</button></li>`;
   el.innerHTML = `
     ${ajustes.length ? `<h4 class="dev-titulo">Ajustes desta aba</h4>
-      ${ajustes.map(a => `<label class="check-line"><input type="checkbox" ${c[a.k] ? 'checked' : ''} onchange="alternarAjusteAba('${id}', '${a.k}')"> ${esc(a.nome)}</label>`).join('')}`
+      ${ajustes.map(a => `<label class="check-line"><input type="checkbox" ${c[a.k] ? 'checked' : ''} onchange="alternarAjusteAba(${jsa(id)}, ${jsa(a.k)})"> ${esc(a.nome)}</label>`).join('')}`
       : `<p class="hint">Esta aba ainda não tem ajustes próprios — use o caderno abaixo para pedir os que fizerem falta.</p>`}
     <h4 class="dev-titulo">🛠️ Caderno desta aba <small>${abertas.length ? plural(abertas.length, 'em aberto', 'em aberto') : 'vazio'}</small></h4>
     <p class="hint" style="margin:0 0 6px 0">Anote aqui, enquanto usa, o que precisa mudar <strong>nesta tela</strong>. Tudo que for anotado em todas as abas aparece junto na janela flutuante 🛠️ Ajustes.</p>
-    <form onsubmit="addNotaDev(event, '${id}')" style="display:flex; gap:8px; margin:0">
+    <form onsubmit="addNotaDev(event, ${jsa(id)})" style="display:flex; gap:8px; margin:0">
       <input type="text" id="dev-input" placeholder="o que mudar nesta aba…" autocomplete="off" style="flex:1">
       <button type="submit">＋</button>
     </form>
@@ -11316,10 +11327,10 @@ function desenharLista(id, focar) {
   const nome = CAMPOS_LISTA[id] || 'item';
   cx.innerHTML = arr.map((s, i) => `<div class="ed-linha"><span class="ed-marca">•</span>
       <input type="text" value="${esc(s)}" placeholder="${esc(nome)}"
-        onchange="editarLinhaLista('${id}', ${i}, this.value)"
-        onkeydown="teclaLinhaLista(event, '${id}', ${i})">
-      <span class="ed-tools"><button type="button" class="mini-btn xs" title="Subir" onclick="moverLinhaLista('${id}', ${i}, -1)">↑</button><button type="button" class="mini-btn xs" title="Descer" onclick="moverLinhaLista('${id}', ${i}, 1)">↓</button><button type="button" class="mini-btn xs" title="Tirar" onclick="removerLinhaLista('${id}', ${i})">✕</button></span></div>`).join('')
-    + `<button type="button" class="ed-add" onclick="addLinhaLista('${id}')">＋ ${esc(nome)}</button>`;
+        onchange="editarLinhaLista(${jsa(id)}, ${i}, this.value)"
+        onkeydown="teclaLinhaLista(event, ${jsa(id)}, ${i})">
+      <span class="ed-tools"><button type="button" class="mini-btn xs" title="Subir" onclick="moverLinhaLista(${jsa(id)}, ${i}, -1)">↑</button><button type="button" class="mini-btn xs" title="Descer" onclick="moverLinhaLista(${jsa(id)}, ${i}, 1)">↓</button><button type="button" class="mini-btn xs" title="Tirar" onclick="removerLinhaLista(${jsa(id)}, ${i})">✕</button></span></div>`).join('')
+    + `<button type="button" class="ed-add" onclick="addLinhaLista(${jsa(id)})">＋ ${esc(nome)}</button>`;
   if (focar !== undefined) {
     const campos = cx.querySelectorAll('input');
     if (campos[focar]) { campos[focar].focus(); campos[focar].select(); }
@@ -11339,7 +11350,7 @@ function prepararListas() {
   Object.keys(CAMPOS_LISTA).forEach(id => {
     const t = document.getElementById(id); if (!t || t.dataset.ed) return;
     t.dataset.ed = '1';
-    t.insertAdjacentHTML('beforebegin', `<button type="button" class="ed-toggle" id="bt-${id}" onclick="alternarModoLista('${id}')">☰ lista</button>`);
+    t.insertAdjacentHTML('beforebegin', `<button type="button" class="ed-toggle" id="bt-${id}" onclick="alternarModoLista(${jsa(id)})">☰ lista</button>`);
     t.insertAdjacentHTML('afterend', `<div class="ed-lista" id="ed-${id}"></div>`);
     // quando o formulário preenche a textarea por código, a lista acompanha
     t.addEventListener('focus', () => desenharLista(id));
@@ -11388,8 +11399,8 @@ function tornarModaisMoveis() {
     const cont = m.querySelector('.modal-content, .lupa-caixa'); if (!cont || cont.dataset.movel) return;
     cont.dataset.movel = id;
     cont.insertAdjacentHTML('afterbegin',
-      `<div class="modal-grip" onpointerdown="pegarModal(event, '${id}')"><span>${nome}</span>
-        <span class="grip-acoes"><button class="mini-btn xs" title="Centralizar de novo" onclick="centralizarModal('${id}')">⌖</button></span></div>`);
+      `<div class="modal-grip" onpointerdown="pegarModal(event, ${jsa(id)})"><span>${nome}</span>
+        <span class="grip-acoes"><button class="mini-btn xs" title="Centralizar de novo" onclick="centralizarModal(${jsa(id)})">⌖</button></span></div>`);
     aplicarPosModal(id);
   });
 }
@@ -11488,7 +11499,7 @@ function prepararCardsRecolhiveis() {
   document.querySelectorAll('#settings .card, #prod .card, #clinic .card').forEach(c => {
     const h = c.querySelector('h2'); if (!h || c.dataset.recolhivel) return;
     c.dataset.recolhivel = 'c' + (++n) + '-' + (c.closest('.tab-content') || {}).id;
-    h.insertAdjacentHTML('beforeend', `<button type="button" class="card-toggle" onclick="alternarCard('${c.dataset.recolhivel}')" title="Recolher">▾</button>`);
+    h.insertAdjacentHTML('beforeend', `<button type="button" class="card-toggle" onclick="alternarCard(${jsa(c.dataset.recolhivel)})" title="Recolher">▾</button>`);
     h.style.cursor = 'pointer';
     h.addEventListener('click', e => { if (e.target.closest('button')) return; alternarCard(c.dataset.recolhivel); });
   });
@@ -11512,7 +11523,7 @@ function renderAtalhoJanelas() {
   const estreito = window.innerWidth < 900;
   el.innerHTML = Object.keys(PAINEIS).map(k => {
     const on = (c.ativos || []).includes(k);
-    return `<span class="jan-chip${on ? ' sel' : ''}" title="${esc(PAINEIS[k].nome)}" onclick="alternarPainelAtalho('${k}')">${PAINEIS[k].ic}</span>`;
+    return `<span class="jan-chip${on ? ' sel' : ''}" title="${esc(PAINEIS[k].nome)}" onclick="alternarPainelAtalho(${jsa(k)})">${PAINEIS[k].ic}</span>`;
   }).join('') +
     `<span class="jan-sep"></span>` +
     `<span class="jan-chip" title="Arrumar todas nas margens" onclick="arrumarPaineis()">↔</span>` +
@@ -11564,7 +11575,7 @@ function corpoDev(el) {
   }
   el.innerHTML = abas.map(a => `<div class="pf-titulo">${esc(ABA_NOME(a))}</div>` +
     notasDev(a).filter(x => !x.done).slice(0, 6).map(n =>
-      `<label class="pf-item"><input type="checkbox" onchange="marcarNotaDev('${a}', ${n.id})"><span>${esc(n.text)}</span></label>`).join('')).join('') +
+      `<label class="pf-item"><input type="checkbox" onchange="marcarNotaDev(${jsa(a)}, ${n.id})"><span>${esc(n.text)}</span></label>`).join('')).join('') +
     `<div class="pf-rodape"><span>${plural(totalDev(true), 'ajuste pedido', 'ajustes pedidos')}</span><button class="mini-btn" onclick="abrirConfigAba()">⚙ nesta aba</button></div>`;
 }
 
@@ -11696,10 +11707,10 @@ function chipsAnexos(o, tipo, id, i) {
     if (a.tipo === 'img') {
       const d = imgPorId(a.imgId);
       return d
-        ? `<img class="anexo-mini" src="${d}" alt="${esc(a.nome || '')}" title="${esc(a.nome || 'imagem')}" onclick="verImagem('${a.imgId}', '${esc(a.nome || '').replace(/'/g, '')}')">`
-        : `<span class="anexo-chip falta" title="Imagem enviada em outro aparelho — não sincroniza" onclick="abrirAnexos('${tipo}', ${id}${i === undefined ? '' : ', ' + i})">🖼️ ${esc(a.nome || 'imagem')}</span>`;
+        ? `<img class="anexo-mini" src="${d}" alt="${esc(a.nome || '')}" title="${esc(a.nome || 'imagem')}" onclick="verImagem(${jsa(a.imgId)}, ${jsa(a.nome || '')})">`
+        : `<span class="anexo-chip falta" title="Imagem enviada em outro aparelho — não sincroniza" onclick="abrirAnexos(${jsa(tipo)}, ${id}${i === undefined ? '' : ', ' + i})">🖼️ ${esc(a.nome || 'imagem')}</span>`;
     }
-    return `<a class="anexo-chip" href="${esc(a.url)}" target="_blank" rel="noopener" title="${esc(a.url)}">${iconeDoLink(a.url)} ${esc(a.nome || 'link')}</a>`;
+    return `<a class="anexo-chip" href="${esc(urlSegura(a.url))}" target="_blank" rel="noopener" title="${esc(a.url)}">${iconeDoLink(a.url)} ${esc(a.nome || 'link')}</a>`;
   }).join('') + `</span>`;
 }
 /** Quantos anexos o item tem (para o botão 📎 mostrar o número). */
@@ -11915,7 +11926,7 @@ function renderBaixaLote() {
     <div class="chips">
       <span class="chip${naoPagos.every(s => plantoesMarcados.has(s.id)) ? ' sel' : ''}" onclick="marcarPlantoes('todos')">✓ todos (${formatCurrency(naoPagos.reduce((a, s) => a + (Number(s.amount) || 0), 0))})</span>
       ${locais.map((d, i) => `<span class="chip${ativo('local', i)}" onclick="marcarPlantoes('local', ${i})">🏥 ${esc(d)} · ${formatCurrency(somaLocal(d))}</span>`).join('')}
-      ${meses.map(m => `<span class="chip${ativo('mes', m)}" onclick="marcarPlantoes('mes', '${m}')">📆 ${esc(nomeMes(m))} · ${formatCurrency(somaMes(m))}</span>`).join('')}
+      ${meses.map(m => `<span class="chip${ativo('mes', m)}" onclick="marcarPlantoes('mes', ${jsa(m)})">📆 ${esc(nomeMes(m))} · ${formatCurrency(somaMes(m))}</span>`).join('')}
     </div>
     <div class="baixa-acao">
       <label>Recebi em: <input type="date" id="baixa-data" value="${hojeISO()}"></label>
@@ -12048,8 +12059,8 @@ function montarPaineis() {
   wrap.innerHTML = ativos.map(k => {
     const p = PAINEIS[k]; const enc = (c.encolhidos || []).includes(k);
     return `<section class="pf${enc ? ' encolhido' : ''}" id="pf-${k}" data-k="${k}">
-      <header class="pf-top" onpointerdown="pegarPainel(event, '${k}')"><span class="pf-ic">${p.ic}</span><strong>${esc(p.nome)}</strong>
-        <span class="pf-acoes"><button class="mini-btn pf-encolher" title="Encolher / abrir" onclick="encolherPainel('${k}')">${enc ? '▸' : '▾'}</button><button class="mini-btn" title="Fechar esta janela" onclick="fecharPainel('${k}')">✕</button></span></header>
+      <header class="pf-top" onpointerdown="pegarPainel(event, ${jsa(k)})"><span class="pf-ic">${p.ic}</span><strong>${esc(p.nome)}</strong>
+        <span class="pf-acoes"><button class="mini-btn pf-encolher" title="Encolher / abrir" onclick="encolherPainel(${jsa(k)})">${enc ? '▸' : '▾'}</button><button class="mini-btn" title="Fechar esta janela" onclick="fecharPainel(${jsa(k)})">✕</button></span></header>
       <div class="pf-corpo" id="pf-${k}-corpo"></div></section>`;
   }).join('');
   ativos.forEach(k => atualizarPainel(k));
@@ -12241,7 +12252,7 @@ async function corpoArte(el) {
   // o espaço vazio que sobrava. Na estreita, empilha como antes.
   const larga = el.offsetWidth >= 330;
   el.innerHTML = `<div class="pf-arte-wrap${larga ? ' larga' : ''}">
-    <a href="${esc(obra.link)}" target="_blank" rel="noopener" class="pf-arte"><img src="${esc(obra.img)}" alt="${esc(obra.titulo)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'pf-vazio\\'>🖼️ imagem indisponível</div>'"></a>
+    <a href="${esc(urlSegura(obra.link))}" target="_blank" rel="noopener" class="pf-arte"><img src="${esc(obra.img)}" alt="${esc(obra.titulo)}" loading="lazy" onerror="this.parentElement.innerHTML='<div class=\\'pf-vazio\\'>🖼️ imagem indisponível</div>'"></a>
     <div class="pf-arte-info"><strong>${esc(obra.titulo)}</strong><small>${esc(obra.autor)}${obra.ano ? ' · ' + esc(String(obra.ano)) : ''}</small>
       ${obra.sobre ? `<p class="pf-arte-sobre">${esc(obra.sobre)}</p>` : ''}
       <small class="item-date">${esc(obra.fonte)}${obra.aviso ? ' · ' + esc(obra.aviso) : ''}</small></div></div>
@@ -12284,7 +12295,7 @@ function renderConfigFlut() {
   el.innerHTML = `<label class="check-line"><input type="checkbox" ${c.ligado ? 'checked' : ''} onchange="alternarFlutuantes()"> Usar janelas flutuantes</label>
     <label class="check-line"><input type="checkbox" ${c.celular ? 'checked' : ''} onchange="alternarFlutCelular()"> Mostrar também no celular / tela estreita</label>
     <div class="check-line">Largura: <input type="range" min="230" max="460" step="10" value="${c.largura || 310}" oninput="mudarLarguraFlut(this.value)"> <small>${c.largura || 310}px</small></div>
-    <div class="chips" style="margin-top:8px">${Object.keys(PAINEIS).map(k => `<span class="chip${(c.ativos || []).includes(k) ? ' sel' : ''}" onclick="alternarPainel('${k}')">${PAINEIS[k].ic} ${esc(PAINEIS[k].nome)}</span>`).join('')}</div>
+    <div class="chips" style="margin-top:8px">${Object.keys(PAINEIS).map(k => `<span class="chip${(c.ativos || []).includes(k) ? ' sel' : ''}" onclick="alternarPainel(${jsa(k)})">${PAINEIS[k].ic} ${esc(PAINEIS[k].nome)}</span>`).join('')}</div>
     <div class="pf-botoes" style="margin-top:10px"><button class="btn" onclick="arrumarPaineis()">↔ Arrumar nas margens</button></div>
     <p class="hint" style="margin-top:8px">${estreito
       ? 'Nesta tela as janelas ficam rentes ao rodapé, encolhidas — toque no título para abrir uma.'
@@ -13223,6 +13234,47 @@ let syncTimer = null;
 let syncResumoTexto = ''; // fase 10: a situação da planilha também aparece dentro do Estoque
 let syncEmAndamento = false;
 let syncEditouDurante = false; // alguma gravação aconteceu enquanto a rede respondia?
+// fase 12 (Codex, achado 3): a "base" = o carimbo de cada módulo que a PLANILHA confirmou ter. Edição daqui acima da base = a planilha
+// ainda não viu. Se chega por cima disso uma versão MAIS NOVA de outro aparelho, é conflito: a versão daqui vai para lifeos_conflitos
+// (só neste aparelho) antes de ser trocada, e o Rafael escolhe em Ajustes → Sincronização. Não junta listas sozinho (ressuscitaria
+// o que foi apagado). O outro lado do conflito (este aparelho por cima de outro) só o Apps Script enxerga: ver .claude/FASE-12-sync.md.
+let syncBase = null; try { syncBase = JSON.parse(localStorage.getItem('lifeos_sync_base')); } catch (e) { }
+if (!syncBase || typeof syncBase !== 'object') { syncBase = { ...syncMeta }; try { localStorage.setItem('lifeos_sync_base', JSON.stringify(syncBase)); } catch (e) { } }
+const NOMES_SYNC = { habits: 'Hábitos', orders: 'Pedidos da Primos 3D', clients: 'Clientes', jarvischat: 'Chat do J.A.R.V.I.S.', agentechat: 'Conversas com os agentes', garimpoaprov: 'Garimpo', patentes: 'Patentes', estoqueprimos: 'Estoque', filaimpressao: 'Fila de impressão', metasprimos: 'Metas da Primos', events: 'Agenda', shifts: 'Plantões', finances: 'Finanças', recurring: 'Recorrentes', tasks: 'Tarefas', tasklists: 'Listas de tarefas', notes: 'Notas', entregas: 'Entregas', contacts: 'Contatos', study: 'Estudos', topics: 'Temas de estudo', materials: 'Materiais', workouts: 'Treinos', medical: 'Saúde', profile: 'Perfil', familia: 'Família', memorias: 'Memórias' };
+function nomeSync(m) { return NOMES_SYNC[m] || m; }
+function lerConflitos() { try { const c = JSON.parse(localStorage.getItem('lifeos_conflitos')); return Array.isArray(c) ? c : []; } catch (e) { return []; } }
+function guardarConflito(modulo, texto, carimboAqui, carimboDeLa) {
+  let lista = lerConflitos().concat({ id: novoId(), modulo, quando: Date.now(), aqui: carimboAqui, la: carimboDeLa, texto });
+  lista = lista.slice(-8);
+  while (lista.length) { try { localStorage.setItem('lifeos_conflitos', JSON.stringify(lista)); break; } catch (e) { lista.shift(); } }
+  if (!lista.some(c => c.modulo === modulo && c.texto === texto)) console.error('conflito: sem espaço para guardar', modulo);
+  toast(`⚠️ Outro aparelho mudou “${nomeSync(modulo)}” ao mesmo tempo que este. Ficou a versão dele; a sua está guardada em Ajustes → Sincronização.`, 9000);
+  renderConflitos();
+}
+function renderConflitos() {
+  const el = document.getElementById('sync-conflitos'); if (!el) return;
+  const lista = lerConflitos();
+  el.innerHTML = lista.length ? `<p><b>⚠️ Versões guardadas por conflito</b> — outro aparelho mudou a mesma parte ao mesmo tempo; ficou a dele. Confira e, se precisar, baixe ou volte a sua.</p>` +
+    lista.slice().reverse().map(c => `<div class="sync-conflito"><span><b>${esc(nomeSync(c.modulo))}</b> · ${esc(new Date(c.quando).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }))}</span><span><button type="button" class="mini-btn xs" onclick="baixarConflito(${jsa(c.id)})">Baixar</button><button type="button" class="mini-btn xs" onclick="usarConflito(${jsa(c.id)})">Voltar a minha</button><button type="button" class="mini-btn xs" onclick="descartarConflito(${jsa(c.id)})">Descartar</button></span></div>`).join('') : '';
+}
+function acharConflito(id) { return lerConflitos().find(c => String(c.id) === String(id)); }
+function baixarConflito(id) {
+  const c = acharConflito(id); if (!c) return;
+  const url = URL.createObjectURL(new Blob([c.texto], { type: 'application/json' })), a = document.createElement('a');
+  a.href = url; a.download = `genesis_conflito_${c.modulo}_${isoDe(new Date(c.quando)).replace(/-/g, '')}.json`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function usarConflito(id) {
+  const c = acharConflito(id); if (!c) return;
+  if (!confirm(`Voltar a SUA versão de “${nomeSync(c.modulo)}”?\n\nO que o outro aparelho mudou nessa parte será substituído (baixe antes, se quiser guardar).`)) return;
+  let valor; try { valor = JSON.parse(c.texto); } catch (e) { toast('⚠️ A cópia guardada está corrompida.'); return; }
+  if (!salvar(c.modulo, valor)) return;
+  descartarConflito(id, true); redesenharTudo([c.modulo]); toast('✓ Sua versão voltou e vai para a planilha.');
+}
+function descartarConflito(id, semPerguntar) {
+  if (!semPerguntar && !confirm('Descartar esta cópia guardada?')) return;
+  try { localStorage.setItem('lifeos_conflitos', JSON.stringify(lerConflitos().filter(c => String(c.id) !== String(id)))); } catch (e) { }
+  renderConflitos();
+}
 
 /** Grava um módulo no localStorage, carimba a hora e agenda uma sincronização. */
 function salvar(modulo, valor) {
@@ -13239,6 +13291,9 @@ function salvar(modulo, valor) {
     if (carimboAntes === undefined) delete syncMeta[modulo]; else syncMeta[modulo] = carimboAntes;
     console.error('salvar:', modulo, e);
     toast('⚠️ Sem espaço no aparelho: a última alteração NÃO foi salva. Apague fotos ou anexos antigos e tente de novo.', 7000);
+    salvarFalhouEm = Date.now();
+    // a memória volta a ser o que está gravado de verdade (quem chamou já tinha mudado a lista antes de salvar)
+    setTimeout(() => { try { redesenharTudo([modulo]); } catch (e3) { console.error(e3); } }, 0);
     setSyncStatus('erro', 'a última alteração NÃO foi salva neste aparelho (sem espaço)');
     return false;
   }
@@ -13305,8 +13360,15 @@ async function sincronizarAgora() {
 
     const mudou = aplicarRemoto(r.dados); // lista dos módulos que chegaram mais novos
     // fase 9 (ideia do Codex): só diz "sincronizado" se a planilha guardou TUDO o que este aparelho mandou
-    const naoGuardou = Object.keys(dados).filter(k => !r.dados[k] || (Number(r.dados[k].updatedAt) || 0) < (dados[k].updatedAt || 0)).filter(k => !k.includes('#'));
+    // fase 12 (Codex, achado 2): módulo em pedaços só conta como guardado se der para REMONTAR inteiro o que a planilha devolveu
+    // (o carimbo do "cabeçalho" sozinho não prova que todos os pedaços chegaram). Incompleto = continua pendente, fica a cópia daqui.
+    const incompletos = SYNC_MODULOS.filter(m => r.dados[m] && r.dados[m].valor && r.dados[m].valor.__partes && valorRemoto(r.dados, m) === null);
+    const naoGuardou = Object.keys(dados).filter(k => !k.includes('#')).filter(k => !r.dados[k] || (Number(r.dados[k].updatedAt) || 0) < (dados[k].updatedAt || 0) || incompletos.includes(k))
+      .concat(incompletos.filter(m => !dados[m])).map(k => incompletos.includes(k) ? k + ' (veio faltando pedaço)' : k);
     registrarDiagSync({ ok: !naoGuardou.length, erro: naoGuardou.length ? 'a planilha não guardou: ' + naoGuardou.join(', ') : '', aqui: Object.keys(dados).filter(k => !k.includes('#')).length, planilha: Object.keys(r.dados).filter(k => !k.includes('#')).length, grandes: Object.keys(dados).filter(k => k.endsWith('#1')).map(k => k.slice(0, -2)) });
+    // o que a planilha confirmou ter IGUAL ao que foi mandado vira a nova base (achado 3)
+    Object.keys(dados).filter(k => !k.includes('#') && !incompletos.includes(k)).forEach(k => { if (r.dados[k] && Number(r.dados[k].updatedAt) === dados[k].updatedAt) syncBase[k] = dados[k].updatedAt; });
+    try { localStorage.setItem('lifeos_sync_base', JSON.stringify(syncBase)); } catch (e) { }
     if (naoGuardou.length) { if (mudou.length) redesenharTudo(mudou); throw new Error('a planilha não guardou: ' + naoGuardou.join(', ')); }
     if (precisaAgenda) {
       if (r.agenda && r.agenda.ok) {
@@ -13347,12 +13409,15 @@ function aplicarRemoto(remoto) {
     if (!r || !Number.isFinite(Number(r.updatedAt))) return;
     const local = syncMeta[m] || 0;
     if (r.updatedAt < local) return;
-    if (r.updatedAt === local && r.texto === localStorage.getItem('lifeos_' + m)) return;
+    const atual = localStorage.getItem('lifeos_' + m);
+    if (r.updatedAt === local && r.texto === atual) { syncBase[m] = local; return; }
+    // edição daqui que a planilha nunca viu, e chega uma versão MAIS NOVA por cima: guarda a daqui antes de trocar (achado 3)
+    if (atual !== null && r.updatedAt > local && local > (Number(syncBase[m]) || 0) && r.texto !== atual) guardarConflito(m, atual, local, r.updatedAt);
     try { localStorage.setItem('lifeos_' + m, r.texto); } catch (e) { console.error('sync: sem espaço para', m); return; }
-    syncMeta[m] = r.updatedAt; // sem carimbar hora nova: isso não é edição local
+    syncMeta[m] = r.updatedAt; syncBase[m] = r.updatedAt; // sem carimbar hora nova: isso não é edição local
     mudou.push(m);
   });
-  try { localStorage.setItem('lifeos_sync_meta', JSON.stringify(syncMeta)); } catch (e) { }
+  try { localStorage.setItem('lifeos_sync_meta', JSON.stringify(syncMeta)); localStorage.setItem('lifeos_sync_base', JSON.stringify(syncBase)); } catch (e) { }
   return mudou;
 }
 /** O módulo como veio da planilha — juntando os pedaços de um módulo grande (fase 9). null = não veio inteiro (fica o daqui). */
@@ -13483,6 +13548,7 @@ function setSyncStatus(estado, detalhe) {
   document.querySelectorAll('[data-sync-resumo]').forEach(x => { x.textContent = syncResumoTexto; });
   if (el) { el.innerText = icone + ' ' + texto; el.style.color = cor; }
   if (dot) { dot.style.background = cor; dot.title = texto; }
+  renderConflitos();
   const dg = document.getElementById('sync-diag'); // fase 9: para conferir que os 3 aparelhos falam com a MESMA planilha
   if (dg) { const d = lerDiagSync(); dg.innerText = `Este aparelho: ${nomeAparelho()} · planilha ${idPlanilha()}${d.aqui ? ` · ${d.aqui} módulos aqui, ${d.planilha || 0} na planilha` : ''}${(d.grandes || []).length ? ` · em pedaços: ${d.grandes.join(', ')}` : ''}. O final da planilha tem que ser o MESMO no celular, no notebook e no computador.`; }
 }
