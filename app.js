@@ -6303,6 +6303,7 @@ async function sincronizarCofreAgora(forcar, silencioso) {
     try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; res.mudou.push('relatorios'); try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } atualizarTelasSincronizadas('central'); renderDestaquesJarvis(); renderGarimpoTela(); } } catch (e) { } // ainda sem relatório: tudo bem
     try { const gp = await (await cofreBruto('dados/garimpo-pc.json')).json(); if (gp && gp.tipo === 'jarvis-garimpo-pc' && (!garimpoPC || gp.atualizadoEm !== garimpoPC.atualizadoEm)) { garimpoPC = gp; res.mudou.push('garimpo'); try { localStorage.setItem('lifeos_garimpopc', JSON.stringify(gp)); } catch (e) { } renderGarimpoTela(); } } catch (e) { } // fase 11: fotos do MakerWorld e 3D girando do garimpo
     try { const eb = await (await cofreBruto('dados/ebook.json')).json(); if (eb && eb.tipo === 'jarvis-ebook' && JSON.stringify(eb) !== JSON.stringify(ebookDados)) { ebookDados = eb; res.mudou.push('ebook'); try { localStorage.setItem('lifeos_ebook', JSON.stringify(eb)); } catch (e) { } if (cc.agente === 'digital' || cc.pagina === 'digital') atualizarTelasSincronizadas('central', 'agente'); if (ebLeitorAberto()) renderLeitorEbook(true); } } catch (e) { } // fase 10: Produto Digital (e-book) + a prévia aberta
+    try { await lerListasCofre(res); } catch (e) { } // fase 12: listas encomendadas (brinquedos da escolinha, kits) e os PDFs
     autoRodadasNuvem(); // fase 9: se o relógio do GitHub falhou, o app pede (plano C)
   } catch (e) { res.estado = navigator.onLine ? 'erro' : 'offline'; res.erro = e.message; if (forcar && !silencioso) toast(`Não consegui falar com o cofre (${e.message}). Confira a conexão em Ajustes do J.A.R.V.I.S.`, 7000); }
   jv.sincronizando = false; jv.cofrePromessa = null; renderAreasJarvis(); atualizarTelasSincronizadas('primos'); renderAjustesJarvis(); setTimeout(renderAreasJarvis, 91000);
@@ -8219,7 +8220,7 @@ function publicarFilaCofre() {
   }, 4000);
 }
 const COR_FILA = { preto: '#1d1d20', preta: '#1d1d20', branco: '#f1f1ee', branca: '#f1f1ee', cinza: '#8a8d93', vermelho: '#d3262a', vermelha: '#d3262a', azul: '#2457c5', verde: '#1f9d55', amarelo: '#f6c51d', amarela: '#f6c51d', laranja: '#ff7a1a', rosa: '#e64d97', roxo: '#7a4fe0', roxa: '#7a4fe0', dourado: '#d4a53c', dourada: '#d4a53c', prata: '#c3c6cc', bege: '#d9c3a0', marrom: '#6e4428', natural: '#e7e3d6', transparente: '#e7e3d6' };
-const ORIGEM_FILA = { voz: '🎙 você', chat: '💬 você', app: '✎ você', agente: '✦ agente', pedido: '📦 pedido', marketing: '📈 marketing', shopee: '🛍 Shopee', data: '📅 data', garimpo: '🔎 garimpo', vendas: '🤝 vendas', dev: '🧩 desenvolvedor' };
+const ORIGEM_FILA = { voz: '🎙 você', chat: '💬 você', app: '✎ você', agente: '✦ agente', pedido: '📦 pedido', marketing: '📈 marketing', shopee: '🛍 Shopee', data: '📅 data', garimpo: '🔎 garimpo', vendas: '🤝 vendas', dev: '🧩 desenvolvedor', lista: '🧸 lista' };
 /** Painel do agente de Produção: fila do dia (nuvem) + a sua fila + a fábrica em 3D + datas que vêm aí. */
 function htmlAgenteProducao(a) {
   const r = relatorioAgente('producao') || {}, abertos = filaImpressao.filter(f => f.status !== 'feito'), feitos = filaImpressao.filter(f => f.status === 'feito').slice(-5).reverse();
@@ -8235,7 +8236,7 @@ function htmlAgenteProducao(a) {
   const datas = (r.datas || []).length ? ccBloco('Datas que vêm aí', `<ul class="cc-lista">${r.datas.map(d => `<li><span><b>${esc(d.tema)}</b><small>${esc(isoParaBR(d.data || ''))}${d.comecarEm ? ` · começar a imprimir até ${esc(isoParaBR(d.comecarEm))}` : ''}</small></span></li>`).join('')}</ul>`) : '';
   const linha = f => `<li class="${f.status}">${miniFilaHTML(f.titulo, COR_FILA[semAcentoCer(f.cor)] || '#8e8e93')}<span><b>${esc(f.titulo)} · ${f.qtd} un.</b><small>${esc([f.material, f.cor, ORIGEM_FILA[f.origem] || ''].filter(Boolean).join(' · '))}</small></span>
     ${f.status === 'feito' ? '<em>✓</em>' : `<button type="button" class="cc-mini${f.status === 'imprimindo' ? '' : ' sec'}" onclick="mudarFila(${f.id}, ${jsa(f.status === 'imprimindo' ? 'feito' : 'imprimindo')})">${f.status === 'imprimindo' ? '✓ Pronto' : '▶ Imprimir'}</button>`}<button type="button" class="cc-mini sec" onclick="removerFila(${f.id})" aria-label="Tirar da fila">✕</button></li>`;
-  return cabecalhoAgente(a) + htmlGarimpo() // fase 11: o GARIMPO DO DIA no topo (espaço reservado)
+  return cabecalhoAgente(a) + htmlListaBrinquedos() + htmlEstimativasPdf() + htmlGarimpo() // fase 12: a LISTA ENCOMENDADA (brinquedos da escolinha) e os PDFs no topo; fase 11: o GARIMPO DO DIA logo depois
     + `<section class="cc-bloco cc-fab-bloco"><h4>Fábrica · ao vivo</h4><div id="cc-fab" class="cc-fab"><div class="cc-seca-carregando"><span class="spin"></span> Ligando as impressoras…</div></div><p class="cc-nota">${impressoesBambu ? `As A1 mostram o que está imprimindo DE VERDADE (conta Bambu, lida às ${esc(String(impressoesBambu.lidoEm || '').slice(11, 16))}); a Kobra X mostra o que você marcou como "imprimindo" ou o 1º da fila do dia.` : 'As impressoras mostram o que está em "imprimindo" (ou o 1º da fila do dia).'}</p></section>`
     + htmlConsenso('producao') + dia + htmlRelatorioAgente('producao')
     + ccBloco(`Sua fila · ${plural(abertos.length, 'item', 'itens')}`, `<ul class="cc-fila">${abertos.map(linha).join('') || '<li><span><small>Vazia. Fale “quero imprimir …” para o J.A.R.V.I.S. ou anote aqui embaixo.</small></span></li>'}${feitos.map(linha).join('')}</ul>
@@ -8370,6 +8371,81 @@ function tocarFabrica3D(info, x, y) {
   t.innerHTML = `<span><b>${esc(info.titulo)}</b><small>${esc(info.sub || '')}</small></span>`; t.hidden = false;
   t.style.left = Math.max(8, Math.min(x - 90, (t.parentElement.clientWidth || 300) - 200)) + 'px'; t.style.top = Math.max(8, y - 64) + 'px';
   clearTimeout(cc.dicaFab); cc.dicaFab = setTimeout(() => { t.hidden = true; }, 3200);
+}
+// =====================================================================================================================
+// LISTAS ENCOMENDADAS (fase 12, pedido do Rafael 10/10/2026): espaço FIXO na Produção para "Brinquedos da Escolinha" (meninas da
+// escola de dança, consignado) e as outras estimativas em PDF (kits empresariais...). Os agentes escolhem na nuvem (rodar.mjs: Marketing +
+// Captação e Vendas + Consignação + Produção + Financeiro); o PC calcula custo e preço com a fórmula da planilha e gera o PDF
+// (lista-pc.ps1 → dados/listas/<lista>.json, midia/listas/<lista>.pdf, dados/listas/indice.json). CACHE local em lifeos_listas.
+// =====================================================================================================================
+let listasPC = (() => { try { const x = JSON.parse(localStorage.getItem('lifeos_listas')); return x && x.dados ? x : { indice: null, dados: {} }; } catch (e) { return { indice: null, dados: {} }; } })();
+async function lerListasCofre(res) {
+  const ind = await (await cofreBruto('dados/listas/indice.json')).json(); if (!ind || ind.tipo !== 'jarvis-listas') return;
+  let mudou = JSON.stringify(ind) !== JSON.stringify(listasPC.indice);
+  for (const l of ind.listas || []) {
+    if (!/^[a-z0-9-]{2,40}$/.test(String(l.lista || '')) || (listasPC.dados[l.lista] && listasPC.dados[l.lista].geradoEm === l.geradoEm)) continue;
+    try { const d = await (await cofreBruto(`dados/listas/${l.lista}.json`)).json(); if (d && d.tipo === 'jarvis-lista') { listasPC.dados[l.lista] = d; mudou = true; } } catch (e) { }
+  }
+  if (!mudou) return;
+  listasPC.indice = ind; try { localStorage.setItem('lifeos_listas', JSON.stringify(listasPC)); } catch (e) { }
+  res.mudou.push('listas'); if (cc.agente === 'producao' || cc.pagina === 'producao') atualizarTelasSincronizadas('central', 'agente');
+}
+const LIC_LISTA = { ok: ['Pode vender', 'ok'], verificar: ['Verificar licença', 'conferir'], nao: ['Só referência', 'risco'] };
+function tempoLista(min) { const m = Math.round(Number(min) || 0); return m >= 60 ? `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}` : `${m} min`; }
+function itemListaNaFila(lista, it) { return filaImpressao.some(f => f.status !== 'feito' && String(f.obs || '').includes(`[${lista}#${it.n}]`)); }
+function htmlListaBrinquedos() {
+  const L = listasPC.dados.escolinha, ex = ((cc.execucao || {}).tarefas || {}).lista, reunidos = ex && ex.status === 'rodando';
+  const pedir = `<button type="button" class="cc-mini sec" onclick="pedirListaAgentes('escolinha')">${L ? '↻ Pedir lista nova aos agentes' : '▶ Pedir aos agentes'}</button>`;
+  if (!L) return `<section class="cc-bloco lb vazio" id="lb"><div class="lb-topo"><div><span class="lb-selo">🧸 Lista encomendada</span><h4 class="lb-tit">Brinquedos da Escolinha</h4><small>${reunidos ? 'Os agentes estão reunidos agora (Marketing, Captação e Vendas, Consignação, Produção e Financeiro)…' : 'Espaço reservado: a lista de brinquedos para as meninas da escola de dança, com o custo, o preço no consignado e o PDF.'} O PC calcula o preço com a fórmula da sua planilha e gera o PDF.</small></div></div>${pedir}</section>`;
+  const t = L.totais || {}, itens = L.itens || [];
+  const card = (it, k) => { const lic = LIC_LISTA[it.licenca] || LIC_LISTA.verificar, naFila = itemListaNaFila('escolinha', it), link = urlSegura(it.link);
+    return `<article class="lb-card${naFila ? ' nafila' : ''}" style="--k:${k}"><div class="lb-foto">${it.foto ? `<img data-cofre="${esc(it.foto)}" alt="" loading="lazy">` : '<span class="lb-sem">🧸</span>'}<span class="lb-n">${it.n}</span><span class="jvk-selo ${lic[1]} lb-lic">${lic[0]}</span></div>
+      <div class="lb-corpo"><b class="lb-nome">${esc(it.titulo)}</b><span class="jvk-selo ${lic[1]} lb-lic2">${lic[0]}</span><small class="lb-sub">${esc([it.idade, `${Math.round(it.gramas || 0)} g · ${tempoLista(it.minutos)}${it.real ? '' : ' (estimado)'}`].filter(Boolean).join(' · '))}</small>
+      <div class="lb-num"><span><em>Custo</em>${reais(it.custo && it.custo.total)}</span><span class="lb-cobrar"><em>Cobrar</em>${reais(it.preco)}</span><span class="lb-lucro"><em>Lucro</em>${reais(it.lucro)}</span></div>
+      ${it.porque ? `<p class="lb-porque">${esc(it.porque)}</p>` : ''}${(it.cores || []).length ? `<small class="lb-cores">🎨 ${esc(it.cores.join(' · '))}</small>` : ''}${it.risco ? `<small class="lb-risco">⚠️ ${esc(it.risco)}</small>` : ''}${it.acimaMercado ? `<small class="lb-alerta">💲 Para cobrir tudo: ${reais(it.custo && it.custo.minimo)}, acima do mercado (${reais(it.precoMercado)}). Ao preço de mercado o lucro seria ${reais(it.lucroMercado)}${it.pratos > 1 ? ` — o perfil tem ${it.pratos} mesas (pode ser mais de 1 peça)` : ''}.</small>` : ''}
+      <div class="lb-acoes">${link ? `<a href="${esc(link)}" target="_blank" rel="noopener noreferrer">Abrir no ${it.site === 'printables' ? 'Printables' : 'MakerWorld'} ↗</a>` : '<span></span>'}${naFila ? '<em>✓ na fila</em>' : `<button type="button" onclick="filaListaItem('escolinha', ${it.n})">＋ Fila (${it.qtd || 1})</button>`}</div></div></article>`; };
+  const faltam = itens.filter(it => !itemListaNaFila('escolinha', it)).length;
+  return `<section class="cc-bloco lb" id="lb"><div class="lb-topo"><div><span class="lb-selo">🧸 Lista encomendada · ${esc(isoParaBR(String(L.geradoEm || '').slice(0, 10)).slice(0, 5))}</span><h4 class="lb-tit">Brinquedos da Escolinha</h4><small>${esc(L.resumo || '')}</small></div>
+    <button type="button" class="lb-pdf" onclick="baixarPdfLista('escolinha')">⬇ PDF da estimativa<small>${L.pdfKb ? L.pdfKb + ' KB' : ''}</small></button></div>
+    <div class="lb-placar"><span><em>Vou gastar</em><b>${reais(t.investimento)}</b><small>${t.pecas || 0} peças · ${t.gramas || 0} g</small></span><span><em>Se vender tudo</em><b>${reais(t.receita)}</b><small>escola fica com ${reais(t.comissao)}</small></span><span class="lb-lucro"><em>Lucro da leva</em><b>${reais(t.lucro)}</b><small>depois de todos os custos</small></span><span><em>Máquina</em><b>${String(t.horas || 0).replace('.', ',')} h</b><small>≈ ${String(t.diasMaquina || 0).replace('.', ',')} dia(s) nas 2 A1</small></span></div>
+    <div class="lb-grade">${itens.map(card).join('')}</div>
+    <div class="lb-rodape">${faltam ? `<button type="button" class="cc-btn" onclick="filaListaToda('escolinha')">＋ Pôr a leva toda na fila (${faltam} modelos)</button>` : '<p class="cc-nota">✓ A leva toda está na fila de impressão.</p>'}${pedir}</div>
+    ${L.aprendizado ? `<p class="cc-nota">📚 ${esc(L.aprendizado)}</p>` : ''}
+    ${(L.reservas || []).length || (L.proximosNiveis || []).length ? `<details class="lb-mais"><summary>Reservas e próximos níveis</summary>${(L.reservas || []).length ? `<h5>Se algum não der certo</h5><ul>${L.reservas.map(r => `<li><b>${esc(r.titulo)}</b> — ${esc(r.porque)}</li>`).join('')}</ul>` : ''}${(L.proximosNiveis || []).length ? `<h5>Mais difíceis, para depois</h5><ul>${L.proximosNiveis.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}</details>` : ''}
+    <p class="cc-nota">Peso e tempo: perfil de impressão do autor no MakerWorld (confira ao fatiar). Preço = custo (filamento, máquina, acabamento, falhas, embalagem) com a margem da planilha e a comissão de ${Math.round((L.comissao || 0) * 100)}% da escola.</p></section>`;
+}
+function htmlEstimativasPdf() {
+  const ls = ((listasPC.indice || {}).listas || []).filter(l => l.lista !== 'escolinha'); if (!ls.length) return '';
+  return ccBloco('Estimativas em PDF', `<ul class="cc-lista lb-pdfs">${ls.map(l => `<li><span><b>${esc(l.titulo)}</b><small>${l.kit ? 'kit · ' : ''}custo ${reais(l.investimento)} · ${esc(isoParaBR(String(l.geradoEm || '').slice(0, 10)))}</small></span><button type="button" class="cc-mini" onclick="baixarPdfLista(${jsa(l.lista)})">⬇ PDF</button></li>`).join('')}</ul><p class="cc-nota">Itens sem número entram quando o Desenvolvedor entregar a ficha de insumos do kit.</p>`);
+}
+async function baixarPdfLista(lista) {
+  const l = ((listasPC.indice || {}).listas || []).find(x => x.lista === lista) || listasPC.dados[lista]; if (!l || !l.pdf) { toast('O PDF ainda não foi gerado.'); return; }
+  if (!claudeConfigurado()) { toast('Conecte o J.A.R.V.I.S. ao computador (Ajustes → 2) para baixar do cofre.'); return; }
+  toast('Baixando o PDF…');
+  try {
+    const b = await (await cofreBruto(l.pdf)).blob(), u = URL.createObjectURL(new Blob([b], { type: 'application/pdf' })), a = document.createElement('a');
+    a.href = u; a.download = `${String(l.titulo || lista).replace(/[\\/:*?"<>|]/g, '-')} - estimativa.pdf`; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(u), 120000);
+  } catch (e) { toast('⚠️ Não consegui baixar agora (' + e.message + ').'); }
+}
+function filaListaItem(lista, n, quieto) {
+  const L = listasPC.dados[lista], it = L && (L.itens || []).find(x => x.n === n); if (!it || itemListaNaFila(lista, it)) return false;
+  const f = adicionarFila({ titulo: it.titulo, qtd: it.qtd || 1, cor: (it.cores || []).join(' + ').slice(0, 60), obs: `[${lista}#${it.n}] ${L.titulo} · ${urlSegura(it.link)}` }, 'lista');
+  if (f && !quieto) { toast(`✓ ${it.titulo} × ${it.qtd || 1} foi para a fila.`, 3500); atualizarTelasSincronizadas('central', 'agente'); }
+  return !!f;
+}
+function filaListaToda(lista) {
+  const L = listasPC.dados[lista]; if (!L) return; let n = 0;
+  for (const it of L.itens || []) { if (itemListaNaFila(lista, it)) continue; if (!filaListaItem(lista, it.n, true)) break; n++; }
+  if (n) toast(`✓ ${plural(n, 'modelo foi', 'modelos foram')} para a fila de impressão.`, 4000);
+  atualizarTelasSincronizadas('central', 'agente');
+}
+async function pedirListaAgentes(lista) {
+  if (!claudeConfigurado()) { toast('Para pedir aos agentes, conecte o computador em Ajustes do J.A.R.V.I.S. → 2.', 5000); return; }
+  const p = { id: 'p' + novoId(), agente: 'lista', lista, instrucao: 'Lista encomendada pelo app (refazer com o que está bombando hoje).', quando: new Date().toISOString() };
+  let ok = false; try { ok = await gravarControleCofre(d => { d.pedidos = (d.pedidos || []).concat(p); }, `Painel: lista ${lista}`); } catch (e) { toast('⚠️ Não consegui falar com o cofre (' + e.message + '). Tente de novo.', 6000); return; }
+  if (!ok) { toast('⚠️ O pedido NÃO foi gravado (o cofre estava ocupado). Tente de novo em instantes.', 6000); return; }
+  toast('✓ Pedido aos agentes. A reunião leva uns minutos; depois o PC calcula os preços e gera o PDF (com o PC ligado).', 6500);
+  if (typeof acompanharExecucao === 'function') acompanharExecucao(true);
 }
 // =====================================================================================================================
 // PÁGINA DO AGENTE (fase 6, pedido do Rafael 03/10/2026): no lugar da janela da Primos, cada agente tem uma PÁGINA INTEIRA,
