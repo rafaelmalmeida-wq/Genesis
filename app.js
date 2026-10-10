@@ -6297,7 +6297,8 @@ async function sincronizarCofreAgora(forcar, silencioso) {
     try { const b = await (await cofreBruto('dados/impressoes.json')).json(); if (b && b.tipo === 'jarvis-impressoes' && (!impressoesBambu || b.lidoEm !== impressoesBambu.lidoEm)) { impressoesBambu = b; res.mudou.push('impressoes'); try { localStorage.setItem('lifeos_impressoes', JSON.stringify(b)); } catch (e) { } if (cc.agente === 'producao') montarFabrica3D(); } } catch (e) { }
     try { const dj = await (await cofreBruto('dados/diario.json')).json(); if (dj && dj.tipo === 'jarvis-diario' && JSON.stringify(dj) !== JSON.stringify(diarioJarvis)) { diarioJarvis = dj; res.mudou.push('diario'); try { localStorage.setItem('lifeos_diario', JSON.stringify(dj)); } catch (e) { } if (cc.pagina === 'jarvis' && !$j('ag-pag').hidden) renderPaginaJarvis(); } } catch (e) { } // diário do J.A.R.V.I.S. do dia (fase 8)
     try { const dv = await (await cofreBruto('dados/dev.json')).json(); if (dv && dv.tipo === 'jarvis-dev') { const mudou = JSON.stringify(dv) !== JSON.stringify(devDados); devDados = dv; if (mudou) res.mudou.push('dev'); try { localStorage.setItem('lifeos_dev', JSON.stringify(dv)); } catch (e) { } if (mudou && cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // projetos do Desenvolvedor (fase 8)
-    try { const pd = await (await cofreBruto('dados/pedidos-dev.json')).json(); if (pd && pd.tipo === 'jarvis-pedidos-dev' && JSON.stringify(pd) !== JSON.stringify(pedidosDev)) { pedidosDev = pd; res.mudou.push('pedidosdev'); try { localStorage.setItem('lifeos_pedidosdev', JSON.stringify(pd)); } catch (e) { } if (cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 10: pedidos ao Desenvolvedor
+    try { const pd = await (await cofreBruto('dados/pedidos-dev.json')).json(); if (pd && pd.tipo === 'jarvis-pedidos-dev' && JSON.stringify(pd) !== JSON.stringify(pedidosDev)) { pedidosDev = pd; res.mudou.push('pedidosdev'); try { localStorage.setItem('lifeos_pedidosdev', JSON.stringify(pd)); } catch (e) { } if (cc.agente === 'dev' || cc.agente === 'primo') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 10: pedidos ao Desenvolvedor
+    try { const pm = await (await cofreBruto('dados/primo.json')).json(); if (pm && pm.tipo === 'jarvis-primo' && JSON.stringify(pm) !== JSON.stringify(primoDados)) { primoDados = pm; res.mudou.push('primo'); try { localStorage.setItem('lifeos_primo', JSON.stringify(pm)); } catch (e) { } if (cc.agente === 'primo' || cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 12: o Primo (radar, paletas, regras)
     try { const g = await (await cofreBruto('dados/giros.json')).json(); if (g && g.tipo === 'jarvis-giros' && (!girosDados || g.atualizadoEm !== girosDados.atualizadoEm)) { girosDados = g; res.mudou.push('giros'); try { localStorage.setItem('lifeos_giros', JSON.stringify(g)); } catch (e) { } if (cc.agente === 'producao') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // miniaturas 3D da fila
     try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; res.mudou.push('engenharia'); guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
     try { const r = await (await cofreBruto('dados/relatorios.json')).json(); if (r && r.tipo === 'jarvis-relatorios' && (!relatoriosAgentes || r.geradoEm !== relatoriosAgentes.geradoEm)) { relatoriosAgentes = r; res.mudou.push('relatorios'); try { localStorage.setItem('lifeos_relatorios', JSON.stringify(r)); } catch (e) { } atualizarTelasSincronizadas('central'); renderDestaquesJarvis(); renderGarimpoTela(); } } catch (e) { } // ainda sem relatório: tudo bem
@@ -7616,6 +7617,9 @@ const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafa
   { id: 'consignacao', setor: 'primos', nome: 'Consignação', funcao: 'Parceiros, remessas, acertos e mix', skills: ['Gestão de parceiros e pontos', 'Controle de remessas, vendas e devoluções', 'Conferência de acerto e comissões', 'Gestão de catálogo e personalização', 'Desempenho e reposição por ponto'], aba: 'chaveiros' },
   { id: 'shopee', setor: 'primos', nome: 'Shopee', funcao: 'Mercado, anúncios, catálogo, preço e desempenho da loja', skills: ['Inteligência de mercado 3D', 'Anúncios que vendem', 'Catálogo e publicação', 'Preço e rentabilidade por anúncio', 'Desempenho e Shopee Ads'] },
   { id: 'dev', setor: 'primos', nome: 'Desenvolvedor', funcao: 'Cria os produtos: placas, carimbos, chaveiros com logo, kits empresariais, luminárias e a camisa — em Blender/Fusion e 3MF', skills: ['Modelagem paramétrica FDM', 'Placas, nomes e carimbos', 'Chaveiros e brindes com logo', 'Luminárias e funcionais', 'Projeto 3MF no Bambu Studio'] },
+  // fase 12 (pedido do Rafael 10/10/2026): o PRIMO é um agente DO Desenvolvedor (chefe: 'dev') só de PLACAS PROFISSIONAIS — bloco menor
+  // pendurado no do Desenvolvedor. Trabalha no PC (7h30, 12h30, 17h30): radar diário, placas da fila e melhoria contínua; o chefe revisa.
+  { id: 'primo', setor: 'primos', nome: 'Primo', chefe: 'dev', mini: true, semNuvem: true, funcao: 'Agente do Desenvolvedor só de PLACAS PROFISSIONAIS: pesquisa todo dia o que está bombando, estuda o ambiente de cada profissão, combina as cores do catálogo e entrega o 3MF fatiado, com peso, folgas certas e render de vitrine e no ambiente', skills: ['Radar diário de placas', 'Design pelo ambiente da profissão', 'Paleta com as cores do catálogo', 'Tamanho, peso e folgas', 'Símbolo fiel e em 3D', 'Render de vitrine e no ambiente', 'Melhoria contínua até ficar ótima', 'Modelagem paramétrica FDM', 'Projeto 3MF no Bambu Studio'] },
   { id: 'digital', setor: 'primos', nome: 'Produto Digital', funcao: 'E-book e mentoria: documenta tudo o que o J.A.R.V.I.S. e os agentes produzem e transforma em produto digital', skills: ['Documentação viva', 'E-book', 'Mentoria', 'Lançamento digital', 'Prova e resultados'], semNuvem: true }, // fase 10 (pedido do Rafael 04/10/2026): por enquanto o Claude escreve no PC
   { id: 'patentes', setor: 'primos', nome: 'Gestão de Patentes', funcao: 'Protege e monetiza os modelos próprios da Primos: desenho industrial, modelo de utilidade, direito autoral e marca, em consenso com o Desenvolvedor e a Produção', skills: ['Triagem do que proteger', 'Escolha do instrumento (INPI)', 'Prazo e novidade', 'Dossiê de depósito', 'Retorno para a Primos'] }, // fase 11 (pedido do Rafael 05/10/2026): atua pouco por enquanto
   { id: 'prospeccao', setor: 'primos', nome: 'Prospecção de Vendas', funcao: 'O analista: lê todos os agentes e mostra quanto cada canal e cada item já deu, quanto dá de forma realista e quanto dá em escala, preso à capacidade real', skills: ['Capacidade e gargalo', 'Lucro por hora de máquina', 'Previsão realista por canal', 'Economia de marketplace', 'Consignação e pontos de venda', 'Produto digital e funil', 'Produto novo: vale a pena?', 'Cenários de escala'] } // fase 10 (pedido do Rafael 04/10/2026)
@@ -7651,6 +7655,13 @@ const SKILLS_DESC = {
   'Chaveiros e brindes com logo': 'Logo autorizado → vetor → camadas de cor, argola reforçada e acabamento; confere a licença de modelos de terceiros.',
   'Luminárias e funcionais': 'Corpo, tampa, difusor, encaixes e passagem de cabos para os LEDs reais, com lista de componentes e testes de calor e encaixe.',
   'Projeto 3MF no Bambu Studio': 'Cores, orientação, suportes e perfil da máquina; fatia, confere camadas, tempo e consumo, reabre o arquivo e entrega fonte + 3MF + relatório.',
+  'Radar diário de placas': 'Todo dia procura no Instagram, no TikTok e em sites (Etsy, Pinterest, MakerWorld, lojas de placas) as placas profissionais que estão chamando atenção e traz 3 a 5 referências com link e o que dá para aproveitar — só como ideia, nunca copia arquivo de ninguém.',
+  'Design pelo ambiente da profissão': 'Pensa onde a placa vai morar (consultório, escritório, obra, clínica, sala de aula) e desenha para combinar com o ambiente e com quem vai usar: mulher em tons claros e traço sutil, homem com contraste e presença.',
+  'Paleta com as cores do catálogo': 'Monta as cores com os filamentos que a Primos tem (máx. 4 no AMS) e, quando faltar a cor certa da profissão (verde-medicina, vinho do Direito…), sugere a compra com o porquê.',
+  'Tamanho, peso e folgas': 'Placas grandes e chamativas (30–35 cm em 2 partes coladas, letras do nome com 30 mm ou mais), peso de chumbo na medida (sem ficar pesada demais) e folgas folgadas o bastante para encaixar sem lixar.',
+  'Símbolo fiel e em 3D': 'O símbolo da profissão transcrito fiel à referência e, quando pede volume (como o Asclépio da medicina), esculpido em 3D de verdade e impresso em alto-relevo, sem suporte.',
+  'Render de vitrine e no ambiente': 'Renderiza cada placa caprichada (vitrine) e também na mesa do ambiente da profissão, para você ver como fica antes de imprimir.',
+  'Melhoria contínua até ficar ótima': 'Sem pedido novo, volta nas placas que já fez e melhora uma por rodada (versão nova, nunca apaga a antiga) até ficar ótima — e segue essa lógica sempre que você mandar nomes novos.',
   'Cadastro e padronização de itens': 'Organizar filamentos, componentes, embalagens e produtos acabados por código, categoria, característica e localização.',
   'Controle de entrada e saída': 'Registrar compras, consumos, devoluções, perdas e movimentações, mantendo histórico e saldo atualizados.',
   'Gestão de filamentos e insumos': 'Controlar peso disponível por bobina, material, cor e lote, além das condições de armazenamento.',
@@ -7796,9 +7807,10 @@ function desempenhoAgentes(Ltodas) {
     const env = Ltodas.filter(m => m.de === a.id), rec = Ltodas.filter(m => m.para === a.id || (m.para === 'todos' && m.de === 'jarvis'));
     const conv = conversasDiario.filter(c => c.agente === a.id), rel = relatorioAgente(a.id), ex = ((cc.execucao || {}).tarefas || {})[a.id];
     const comNum = env.filter(m => /\d/.test(m.texto)).length, comPasso = conv.filter(c => c.caminho).length;
-    const pedidos = a.id === 'dev' ? ((pedidosDev && pedidosDev.pedidos) || []) : [], feitos = pedidos.filter(p => p.status === 'feito').length;
+    const pedidos = a.id === 'dev' ? ((pedidosDev && pedidosDev.pedidos) || []) : a.id === 'primo' ? filaPrimo() : [], feitos = pedidos.filter(p => p.status === 'feito').length;
     let nota = 0; const motivos = [];
     if (a.semNuvem && a.id === 'digital') { const cs = (ebookDados && ebookDados.capitulos) || []; const esc2 = cs.filter(c => c.status !== 'ideia').length; nota += Math.min(30, esc2 * 4); motivos.push(`${esc2} capítulo(s) escritos (trabalha no PC)`); }
+    else if (a.id === 'primo') { const rd = (primoDados && primoDados.radar) || {}; if (rd.dia === hoje) { nota += 30; motivos.push('radar de hoje entregue (trabalha no PC)'); } else if (rd.dia) { nota += 10; motivos.push(`radar de ${isoParaBR(rd.dia).slice(0, 5)}`); } else motivos.push('1ª rodada no PC ainda não rodou'); }
     else if (rel && rel.dia === hoje && !rel.velho) { nota += 30; motivos.push('relatório de hoje entregue'); } else if (rel) { nota += 10; motivos.push(`relatório de ${isoParaBR(rel.dia || '').slice(0, 5)}${rel.velho ? ' (a rodada de hoje falhou)' : ''}`); } else motivos.push('ainda sem relatório');
     if (conv.length) { nota += Math.min(25, conv.length * 6); motivos.push(`${plural(conv.length, 'conversa', 'conversas')} com o J.A.R.V.I.S. do dia`); }
     if (env.length) { nota += Math.round(20 * comNum / env.length); if (comNum) motivos.push(`${Math.round(comNum / env.length * 100)}% das falas com números`); }
@@ -7930,6 +7942,8 @@ function estadoAgenteBase(a) {
   }
   if (a.aba) { const r = relatorioAgente(a.id); return r ? { nivel: 'ok', metrica: `Relatório de ${isoParaBR(r.dia || '').slice(0, 5)}` } : { nivel: 'sem', metrica: 'Aguardando o 1º relatório' }; }
   if (a.id === 'mercado') return { nivel: 'ok', metrica: 'Cotações ao vivo' };
+  if (a.id === 'primo') { const f = filaPrimo().filter(x => x.status !== 'feito'), r = (primoDados && primoDados.radar) || {}; // fase 12
+    return { nivel: primoDados || f.length ? 'ok' : 'sem', metrica: `${plural(f.length, 'placa na fila', 'placas na fila')}${r.dia ? ` · radar ${r.dia === hojeISO() ? 'de hoje' : isoParaBR(r.dia).slice(0, 5)}` : ''}` }; }
   if (a.id === 'patentes') { const n = ((relatorioAgente('patentes') || {}).candidatos || []).length, ac = registrosPatentes.length; return { nivel: relatorioAgente('patentes') ? 'ok' : 'sem', metrica: n || ac ? `${plural(n, 'candidato', 'candidatos')} · ${ac} acompanhando` : 'De olho nos modelos do Desenvolvedor' }; }
   if (a.id === 'prospeccao') { if (!pc) return { nivel: 'sem', metrica: 'Sem dados do cofre' }; try { const m = modeloProsp(); return { nivel: 'ok', metrica: `${reaisK(m.rea.total(12))} realista · 12 m` }; } catch (e) { return { nivel: 'sem', metrica: 'Calculando…' }; } }
   if (a.id === 'treino') { const n = workouts.filter(w => { const d = w.date || w.data; return d && diasEntre(d, hojeISO()) <= 7; }).length; return { nivel: n >= 3 ? 'ok' : 'atencao', metrica: `${plural(n, 'treino', 'treinos')} em 7 dias` }; }
@@ -7983,21 +7997,24 @@ function posPadraoCanvas() {
   if (celCanvas()) { // celular em pé: 2 colunas, o J.A.R.V.I.S. no meio
     [['contabil', -150, -400], ['marketing', 150, -400], ['estoque', -150, 380], ['producao', 150, 380], ['vendas', -150, 700], ['consignacao', 150, 700]].forEach(([id, x, y]) => { p[id] = { x, y }; });
     p.shopee = { x: -150, y: 1020 }; p.dev = { x: 150, y: 1020 }; p.prospeccao = { x: 0, y: -720 }; // fase 10: no celular eles não tinham lugar (ficavam no meio)
-    ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'prospeccao').forEach((a, i) => { p[a.id] = { x: (i % 2 ? 150 : -150), y: 1340 + Math.floor(i / 2) * 320 }; });
+    p.primo = { x: 150, y: 1290 }; // fase 12: o Primo pendurado embaixo do Desenvolvedor (chefe dele)
+    ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'prospeccao' && a.id !== 'primo').forEach((a, i) => { p[a.id] = { x: (i % 2 ? 150 : -150), y: 1580 + Math.floor(i / 2) * 320 }; });
     return p;
   }
   CV_PRIMOS.forEach((id, i) => { const a = -Math.PI / 2 + i / CV_PRIMOS.length * Math.PI * 2; p[id] = { x: Math.round(Math.cos(a) * R1 * 1.35), y: Math.round(Math.sin(a) * R1) }; });
   p.shopee = { x: -460, y: 820 }; p.dev = { x: 460, y: 820 }; p.digital = { x: 0, y: 1080 }; // Shopee, Desenvolvedor e Produto Digital embaixo, fora do círculo da operação
   p.prospeccao = { x: 0, y: -860 }; // fase 10: o analista em cima do círculo, lendo todos
   p.patentes = { x: 920, y: 1080 }; // fase 11: ao lado do Desenvolvedor (protege o que ele cria)
-  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee' && a.id !== 'digital' && a.id !== 'prospeccao' && a.id !== 'patentes'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
+  p.primo = { x: 460, y: 1150 }; // fase 12: o Primo (placas) pendurado embaixo do Desenvolvedor, o chefe dele
+  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee' && a.id !== 'digital' && a.id !== 'prospeccao' && a.id !== 'patentes' && a.id !== 'primo'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
   return p;
 }
 function posCanvas(id) { const s = (prefs[chavePosCanvas()] || {})[id]; return s || posPadraoCanvas()[id] || { x: 0, y: 0 }; }
 /** Os fios: quem passa o quê para quem (com o número real, quando há). */
 function fiosCanvas() {
   const N = (relatoriosAgentes && relatoriosAgentes.numeros) || {}, e = calcularEstoque(), pc = primosCentral || {}, p7 = (((pc.marketing || {}).tiktok || {}).periodo7d || {});
-  const F = agentesCentral().map(a => ({ de: a.id, para: 'jarvis', rot: relatorioAgente(a.id) ? 'relatório ' + isoParaBR(relatorioAgente(a.id).dia || '').slice(0, 5) : estadoAgente(a).metrica, forte: !!relatorioAgente(a.id) }));
+  const F = agentesCentral().map(a => a.chefe ? { de: a.id, para: a.chefe, rot: estadoAgente(a).metrica, forte: true, sub: true } // fase 12: o Primo responde ao Desenvolvedor, não direto ao J.A.R.V.I.S.
+    : { de: a.id, para: 'jarvis', rot: relatorioAgente(a.id) ? 'relatório ' + isoParaBR(relatorioAgente(a.id).dia || '').slice(0, 5) : estadoAgente(a).metrica, forte: !!relatorioAgente(a.id) });
   F.push({ de: 'estoque', para: 'contabil', rot: N.dinheiroEmFilamento ? reais(N.dinheiroEmFilamento) + ' em filamento' : 'valor do estoque', lateral: true });
   F.push({ de: 'producao', para: 'contabil', rot: N.lucroMedioPorPeca ? 'sobra ' + reais(N.lucroMedioPorPeca) + '/peça' : 'custo por peça', lateral: true });
   F.push({ de: 'estoque', para: 'producao', rot: e.total ? fmtKg(e.total) + ' disponível' : 'filamento', lateral: true });
@@ -8031,6 +8048,7 @@ function estadoCanvas(a) {
 function tarefaCanvas(a) {
   const ex = cc.execucao || {}, t = (ex.tarefas || {})[a.id];
   if (t && (t.status === 'rodando' || t.status === 'fila')) return t.instrucao ? `Executando: ${t.instrucao}` : 'Gerando o relatório agora…';
+  if (a.id === 'primo') return tarefaPrimo(); // fase 12: trabalha no PC, não tem rodada na nuvem
   const r = relatorioAgente(a.id); if (r && (r.acoes || []).length) return r.acoes[0];
   return a.aba || AGENTES_NUVEM.includes(a.id) ? 'Aguardando a rodada das 7h' : a.missao || a.funcao || '';
 }
@@ -8051,8 +8069,9 @@ function renderCanvasCentral() {
     <div class="cv-acoes"><button type="button" data-acao="rodar" data-ag="todos">▶ Rodar todos</button><button type="button" data-acao="abrir" data-ag="jarvis">Abrir</button></div></div>`;
   ag.forEach(a => {
     const p = posCanvas(a.id), s = setorCentral(a.setor), est = estadoCanvas(a), E = ESTADOS_CV[est] || ESTADOS_CV.sem, pausado = est === 'pausado', rodando = est === 'rodando' || est === 'fila';
-    h += `<div class="cv-no cv-agente${cc.agente === a.id ? ' sel' : ''}${rodando ? ' rodando' : ''}" data-id="${esc(a.id)}" style="left:${p.x}px; top:${p.y}px; --cor:${s.cor}">
-      <div class="cv-alca"><i class="cv-sel-setor"></i><div><b>${esc(a.nome)}</b><small>${esc(s.nome)}</small></div><span class="cv-estado" style="--e:${E[1]}">${E[0]}</span></div>
+    const chefe = a.chefe ? todosAgentes().find(x => x.id === a.chefe) : null; // fase 12: agente de um agente (o Primo é do Desenvolvedor)
+    h += `<div class="cv-no cv-agente${a.mini ? ' cv-subagente' : ''}${cc.agente === a.id ? ' sel' : ''}${rodando ? ' rodando' : ''}" data-id="${esc(a.id)}" style="left:${p.x}px; top:${p.y}px; --cor:${s.cor}${COR_AGENTE[a.id] && a.mini ? '; --ag:' + COR_AGENTE[a.id] : ''}">
+      <div class="cv-alca"><i class="cv-sel-setor"></i><div><b>${esc(a.nome)}</b><small>${chefe ? 'agente do ' + esc(chefe.nome) : esc(s.nome)}</small></div><span class="cv-estado" style="--e:${E[1]}">${E[0]}</span></div>
       <p class="cv-tarefa"><em>${rodando ? 'Executando' : 'Tarefa atual'}</em>${textoAgente(tarefaCanvas(a))}</p>
       <div class="cv-rodape"><strong>${esc(estadoAgente(a).metrica)}</strong>
         <span class="cv-ctrls"${a.semNuvem ? ' hidden' : ''}><button type="button" data-acao="rodar" data-ag="${esc(a.id)}" title="Rodar agora" ${rodando || pausado ? 'disabled' : ''}>▶</button><button type="button" data-acao="${pausado ? 'retomar' : 'pausar'}" data-ag="${esc(a.id)}" title="${pausado ? 'Retomar' : 'Pausar'}">${pausado ? '⏵' : '⏸'}</button><button type="button" data-acao="cancelar" data-ag="${esc(a.id)}" title="Cancelar a tarefa" ${rodando ? '' : 'disabled'}>✕</button></span></div></div>`;
@@ -8908,6 +8927,7 @@ function renderPaginaAgente() {
   if (id === 'prospeccao') return renderPaginaProspeccao();
   if (id === 'conversas') return renderPaginaConversas();
   if (id === 'dev') return renderPaginaDev(); // fase 11: estúdio claro
+  if (id === 'primo') return renderPaginaPrimo(); // fase 12: o estúdio das placas (mesmo visual claro do chefe)
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -8980,6 +9000,10 @@ function itensAgente(id) {
   if (id === 'dev') {
     ((pedidosDev && pedidosDev.pedidos) || []).slice(0, 10).forEach(p => add({ id: `pd:${p.id}:${p.status}`, tipo: p.status === 'duvida' ? 'pendencia' : 'novidade', prio: 1, texto: `${p.status === 'feito' ? 'Pronto' : p.status === 'duvida' ? 'Precisa de você' : p.status === 'andamento' ? 'Modelando' : 'Pedido na fila'}: ${String(p.texto).slice(0, 110)}${p.resposta ? ' — ' + p.resposta : ''}`, quando: p.quando, origem: p.origem === 'voz' ? 'voz' : p.origem === 'chat' ? 'chat' : 'app' }));
     ((devDados && devDados.projetos) || []).forEach(p => add({ id: `proj:${p.codigo}:${p.status}:${p.versao || ''}`, tipo: 'novidade', texto: `${p.nome} → ${(ETAPAS_DEV[p.status] || ETAPAS_DEV.ideia)[0]}`, quando: p.atualizadoEm || '', origem: 'Desenvolvedor no PC', acao: ['Ver projeto', `abrirProjetoDev(${jsa(p.codigo)})`] }));
+  }
+  if (id === 'primo') { // fase 12
+    const rd = (primoDados && primoDados.radar) || {}; if (rd.dia && (rd.itens || []).length) add({ id: `radar:${rd.dia}`, tipo: 'novidade', texto: `Radar de placas: ${plural(rd.itens.length, 'referência nova', 'referências novas')}`, quando: rd.dia, origem: 'Primo no PC' });
+    filaPrimo().slice(0, 10).forEach(p => add({ id: `pp:${p.id}:${p.status}`, tipo: p.status === 'duvida' ? 'pendencia' : 'novidade', prio: 1, texto: `${(ESTADOS_PEDIDO_DEV[p.status] || ESTADOS_PEDIDO_DEV.novo)[0]}: ${tituloPedidoDev(p.texto).titulo}${p.resposta ? ' — ' + p.resposta : ''}`, quando: p.quando, origem: 'Primo no PC' }));
   }
   if (id === 'digital') ((ebookDados && ebookDados.capitulos) || []).forEach(c => add({ id: `cap:${c.id}:${c.status}`, tipo: 'novidade', texto: `Capítulo ${c.n}: ${c.titulo} → ${ESTADOS_CAP[c.status] || c.status}`, quando: c.atualizadoEm || (ebookDados && ebookDados.atualizadoEm) || '', origem: 'e-book (PC)' }));
   return out;
@@ -9111,7 +9135,7 @@ function desenharFiosCanvas() {
     const d = `M${a.x.toFixed(1)},${a.y.toFixed(1)} Q${(mx + nx).toFixed(1)},${(my + ny).toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
     const ativo = cc.agente && (cc.agente === f.de || cc.agente === f.para), rodando = estadoCanvas({ id: f.de, ...(agentesCentral().find(x => x.id === f.de) || {}) }) === 'rodando';
     const falando = cc.fioConv && ((cc.fioConv.de === f.de && cc.fioConv.para === f.para) || (cc.fioConv.de === f.para && cc.fioConv.para === f.de)), corF = f.conversa ? corConv(f.conversa, true) : '';
-    h += `<path id="cvf${i}" class="cv-fio${f.lateral ? ' lateral' : ''}${ativo ? ' ativo' : ''}${rodando ? ' rodando' : ''}${f.conversa ? ' conversa' : ''}${falando ? ' falando' : ''}"${corF ? ` style="--c:${corF}"` : ''} d="${d}"/>`;
+    h += `<path id="cvf${i}" class="cv-fio${f.lateral ? ' lateral' : ''}${f.sub ? ' sub' : ''}${ativo ? ' ativo' : ''}${rodando ? ' rodando' : ''}${f.conversa ? ' conversa' : ''}${falando ? ' falando' : ''}"${corF ? ` style="--c:${corF}"` : ''} d="${d}"/>`;
     h += `<circle class="cv-pulso${f.lateral ? ' lateral' : ''}${f.conversa ? ' conversa' : ''}${falando ? ' falando' : ''}"${corF ? ` style="--c:${corF}"` : ''} r="${rodando || falando ? 6.5 : f.conversa ? 5 : 4.2}"><animateMotion dur="${rodando ? 1.4 : f.lateral ? 4.6 : 3.4}s" begin="${(i * 0.37) % 3}s" repeatCount="indefinite" rotate="auto"><mpath href="#cvf${i}"/></animateMotion></circle>`;
     rot += `<span class="cv-rot${f.lateral ? ' lateral' : ''}${ativo || falando ? ' ativo' : ''}${f.conversa ? ' conversa' : ''}"${corF ? ` data-c="1"` : ''} style="${corF ? `--c:${corF}; ` : ''}left:${(mx + nx / 2).toFixed(0)}px; top:${(my + ny / 2).toFixed(0)}px">${esc(f.rot)}</span>`;
   });
@@ -9722,6 +9746,7 @@ async function pedirAoDesenvolvedor(texto, origem, anexos = []) {
   const id = novoId(), prints = [];
   for (const [k, a] of anexos.entries()) { const caminho = `entrada/dev-${hojeISO()}-${id}-${k + 1}.jpg`; try { await gh(`/contents/${caminho}`, { method: 'PUT', body: JSON.stringify({ message: 'J.A.R.V.I.S.: referência para o Desenvolvedor', content: a.dados.split(',')[1] }) }); prints.push(caminho); } catch (e) { } }
   const item = { id, quando: new Date().toISOString().slice(0, 16), texto: texto.slice(0, 1500), origem: origem || 'app', status: 'novo', prints };
+  if (ehPedidoPlaca(texto) || origem === 'agente:primo') item.agente = 'primo'; // fase 12: placa profissional vai para o Primo (o Desenvolvedor, chefe dele, revisa)
   try { await gravarCofreJson('dados/pedidos-dev.json', x => { x = x && x.pedidos ? x : { tipo: 'jarvis-pedidos-dev', pedidos: [] }; x.pedidos.unshift(item); x.pedidos = x.pedidos.slice(0, 60); return x; }, 'J.A.R.V.I.S.: pedido ao Desenvolvedor'); }
   catch (e) { toast(`Não consegui mandar ao Desenvolvedor (${e.message}). Tente de novo.`, 6000); return null; }
   pedidosDev = { tipo: 'jarvis-pedidos-dev', pedidos: [item, ...((pedidosDev && pedidosDev.pedidos) || [])].slice(0, 60) }; try { localStorage.setItem('lifeos_pedidosdev', JSON.stringify(pedidosDev)); } catch (e) { }
@@ -9738,8 +9763,8 @@ async function desfazerPedidoDev(id, msgId) {
 function htmlPedidosDev() {
   const ps = ((pedidosDev && pedidosDev.pedidos) || []).filter(p => p.status !== 'feito' || (p.quando || '') >= new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10)).slice(0, 8);
   if (!ps.length) return ccBloco('Seus pedidos', '<p class="cc-txt">Peça um modelo pelo J.A.R.V.I.S. (voz ou chat): <i>“faz uma placa de mesa para a Dra. Ana, dentista, em branco e dourado”</i>. Ele entra aqui e o Desenvolvedor faz na próxima rodada do PC (10h, 15h e 20h).</p>');
-  const st = { novo: ['Na fila', '#ff9f0a'], andamento: ['Modelando', '#0a84ff'], feito: ['Pronto', '#30d158'], duvida: ['Precisa de você', '#ff453a'] };
-  return ccBloco('Seus pedidos', `<ul class="dev-lista">${ps.map(p => { const e = st[p.status] || st.novo; return `<li${p.codigo ? ` class="dev-item" onclick="abrirProjetoDev(${jsa(p.codigo)})"` : ''}><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(String(p.texto).slice(0, 160))}</b><small>${esc(isoParaBR(String(p.quando || '').slice(0, 10)).slice(0, 5))} · ${esc(p.origem || '')}${p.codigo ? ' · ' + esc(p.codigo) : ''}${p.resposta ? ' · ' + esc(p.resposta) : ''}</small></li>`; }).join('')}</ul>`);
+  const st = ESTADOS_PEDIDO_DEV;
+  return ccBloco('Seus pedidos', `<ul class="dev-lista">${ps.map(p => { const e = st[p.status] || st.novo; return `<li${p.codigo ? ` class="dev-item" onclick="abrirProjetoDev(${jsa(p.codigo)})"` : ''}><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(String(p.texto).slice(0, 160))}</b><small>${esc(isoParaBR(String(p.quando || '').slice(0, 10)).slice(0, 5))} · ${esc(p.origem || '')}${p.agente === 'primo' ? ' · com o Primo' : ''}${p.codigo ? ' · ' + esc(p.codigo) : ''}${p.resposta ? ' · ' + esc(p.resposta) : ''}</small></li>`; }).join('')}</ul>`);
 }
 const ABAS_DEV = [['agro', 'Agro'], ['empresas', 'Empresas'], ['religioso', 'Religioso'], ['esportes', 'Esportes'], ['kids', 'Kids'], ['pet', 'Pet']];
 const ETAPAS_DEV = { ideia: ['Ideia', '#8e8e93'], imagem: ['Imagem para aprovar', '#ff9f0a'], aprovado: ['Aprovado', '#0a84ff'], '3mf': ['3MF pronto', '#bf5af2'], feito: ['Feito', '#30d158'] };
@@ -9833,14 +9858,17 @@ function cartaoVitrineDev(p, k) {
     <span class="dvs-modelo-txt"><span class="dvs-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${esc(p.nome)}</b><small>${esc(NICHOS_DEV[p.categoria] || 'Empresas')} · ${esc(p.codigo)}${p.versao ? ' ' + esc(p.versao) : ''}${arqs ? ` · ⬇ ${plural(arqs, 'arquivo', 'arquivos')}` : ''}</small>${proximaAcaoDev(p) ? `<span class="dvs-prox">Próximo: ${esc(proximaAcaoDev(p))}</span>` : ''}</span></button>`;
 }
 const COLUNAS_DEV = [['duvida', 'Precisa de você', '#ff3b30'], ['novo', 'Na fila', '#ff9f0a'], ['andamento', 'Modelando', '#0071e3'], ['feito', 'Pronto', '#34c759']];
+// fase 12: estados do pedido (o Primo entrega em 'revisao'; o Desenvolvedor, chefe dele, passa a 'feito' ou devolve em 'ajustar' com notaChefe)
+const ESTADOS_PEDIDO_DEV = { novo: ['Na fila', '#ff9f0a'], andamento: ['Modelando', '#0a84ff'], revisao: ['Com o chefe (revisão)', '#5e5ce6'], ajustar: ['Ajustando o que o chefe pediu', '#ff9f0a'], feito: ['Pronto', '#30d158'], duvida: ['Precisa de você', '#ff453a'] };
+function colunaPedidoDev(x) { const s = x.status || 'novo'; return s === 'revisao' || s === 'ajustar' ? 'andamento' : s; }
 function quadroPedidosDev() {
   const semana = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
   const pd = ((pedidosDev && pedidosDev.pedidos) || []).filter(x => x.status !== 'feito' || String(x.quando || '') >= semana);
   if (!pd.length) return '<p class="dvs-vazio">Nenhum pedido agora. Peça um modelo aqui embaixo ou pelo J.A.R.V.I.S. (voz ou chat).</p>';
-  return `<div class="dvs-quadro">${COLUNAS_DEV.map(([st, nome, cor]) => { const L = pd.filter(x => (x.status || 'novo') === st);
-    const card = x => { const t = tituloPedidoDev(x.texto);
-      return `<details class="dvs-ped"><summary>${t.chip ? `<em>${esc(t.chip)}</em>` : ''}<b>${esc(t.titulo)}</b><small>${esc(isoParaBR(String(x.quando || '').slice(0, 10)).slice(0, 5))}${x.origem ? ' · ' + esc(x.origem) : ''}${x.codigo ? ' · ' + esc(x.codigo) : ''}</small></summary>
-        <p>${esc(t.completo)}</p>${x.resposta ? `<p class="dvs-resp"><b>Desenvolvedor:</b> ${esc(x.resposta)}</p>` : ''}${x.codigo && projetosDev().some(p => p.codigo === x.codigo) ? `<button type="button" onclick="abrirProjetoDev(${jsa(x.codigo)})">Ver o modelo ›</button>` : ''}</details>`; };
+  return `<div class="dvs-quadro">${COLUNAS_DEV.map(([st, nome, cor]) => { const L = pd.filter(x => colunaPedidoDev(x) === st);
+    const card = x => { const t = tituloPedidoDev(x.texto), doPrimo = x.agente === 'primo', e = ESTADOS_PEDIDO_DEV[x.status];
+      return `<details class="dvs-ped"><summary>${t.chip ? `<em>${esc(t.chip)}</em>` : ''}${doPrimo ? '<em class="dvs-primo">Primo</em>' : ''}<b>${esc(t.titulo)}</b><small>${esc(isoParaBR(String(x.quando || '').slice(0, 10)).slice(0, 5))}${x.origem ? ' · ' + esc(x.origem) : ''}${x.codigo ? ' · ' + esc(x.codigo) : ''}${e && (x.status === 'revisao' || x.status === 'ajustar') ? ' · ' + esc(e[0]) : ''}</small></summary>
+        <p>${esc(t.completo)}</p>${x.resposta ? `<p class="dvs-resp"><b>${doPrimo ? 'Primo' : 'Desenvolvedor'}:</b> ${esc(x.resposta)}</p>` : ''}${x.notaChefe ? `<p class="dvs-resp"><b>Desenvolvedor (chefe):</b> ${esc(x.notaChefe)}</p>` : ''}${x.codigo && projetosDev().some(p => p.codigo === x.codigo) ? `<button type="button" onclick="abrirProjetoDev(${jsa(x.codigo)})">Ver o modelo ›</button>` : ''}</details>`; };
     return `<section class="dvs-col" style="--c:${cor}"><h3><i></i>${esc(nome)}<span>${L.length}</span></h3>${L.length ? L.slice(0, 5).map(card).join('') + (L.length > 5 ? `<details class="dvs-mais"><summary>Mais ${plural(L.length - 5, 'pedido', 'pedidos')}</summary>${L.slice(5).map(card).join('')}</details>` : '') : '<p class="dvs-col-vazia">—</p>'}</section>`; }).join('')}</div>`;
 }
 function ideiasDev() {
@@ -9884,6 +9912,7 @@ function renderPaginaDev() {
         ${destaque ? `<figure class="dvs-destaque"><div class="dvs-pedestal"><div class="dev-giro dvs-giro" id="dvs-giro" data-folha="${esc(destaque.folha)}"></div></div><figcaption><span class="dvs-etapa" style="--c:${(ETAPAS_DEV[destaque.status] || ETAPAS_DEV.ideia)[1]}">${esc((ETAPAS_DEV[destaque.status] || ETAPAS_DEV.ideia)[0])}</span><b>${esc(destaque.nome)}</b><small>Arraste para girar · <button type="button" onclick="abrirProjetoDev(${jsa(destaque.codigo)})">abrir e baixar o 3MF ›</button></small></figcaption></figure>` : ''}</section>
       <section class="dvs-sec"><header class="dvs-tit"><h2>Precisa de você</h2><p>${pend.length ? 'O que está parado esperando uma decisão ou um teste seu.' : 'Nada esperando você agora.'}</p></header>
         ${pend.length ? `<div class="dvs-pends">${pend.map(cartaoPendenciaDev).join('')}</div>` : '<p class="dvs-vazio">Tudo em dia. Quando houver imagem para aprovar, dúvida ou modelo para testar, aparece aqui.</p>'}</section>
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Radar de placas</h2><p>Do <b>Primo</b>, o agente de placas que trabalha para o Desenvolvedor: o que está chamando atenção hoje no Instagram, no TikTok e nos sites. <button type="button" class="prm-ir" onclick="abrirPaginaAgente('primo')">Abrir o estúdio do Primo ›</button></p></header>${htmlRadarPlacas(5, true)}</section>
       <section class="dvs-sec"><header class="dvs-tit"><h2>Vitrine</h2><p>${plural(vitrine.length, 'modelo com prévia', 'modelos com prévia')}. Toque num modelo para girar, dar zoom e baixar o arquivo.</p></header>
         ${vitrine.length ? filtrosDev('vitrine', vitrine.map(p => p.categoria || 'empresas')) + `<div class="dvs-vitrine" data-lista-itens="vitrine">${vitrine.map(cartaoVitrineDev).join('')}</div>` : '<p class="dvs-vazio">As prévias aparecem aqui quando o PC renderizar o primeiro modelo.</p>'}</section>
       <section class="dvs-sec"><header class="dvs-tit"><h2>Em produção</h2><p>Seus pedidos ao Desenvolvedor. Ele trabalha nas rodadas do PC: 10h, 15h e 20h. Toque num pedido para ler tudo.</p></header>${quadroPedidosDev()}
@@ -9900,6 +9929,102 @@ function renderPaginaDev() {
   if (destaque) montarGiroDev($j('dvs-giro'), destaque.folha);
   ['vitrine', 'ideias'].forEach(l => { const k = (cc.devFiltro || {})[l]; if (k && k !== 'todos') filtrarDev(l, k); });
   posRenderPagina();
+}
+// =====================================================================================================================
+// PRIMO (fase 12, pedido do Rafael 10/10/2026): um agente DO Desenvolvedor (chefe: 'dev') só de PLACAS PROFISSIONAIS.
+// Trabalha no PC (tarefa agendada 7h30, 12h30 e 17h30): RADAR do dia (3–5 referências com link: Instagram, TikTok e sites),
+// as placas da fila (pedidos com agente 'primo', na ordem), melhoria contínua das que já fez e render de vitrine + no ambiente.
+// O chefe revisa: pedido em 'revisao' → 'feito' ou 'ajustar' (com notaChefe). O que o PC publica no cofre: dados/primo.json
+// { tipo: 'jarvis-primo', atualizadoEm, diz, radar: { dia, itens: [{ titulo, fonte, link, profissao, aproveitar }] },
+//   paletas: [{ profissao, genero, cores: [{ nome, hex, tem }], porque }], comprar: [{ cor, hex, porque, profissoes }],
+//   regras: { tamanho, peso, folgas }, melhorias: [{ codigo, oque, status }] } — cache local lifeos_primo (só leitura no app).
+// O radar também aparece na página do Desenvolvedor (pedido do Rafael).
+// =====================================================================================================================
+let primoDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_primo')); } catch (e) { return null; } })();
+const RE_PLACA = /\bplac(a|as|inha|inhas)\b/i, RE_NAO_PLACA = /porteira|fazenda|coleira|\bpet\b|cachorro|\bgato\b|\bcarro\b|\bmoto\b/i;
+function ehPedidoPlaca(t) { const s = String(t || ''); return RE_PLACA.test(s) && !RE_NAO_PLACA.test(s); }
+function filaPrimo() { return ((pedidosDev && pedidosDev.pedidos) || []).filter(p => p.agente === 'primo'); }
+function placasPrimo() { return projetosDev().filter(p => /^P3D-PLACA-/.test(p.codigo || '')).sort((x, y) => String(y.atualizadoEm || '').localeCompare(String(x.atualizadoEm || ''))); }
+function tarefaPrimo() {
+  const ord = { andamento: 0, ajustar: 1, novo: 2, revisao: 3 }, atual = filaPrimo().filter(p => ord[p.status] !== undefined).sort((a, b) => ord[a.status] - ord[b.status])[0];
+  if (atual) { const t = tituloPedidoDev(atual.texto); return `${(ESTADOS_PEDIDO_DEV[atual.status] || ESTADOS_PEDIDO_DEV.novo)[0]}: ${t.chip ? t.chip + ' — ' : ''}${t.titulo}`; }
+  const m = ((primoDados && primoDados.melhorias) || []).find(x => x.status !== 'feito'); if (m) return `Melhorando: ${m.oque || m.codigo}`;
+  const r = (primoDados && primoDados.radar) || {}; return r.dia ? `Radar de ${isoParaBR(r.dia).slice(0, 5)}: ${plural((r.itens || []).length, 'referência', 'referências')}` : 'A 1ª rodada no PC é às 7h30, 12h30 ou 17h30';
+}
+function radarPlacas(n) { const r = (primoDados && primoDados.radar) || {}; return { dia: r.dia || '', itens: (r.itens || []).filter(x => x && x.titulo).slice(0, n || 5) }; }
+function corSegura(h) { const s = String(h || '').trim(); return /^#[0-9a-f]{3,8}$/i.test(s) ? s : '#8e8e93'; }
+/** As referências do dia (claro = página em estúdio claro; senão o painel escuro da Central). Link só http(s). */
+function htmlRadarPlacas(n, claro) {
+  const r = radarPlacas(n);
+  if (!r.itens.length) return `<p class="${claro ? 'dvs-vazio' : 'cc-txt'}">O Primo traz de 3 a 5 referências por dia (Instagram, TikTok e sites) na primeira rodada do PC (7h30).</p>`;
+  return `<div class="prm-radar${claro ? '' : ' escuro'}">${r.itens.map((x, k) => { const u = urlSegura(x.link);
+    return `<article class="prm-ref" style="--k:${k}"><small>${esc(x.fonte || 'web')}${x.profissao ? ' · ' + esc(x.profissao) : ''}</small><b>${esc(x.titulo)}</b>${x.aproveitar ? `<p>${esc(x.aproveitar)}</p>` : ''}${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Ver a referência ↗</a>` : ''}</article>`; }).join('')}</div>
+    <p class="${claro ? 'prm-nota' : 'cc-nota'}">Radar de ${esc(isoParaBR(r.dia))}${r.dia === hojeISO() ? ' (hoje)' : ''} · só como ideia: o Primo nunca copia arquivo de ninguém.</p>`;
+}
+function htmlAgentePrimo(a) {
+  const f = filaPrimo(), abertos = f.filter(p => p.status !== 'feito'), ps = placasPrimo(), r = radarPlacas(5), d = primoDados || {};
+  const sk = (a.skills || []).filter(k => SKILLS_DESC[k]);
+  return cabecalhoAgente(a, '<p class="cc-nota">Agente do <b>Desenvolvedor</b>: o chefe repassa as placas e revisa tudo antes de chegar a você.</p>')
+    + `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('primo')">Abrir a página completa do Primo ›</button>`
+    + `<button type="button" class="cc-falar" style="--ag:${COR_AGENTE.primo}" onclick="falarComAgente('primo')"><i></i>Falar com o Primo</button>`
+    + ccNums([[abertos.length, 'placas na fila'], [f.filter(p => p.status === 'revisao').length, 'com o chefe'], [ps.length, 'placas feitas'], [r.itens.length, 'no radar']])
+    + (d.diz ? ccBloco('O Primo diz', `<p class="cc-txt">${textoAgente(d.diz)}</p>`) : '')
+    + ccBloco('Radar de placas', htmlRadarPlacas(3))
+    + ccBloco('Fila de placas', abertos.length ? `<ul class="dev-lista">${abertos.slice(0, 8).map(p => { const e = ESTADOS_PEDIDO_DEV[p.status] || ESTADOS_PEDIDO_DEV.novo, t = tituloPedidoDev(p.texto);
+        return `<li${p.codigo ? ` class="dev-item" onclick="abrirProjetoDev(${jsa(p.codigo)})"` : ''}><span class="dev-etapa" style="--c:${e[1]}">${esc(e[0])}</span><b>${t.chip ? esc(t.chip) + ' — ' : ''}${esc(t.titulo)}</b>${p.resposta ? `<small>${esc(p.resposta)}</small>` : ''}</li>`; }).join('')}</ul>`
+      : '<p class="cc-txt">Nenhuma placa esperando. Sem pedido novo, o Primo melhora as que já fez, uma por rodada.</p>')
+    + (sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '')
+    + botaoConversarAgente(a);
+}
+async function enviarPedidoPlacaPrimo(ev) {
+  ev.preventDefault(); const ta = $j('prm-pedido'), t = ta ? ta.value.trim() : ''; if (!t) return;
+  const pd = await pedirAoDesenvolvedor(ehPedidoPlaca(t) ? t : 'Placa profissional: ' + t, 'app'); if (pd) { ta.value = ''; toast('Pedido enviado ao Primo. Ele aparece em “Na fila”.', 3500); renderPaginaPrimo(); }
+}
+const REGRAS_PRIMO = { tamanho: '30 a 35 cm em 2 partes coladas, letras do nome com 30 mm ou mais', peso: '2 tiras de chumbo (118 g) até 24 cm; 3 tiras (177 g) nas grandes — firme, sem ficar pesada demais', folgas: 'encaixes com 0,5 mm por lado; cavidade do chumbo com 0,8 mm por lado' };
+function renderPaginaPrimo() {
+  const el = $j('ag-pag'); if (!el) return;
+  const a = todosAgentes().find(x => x.id === 'primo'), d = primoDados || {}, f = filaPrimo(), ps = placasPrimo(), r = radarPlacas(5);
+  const abertos = f.filter(p => p.status !== 'feito'), destaque = ps.filter(p => p.folha)[0];
+  const nums = [[abertos.length, 'placas na fila'], [f.filter(p => p.status === 'revisao').length, 'com o chefe (revisão)'], [ps.length, 'placas feitas'], [r.itens.length, 'referências no radar']];
+  const semana = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const colunas = [['novo', 'Na fila', '#ff9f0a', x => x.status === 'novo' || x.status === 'duvida'], ['fazendo', 'Fazendo', '#0071e3', x => x.status === 'andamento' || x.status === 'ajustar'], ['revisao', 'Com o chefe', '#5e5ce6', x => x.status === 'revisao'], ['feito', 'Pronto', '#34c759', x => x.status === 'feito' && String(x.quando || '') >= semana]];
+  const card = x => { const t = tituloPedidoDev(x.texto), e = ESTADOS_PEDIDO_DEV[x.status] || ESTADOS_PEDIDO_DEV.novo;
+    return `<details class="dvs-ped"><summary>${t.chip ? `<em>${esc(t.chip)}</em>` : ''}<b>${esc(t.titulo)}</b><small>${esc(e[0])}${x.codigo ? ' · ' + esc(x.codigo) : ''}</small></summary><p>${esc(t.completo)}</p>${x.resposta ? `<p class="dvs-resp"><b>Primo:</b> ${esc(x.resposta)}</p>` : ''}${x.notaChefe ? `<p class="dvs-resp"><b>Desenvolvedor (chefe):</b> ${esc(x.notaChefe)}</p>` : ''}${x.codigo && projetosDev().some(p => p.codigo === x.codigo) ? `<button type="button" onclick="abrirProjetoDev(${jsa(x.codigo)})">Ver a placa ›</button>` : ''}</details>`; };
+  const reg = { ...REGRAS_PRIMO, ...(d.regras || {}) }, pal = (d.paletas || []).slice(0, 18), comprar = (d.comprar || []).slice(0, 8), mel = (d.melhorias || []).slice(0, 8);
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
+      <button type="button" class="ag-falar" onclick="falarComAgente('primo')">🎙 Falar</button></header>
+    <div class="ag-rolo dvs prm" id="ag-rolo">
+      <section class="dvs-heroi"><div class="dvs-heroi-txt"><small>Estúdio de placas profissionais</small><h1>Primo</h1><p>${esc(a.funcao)}.</p>
+        <ul class="dvs-nums">${nums.map(([v, t], k) => `<li style="--k:${k}"><b>${v}</b><span>${esc(t)}</span></li>`).join('')}</ul>
+        <p class="prm-chefe">Chefe: <button type="button" onclick="abrirPaginaAgente('dev')">Desenvolvedor ›</button> — ele repassa as placas e revisa antes de chegar a você.</p></div>
+        ${destaque ? `<figure class="dvs-destaque"><div class="dvs-pedestal"><div class="dev-giro dvs-giro" id="prm-giro" data-folha="${esc(destaque.folha)}"></div></div><figcaption><b>${esc(destaque.nome)}</b><small>Arraste para girar · <button type="button" onclick="abrirProjetoDev(${jsa(destaque.codigo)})">abrir e baixar o 3MF ›</button></small></figcaption></figure>` : ''}</section>
+      ${d.diz ? `<section class="dvs-sec"><div class="dvs-tarefa"><small>O Primo diz${d.atualizadoEm ? ' · ' + esc(quandoTxt(d.atualizadoEm)) : ''}</small><p>${textoAgente(d.diz)}</p></div></section>` : ''}
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Radar de placas</h2><p>De 3 a 5 referências por dia, do Instagram, do TikTok e de sites: o que está chamando atenção e o que dá para aproveitar.</p></header>${htmlRadarPlacas(5, true)}</section>
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Fila de placas</h2><p>Os nomes que você mandou, na ordem. Ele faz uma por rodada no PC (7h30, 12h30 e 17h30) e o Desenvolvedor revisa antes de te entregar.</p></header>
+        <div class="dvs-quadro">${colunas.map(([k, nome, cor, filtro]) => { const L = f.filter(filtro); return `<section class="dvs-col" style="--c:${cor}"><h3><i></i>${esc(nome)}<span>${L.length}</span></h3>${L.length ? L.slice(0, 6).map(card).join('') : '<p class="dvs-col-vazia">—</p>'}</section>`; }).join('')}</div>
+        <form class="dvs-pedir" onsubmit="enviarPedidoPlacaPrimo(event)"><label for="prm-pedido">Pedir uma placa</label><div><textarea id="prm-pedido" rows="2" maxlength="1500" placeholder="Ex.: Dra. Ana Souza, dentista, para o consultório"></textarea><button type="submit">Pedir</button></div></form></section>
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Placas feitas</h2><p>${plural(ps.length, 'placa', 'placas')} até agora. Sem pedido novo, ele volta numa delas e melhora (versão nova, a antiga fica guardada).</p></header>
+        ${ps.length ? `<div class="dvs-vitrine">${ps.map(cartaoVitrineDev).join('')}</div>` : '<p class="dvs-vazio">As placas aparecem aqui quando o PC publicar a primeira.</p>'}</section>
+      ${mel.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Melhorando</h2><p>O que ele está aperfeiçoando nas placas que já fez.</p></header><ul class="prm-lista">${mel.map(m => `<li><b>${esc(m.codigo || '')}</b><span>${esc(m.oque || '')}</span><em>${esc(m.status === 'feito' ? 'feito' : m.status === 'revisao' ? 'com o chefe' : 'fazendo')}</em></li>`).join('')}</ul></section>` : ''}
+      ${pal.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Cores por profissão</h2><p>Com os filamentos do catálogo (máx. 4 por placa). Bolinha tracejada = cor para comprar.</p></header><div class="prm-paletas">${pal.map(p => `<article class="prm-pal"><small>${esc(p.profissao || '')}${p.genero ? ' · ' + esc(p.genero) : ''}</small><div class="prm-cores">${(p.cores || []).slice(0, 4).map(c => `<span class="${c.tem === false ? 'falta' : ''}" style="--c:${corSegura(c.hex)}"><i></i>${esc(c.nome || '')}</span>`).join('')}</div>${p.porque ? `<p>${esc(p.porque)}</p>` : ''}</article>`).join('')}</div></section>` : ''}
+      ${comprar.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Cores para comprar</h2><p>Sugestões do Primo — quem decide e compra é você.</p></header><ul class="prm-lista">${comprar.map(c => `<li><i class="prm-bola" style="--c:${corSegura(c.hex)}"></i><b>${esc(c.cor || '')}</b><span>${esc(c.porque || '')}${c.profissoes ? ' · ' + esc([].concat(c.profissoes).join(', ')) : ''}</span></li>`).join('')}</ul></section>` : ''}
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Regras das placas</h2><p>O padrão que o Primo segue (você muda pelo chat dele).</p></header>
+        <div class="dvs-datas">${[['Tamanho', reg.tamanho], ['Peso', reg.peso], ['Folgas', reg.folgas]].map(([t, v]) => `<article><b>${esc(t)}</b><p>${esc(v || '')}</p></article>`).join('')}</div></section>
+      <footer class="ag-fim">J.A.R.V.I.S. · Estúdio do Primo</footer>
+    </div>`;
+  carregarMidiasCofre(el);
+  if (destaque) montarGiroDev($j('prm-giro'), destaque.folha);
+  posRenderPagina();
+}
+/** Dados do Primo para o cérebro dele (chat e voz): radar, fila e regras. */
+function dadosPrimoIA() {
+  const d = primoDados || {}, r = radarPlacas(5), f = filaPrimo().filter(p => p.status !== 'feito');
+  return `=== SEU TRABALHO NO PC (Primo) ===
+Radar ${r.dia || '(ainda não rodou)'}: ${r.itens.map(x => `${x.titulo} (${x.fonte || 'web'}${x.profissao ? ', ' + x.profissao : ''})`).join('; ') || '—'}
+Fila de placas: ${f.map(p => `${(ESTADOS_PEDIDO_DEV[p.status] || ESTADOS_PEDIDO_DEV.novo)[0]}: ${tituloPedidoDev(p.texto).titulo}${p.resposta ? ' → ' + p.resposta : ''}`).join(' | ') || 'vazia'}
+Placas feitas: ${placasPrimo().map(p => `${p.codigo} ${p.versao || ''} ${p.nome}`).join('; ') || '—'}
+Regras: tamanho ${REGRAS_PRIMO.tamanho}; peso ${REGRAS_PRIMO.peso}; folgas ${REGRAS_PRIMO.folgas}.${d.diz ? '\nO que você disse na última rodada: ' + semNegrito(d.diz) : ''}
+`;
 }
 // =====================================================================================================================
 // GESTÃO DE PATENTES (fase 11, pedido do Rafael 05/10/2026): protege e monetiza os modelos PRÓPRIOS da Primos, em consenso com o
@@ -10083,10 +10208,12 @@ const VOZ_AGENTES = {
   shopee: { voz: 'Laomedeia', persona: 'Mulher, energia alta e olho de e-commerce. Pensa em título, foto de capa, preço com as taxas da Shopee e no que os concorrentes fazem; nunca promete publicação nem aumenta gasto com anúncio.' },
   producao: { voz: 'Orus', persona: 'Homem, voz firme de chefe de fábrica. Criativo, mas totalmente centrado: você gerencia a produção inteira (fila, máquinas, prazos, filamento, qualidade). Fala com segurança, organiza as ideias do Rafael numa fila clara e sempre diz o próximo passo da produção. Quando ele falar algo que quer imprimir, anote na fila com a ferramenta.' },
   marketing: { voz: 'Aoede', persona: 'Mulher, extrovertida, animada e falante, com humor — obcecada por viralizar a Primos 3D no TikTok e no Instagram. Dá ideias de vídeo concretas (gancho, formato, áudio, horário), cita o que está bombando e avisa quando algo deve ir para a fila de impressão. Animada, mas sempre com dados.' },
+  // fase 12 (pedido do Rafael 10/10/2026: "voz própria e personalidade própria")
+  primo: { voz: 'Sadachbia', persona: 'Homem jovem, voz animada e calorosa: o PRIMO, o designer de placas profissionais da Primos 3D — trata o Rafael como primo, de igual para igual, com bom humor, e é perfeccionista assumido. Trabalha para o Desenvolvedor (o chefe dele, que revisa tudo antes de chegar ao Rafael). Sempre explica a escolha da placa pelo AMBIENTE da profissão (consultório clean, escritório sóbrio, obra industrial) e pelo gênero (mulher: tons claros e traço sutil; homem: contraste e presença), diz o tamanho, o peso de chumbo e as folgas, e cita uma referência do radar do dia. Quando falta a cor certa no catálogo, sugere comprar e diz por quê. Nunca diz que a placa está aprovada sem o teste físico; nunca copia arquivo de ninguém (referência é só ideia).' },
   dev: { voz: 'Achird', persona: 'Homem, voz suave e calma, criativo de verdade — designer de produto que entende de tendência, de moda e de forma, mas com cabeça de engenheiro de impressão 3D (encaixe, folga, camada, cor, AMS). Fala com entusiasmo tranquilo, propõe ideias concretas (placas de profissão, carimbos, chaveiros com logo de comércio, kits empresariais, luminárias, camisa da marca), sempre diz em que etapa cada projeto está (conceito, modelo digital, fatiado, testado) e o que ele precisa do Rafael para seguir. Nunca diz que algo está aprovado sem teste físico.' },
 };
 // fase 9: a cor de cada agente (a bolinha da voz e o destaque da página dele)
-const COR_AGENTE = { prospeccao: '#2dd4bf', contabil: '#30d158', marketing: '#ff375f', estoque: '#ff9f0a', producao: '#0a84ff', vendas: '#ffd60a', consignacao: '#bf5af2', shopee: '#ff6b2c', dev: '#64d2ff', digital: '#e9c46a', patentes: '#5e5ce6' };
+const COR_AGENTE = { prospeccao: '#2dd4bf', contabil: '#30d158', marketing: '#ff375f', estoque: '#ff9f0a', producao: '#0a84ff', vendas: '#ffd60a', consignacao: '#bf5af2', shopee: '#ff6b2c', dev: '#64d2ff', digital: '#e9c46a', patentes: '#5e5ce6', primo: '#c9a227' };
 function falarComAgente(id) { const a = todosAgentes().find(x => x.id === id), v = VOZ_AGENTES[id]; if (!a || !v) return conversarComAgente(id); iniciarConversaVoz(`Central › agente ${a.nome}`, 'primos', { voz: v.voz, persona: v.persona, nomeAgente: a.nome, cor: COR_AGENTE[id], funcao: a.funcao, agenteId: id }); }
 function conversarComAgente(id) {
   const a = todosAgentes().find(x => x.id === id); if (!a) return;
@@ -10231,7 +10358,7 @@ LINHAS ESPECIAIS (no fim da resposta, só quando necessário): ⟦AGENTES: id1, 
 MEMÓRIA: quando ele der uma instrução ou decisão duradoura ("a partir de agora…", "sempre…", "prefiro…"), confirme em uma frase que vai levar isso para as próximas rodadas — esta conversa vai para os agentes da nuvem.
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); use os códigos como estão. Nunca peça senhas ou dados bancários.
 ${jeitoIdeiasIA()}AGORA: ${dia}, ${hora}.
-${rel ? `=== SEU ÚLTIMO RELATÓRIO (${r.dia || 'sem data'}) ===\n${anonimizar(rel, mapa)}\n` : ''}${passou ? `=== O QUE O J.A.R.V.I.S. E OS OUTROS AGENTES TROCARAM COM VOCÊ (7 dias) ===\n${anonimizar(passou, mapa)}\n` : ''}=== DADOS ===
+${rel ? `=== SEU ÚLTIMO RELATÓRIO (${r.dia || 'sem data'}) ===\n${anonimizar(rel, mapa)}\n` : ''}${passou ? `=== O QUE O J.A.R.V.I.S. E OS OUTROS AGENTES TROCARAM COM VOCÊ (7 dias) ===\n${anonimizar(passou, mapa)}\n` : ''}${id === 'primo' ? anonimizar(dadosPrimoIA(), mapa) + 'SEU CHEFE: o Desenvolvedor (ele repassa as placas e revisa antes de chegar ao Rafael). Pedido de placa nova → ⟦DEV: …⟧ (vai para a sua fila).\n' : ''}=== DADOS ===
 ${dadosCompletosIA()}`;
 }
 /** Manda a mensagem ao agente e grava a resposta na conversa dele. op: { ref (o aviso respondido), via: chat|inicio|voz } */
@@ -10271,7 +10398,7 @@ async function ordensDoAgente(id, resp, bruto, texto, mapa) {
   ordens.filter(o => o[0] === 'AGENTES').forEach(o => { const [ids, rec] = o[1].split('|'); const r = registrarRecado(String(ids || '').split(/[,\s]+/).filter(x => x && x !== id), (t => t.toLowerCase().startsWith(a.nome.toLowerCase()) ? t : `${a.nome}: ${t}`)(desanonimizar(String(rec || '').trim(), mapa)), 'fato', 'agente'); if (r) notas.push(`✦ Passei para ${r.agentes.map(nomeConv).join(', ')}.`); });
   const abrir = ordens.find(o => o[0] === 'ABRIR'); if (abrir && DESTINOS_JARVIS[abrir[1]]) resp.acoes.push([DESTINOS_JARVIS[abrir[1]][0], `fecharChatAgente(); irDestinoJarvis('${abrir[1]}')`]);
   const dev = ordens.find(o => o[0] === 'DEV');
-  if (dev) { const pd = await pedirAoDesenvolvedor(desanonimizar(dev[1], mapa), 'agente:' + id, []); if (pd) notas.push(`🧩 Pedido anotado no Desenvolvedor: ${String(pd.texto).slice(0, 160)}`); }
+  if (dev) { const pd = await pedirAoDesenvolvedor(desanonimizar(dev[1], mapa), 'agente:' + id, []); if (pd) notas.push(`🧩 Pedido anotado ${pd.agente === 'primo' ? 'na fila do Primo (placas)' : 'no Desenvolvedor'}: ${String(pd.texto).slice(0, 160)}`); }
   const pc = ordens.find(o => o[0] === 'PC');
   if (pc) {
     const tarefa = desanonimizar(pc[1], mapa), tipo = classificarPedidoPC(texto, tarefa), ctx = `Conversa com o agente ${a.nome}`;
@@ -10377,6 +10504,7 @@ function htmlPainelAgenteBase(id) {
       + ccBloco('Próximo passo', `<p class="cc-txt">O plano semanal e a dieta entram aqui assim que você me disser como quer montar. Por enquanto, registre os treinos na aba Saúde.</p><button type="button" class="cc-btn sec" onclick="fecharCentral(); changeTab('health')">Abrir Saúde</button>`) + botaoConversarAgente(a);
   }
   if (a.id === 'dev') return htmlAgenteDev(a);
+  if (a.id === 'primo') return htmlAgentePrimo(a);
   if (a.id === 'patentes') return htmlAgentePatentes(a);
   if (a.id === 'shopee') return htmlAgenteShopee(a);
   return cabecalhoAgente(a) + ccBloco('Missão', `<p class="cc-txt">${esc(a.missao || 'Sem missão definida.')}</p>`)
