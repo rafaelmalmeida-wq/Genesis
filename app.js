@@ -6298,6 +6298,7 @@ async function sincronizarCofreAgora(forcar, silencioso) {
     try { const dj = await (await cofreBruto('dados/diario.json')).json(); if (dj && dj.tipo === 'jarvis-diario' && JSON.stringify(dj) !== JSON.stringify(diarioJarvis)) { diarioJarvis = dj; res.mudou.push('diario'); try { localStorage.setItem('lifeos_diario', JSON.stringify(dj)); } catch (e) { } if (cc.pagina === 'jarvis' && !$j('ag-pag').hidden) renderPaginaJarvis(); } } catch (e) { } // diário do J.A.R.V.I.S. do dia (fase 8)
     try { const dv = await (await cofreBruto('dados/dev.json')).json(); if (dv && dv.tipo === 'jarvis-dev') { const mudou = JSON.stringify(dv) !== JSON.stringify(devDados); devDados = dv; if (mudou) res.mudou.push('dev'); try { localStorage.setItem('lifeos_dev', JSON.stringify(dv)); } catch (e) { } if (mudou && cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // projetos do Desenvolvedor (fase 8)
     try { const pd = await (await cofreBruto('dados/pedidos-dev.json')).json(); if (pd && pd.tipo === 'jarvis-pedidos-dev' && JSON.stringify(pd) !== JSON.stringify(pedidosDev)) { pedidosDev = pd; res.mudou.push('pedidosdev'); try { localStorage.setItem('lifeos_pedidosdev', JSON.stringify(pd)); } catch (e) { } if (cc.agente === 'dev' || cc.agente === 'primo') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 10: pedidos ao Desenvolvedor
+    try { const em = await (await cofreBruto('dados/embalagens.json')).json(); if (em && em.tipo === 'jarvis-embalagens' && JSON.stringify(em) !== JSON.stringify(embalagensDados)) { embalagensDados = em; res.mudou.push('embalagens'); try { localStorage.setItem('lifeos_embalagens', JSON.stringify(em)); } catch (e) { } if (cc.agente === 'embalagens' || cc.pagina === 'embalagens') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // 18/10/2026: o Designer de Embalagens
     try { const pm = await (await cofreBruto('dados/primo.json')).json(); if (pm && pm.tipo === 'jarvis-primo' && JSON.stringify(pm) !== JSON.stringify(primoDados)) { primoDados = pm; res.mudou.push('primo'); try { localStorage.setItem('lifeos_primo', JSON.stringify(pm)); } catch (e) { } if (cc.agente === 'primo' || cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 12: o Primo (radar, paletas, regras)
     try { const g = await (await cofreBruto('dados/giros.json')).json(); if (g && g.tipo === 'jarvis-giros' && (!girosDados || g.atualizadoEm !== girosDados.atualizadoEm)) { girosDados = g; res.mudou.push('giros'); try { localStorage.setItem('lifeos_giros', JSON.stringify(g)); } catch (e) { } if (cc.agente === 'producao') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // miniaturas 3D da fila
     try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; res.mudou.push('engenharia'); guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
@@ -6955,7 +6956,8 @@ const DESTINOS_JARVIS = {
   saude: ['Abrir Saúde', () => changeTab('health')], negocios: ['Abrir Negócios', () => changeTab('business')], ajustes: ['Ajustes do J.A.R.V.I.S.', () => abrirAjustesJarvis()],
   engenharia: ['Abrir Engenharia Civil', () => abrirMenuArea('eng')], seguranca: ['Abrir Segurança do Trabalho', () => abrirMenuArea('sst')], mercado: ['Abrir Mercado', () => abrirMenuArea('mercado')],
   academia: ['Abrir Academia', () => abrirMenuArea('academia')], familia: ['Abrir Família', () => abrirMenuArea('familia')], diaadia: ['Abrir Dia a dia', () => abrirMenuArea('dia')],
-  ebook: ['Abrir a prévia do e-book', () => abrirLeitorEbook()] // fase 10: o leitor do e-book do Produto Digital
+  ebook: ['Abrir a prévia do e-book', () => abrirLeitorEbook()], // fase 10: o leitor do e-book do Produto Digital
+  embalagens: ['Abrir o Designer de Embalagens', () => { abrirCentral('primos'); abrirPaginaAgente('embalagens'); }] // 18/10/2026
 };
 const DESTINOS_NA_CASA = ['engenharia', 'seguranca', 'mercado', 'academia', 'familia', 'diaadia']; // menus que vivem na página inicial, como a Primos
 function irDestinoJarvis(d) { const x = DESTINOS_JARVIS[d]; if (!x) return; if (d.startsWith('primos') || DESTINOS_NA_CASA.includes(d)) { fecharChatJarvis(); if (abaAtual() !== 'cerebro') changeTab('cerebro'); } else if (d !== 'ajustes') fecharChatJarvis(); x[1](); }
@@ -7620,12 +7622,23 @@ const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafa
   // fase 12 (pedido do Rafael 10/10/2026): o PRIMO é um agente DO Desenvolvedor (chefe: 'dev') só de PLACAS PROFISSIONAIS — bloco menor
   // pendurado no do Desenvolvedor. Trabalha no PC (7h30, 12h30, 17h30): radar diário, placas da fila e melhoria contínua; o chefe revisa.
   { id: 'primo', setor: 'primos', nome: 'Primo', chefe: 'dev', mini: true, semNuvem: true, funcao: 'Agente do Desenvolvedor só de PLACAS PROFISSIONAIS: pesquisa todo dia o que está bombando, estuda o ambiente de cada profissão, combina as cores do catálogo e entrega o 3MF fatiado, com peso, folgas certas e render de vitrine e no ambiente', skills: ['Radar diário de placas', 'Design pelo ambiente da profissão', 'Paleta com as cores do catálogo', 'Tamanho, peso e folgas', 'Símbolo fiel e em 3D', 'Render de vitrine e no ambiente', 'Melhoria contínua até ficar ótima', 'Modelagem paramétrica FDM', 'Projeto 3MF no Bambu Studio'] },
+  // pedido do Rafael (18/10/2026): DESIGNER DE EMBALAGENS — artes impressas para as embalagens (adesivos, etiquetas, rótulos, cartões, encartes,
+  // panfletos, solapas, cintas). Trabalha no PC (Inkscape + gerador próprio em .claude/jarvis/dev/embalagens); conversa com Estoque, Produção e Marketing.
+  { id: 'embalagens', setor: 'primos', nome: 'Designer de Embalagens', semNuvem: true, funcao: 'Cria as artes impressas das embalagens da Primos 3D (adesivos, etiquetas, rótulos, cartões, encartes, panfletos, solapas e cintas) a partir das fotos e dos dados reais de cada produto, prontas para imprimir e recortar', skills: ['Pesquisa e entendimento do produto', 'Identidade visual e marcas dos clientes', 'Design gráfico de embalagens', 'Criação e tratamento de imagens', 'Textos, instruções e cuidados', 'Rotulagem no Brasil (Inmetro)', 'Preparação para impressão', 'Revisão, versões e entrega'] },
   { id: 'digital', setor: 'primos', nome: 'Produto Digital', funcao: 'E-book e mentoria: documenta tudo o que o J.A.R.V.I.S. e os agentes produzem e transforma em produto digital', skills: ['Documentação viva', 'E-book', 'Mentoria', 'Lançamento digital', 'Prova e resultados'], semNuvem: true }, // fase 10 (pedido do Rafael 04/10/2026): por enquanto o Claude escreve no PC
   { id: 'patentes', setor: 'primos', nome: 'Gestão de Patentes', funcao: 'Protege e monetiza os modelos próprios da Primos: desenho industrial, modelo de utilidade, direito autoral e marca, em consenso com o Desenvolvedor e a Produção', skills: ['Triagem do que proteger', 'Escolha do instrumento (INPI)', 'Prazo e novidade', 'Dossiê de depósito', 'Retorno para a Primos'] }, // fase 11 (pedido do Rafael 05/10/2026): atua pouco por enquanto
   { id: 'prospeccao', setor: 'primos', nome: 'Prospecção de Vendas', funcao: 'O analista: lê todos os agentes e mostra quanto cada canal e cada item já deu, quanto dá de forma realista e quanto dá em escala, preso à capacidade real', skills: ['Capacidade e gargalo', 'Lucro por hora de máquina', 'Previsão realista por canal', 'Economia de marketplace', 'Consignação e pontos de venda', 'Produto digital e funil', 'Produto novo: vale a pena?', 'Cenários de escala'] } // fase 10 (pedido do Rafael 04/10/2026)
 ];
 /** O que cada skill faz (pedido do Rafael 02/10/2026) — aparece no painel do agente e vai no "manual" dele na nuvem (rodar.mjs). */
 const SKILLS_DESC = {
+  'Pesquisa e entendimento do produto': 'Antes de desenhar: o que é o produto, para quem, o que vai dentro, como funciona, fotos, medidas e a embalagem. Busca no histórico da Bambu, na página do modelo e nos outros agentes, e separa o confirmado do que é sugestão ou está pendente.',
+  'Identidade visual e marcas dos clientes': 'A logo oficial da Primos (o P de camadas) sem redesenho, paleta e tipografia consistentes entre os produtos; nos kits de hotel e empresa, a marca do cliente em primeiro plano com a assinatura discreta da Primos.',
+  'Design gráfico de embalagens': 'Arte pensada para a peça física: medidas em milímetros, área útil, frente e verso, dobras, furos, transparência (organza, acetato, papelão) e a ordem de leitura — marca, nome, foto, como usar.',
+  'Criação e tratamento de imagens': 'Usa a foto real (sua ou do MakerWorld): recorta, tira o fundo e ajusta sem mudar forma, cor, peças ou acabamento. Logo, textos e QR nunca vão dentro da imagem.',
+  'Textos, instruções e cuidados': 'Nome, frase curta, como brincar ou usar, cuidados e contato em português do Brasil. Nada de “atóxico”, “educativo” ou “antibacteriano” sem fundamento.',
+  'Rotulagem no Brasil (Inmetro)': 'Brinquedo para menores de 14 anos precisa de certificação do Inmetro (Portaria 302/2021): faixa etária e advertências só com base técnica e nunca um selo decorativo. Sem os dados, a arte fica como conceito.',
+  'Preparação para impressão': 'Escala real, sangria de 2 mm, margem de 3 mm, foto com 300 ppi, fonte embutida, folha A4 com marcas de corte e régua de 5 cm para conferir a impressão em 100%. O QR é lido de volta do arquivo final.',
+  'Revisão, versões e entrega': 'Confere tudo (produto, marca, textos, cortes, QR), guarda um modelo mestre por formato com os dados de cada produto e registra o estado real: conceito, final digital, prova física pendente ou confirmada.',
   'Triagem do que proteger': 'Só entra o que é criação própria da Primos (feito pelo Desenvolvedor, nunca modelo baixado de terceiro), já impresso e aprovado por você, e com potencial de venda ou de cópia.',
   'Escolha do instrumento (INPI)': 'Desenho industrial (a forma nova do objeto — o caso mais comum na impressão 3D), modelo de utilidade (melhoria funcional), patente de invenção (raro), direito autoral (a obra e o arquivo) e marca (Primos 3D e linhas de produto).',
   'Prazo e novidade': 'Postar, vender ou expor antes de depositar pode tirar a novidade. Controla a data da 1ª divulgação e o período de graça (desenho industrial: 180 dias) e avisa antes de o Marketing postar um candidato.',
@@ -7807,9 +7820,10 @@ function desempenhoAgentes(Ltodas) {
     const env = Ltodas.filter(m => m.de === a.id), rec = Ltodas.filter(m => m.para === a.id || (m.para === 'todos' && m.de === 'jarvis'));
     const conv = conversasDiario.filter(c => c.agente === a.id), rel = relatorioAgente(a.id), ex = ((cc.execucao || {}).tarefas || {})[a.id];
     const comNum = env.filter(m => /\d/.test(m.texto)).length, comPasso = conv.filter(c => c.caminho).length;
-    const pedidos = a.id === 'dev' ? ((pedidosDev && pedidosDev.pedidos) || []) : a.id === 'primo' ? filaPrimo() : [], feitos = pedidos.filter(p => p.status === 'feito').length;
+    const pedidos = a.id === 'dev' ? ((pedidosDev && pedidosDev.pedidos) || []) : a.id === 'primo' ? filaPrimo() : a.id === 'embalagens' ? filaEmbalagens() : [], feitos = pedidos.filter(p => p.status === 'feito').length;
     let nota = 0; const motivos = [];
     if (a.semNuvem && a.id === 'digital') { const cs = (ebookDados && ebookDados.capitulos) || []; const esc2 = cs.filter(c => c.status !== 'ideia').length; nota += Math.min(30, esc2 * 4); motivos.push(`${esc2} capítulo(s) escritos (trabalha no PC)`); }
+    else if (a.id === 'embalagens') { const d = embalagensDados || {}; if (String(d.atualizadoEm || '').slice(0, 10) === hoje) { nota += 30; motivos.push('artes atualizadas hoje (trabalha no PC)'); } else if (d.atualizadoEm) { nota += 10; motivos.push(`artes de ${isoParaBR(String(d.atualizadoEm).slice(0, 10)).slice(0, 5)}`); } else motivos.push('ainda sem projeto publicado'); }
     else if (a.id === 'primo') { const rd = (primoDados && primoDados.radar) || {}; if (rd.dia === hoje) { nota += 30; motivos.push('radar de hoje entregue (trabalha no PC)'); } else if (rd.dia) { nota += 10; motivos.push(`radar de ${isoParaBR(rd.dia).slice(0, 5)}`); } else motivos.push('1ª rodada no PC ainda não rodou'); }
     else if (rel && rel.dia === hoje && !rel.velho) { nota += 30; motivos.push('relatório de hoje entregue'); } else if (rel) { nota += 10; motivos.push(`relatório de ${isoParaBR(rel.dia || '').slice(0, 5)}${rel.velho ? ' (a rodada de hoje falhou)' : ''}`); } else motivos.push('ainda sem relatório');
     if (conv.length) { nota += Math.min(25, conv.length * 6); motivos.push(`${plural(conv.length, 'conversa', 'conversas')} com o J.A.R.V.I.S. do dia`); }
@@ -7942,6 +7956,7 @@ function estadoAgenteBase(a) {
   }
   if (a.aba) { const r = relatorioAgente(a.id); return r ? { nivel: 'ok', metrica: `Relatório de ${isoParaBR(r.dia || '').slice(0, 5)}` } : { nivel: 'sem', metrica: 'Aguardando o 1º relatório' }; }
   if (a.id === 'mercado') return { nivel: 'ok', metrica: 'Cotações ao vivo' };
+  if (a.id === 'embalagens') { const r = resumoEmbalagens(); return { nivel: embalagensDados ? (r.bloqueios ? 'atencao' : 'ok') : 'sem', metrica: embalagensDados ? `${plural(r.artes, 'arte', 'artes')} · ${plural(r.pend, 'pendência', 'pendências')}` : 'Aguardando o 1º projeto' }; }
   if (a.id === 'primo') { const f = filaPrimo().filter(x => x.status !== 'feito'), r = (primoDados && primoDados.radar) || {}; // fase 12
     return { nivel: primoDados || f.length ? 'ok' : 'sem', metrica: `${plural(f.length, 'placa na fila', 'placas na fila')}${r.dia ? ` · radar ${r.dia === hojeISO() ? 'de hoje' : isoParaBR(r.dia).slice(0, 5)}` : ''}` }; }
   if (a.id === 'patentes') { const n = ((relatorioAgente('patentes') || {}).candidatos || []).length, ac = registrosPatentes.length; return { nivel: relatorioAgente('patentes') ? 'ok' : 'sem', metrica: n || ac ? `${plural(n, 'candidato', 'candidatos')} · ${ac} acompanhando` : 'De olho nos modelos do Desenvolvedor' }; }
@@ -7998,7 +8013,8 @@ function posPadraoCanvas() {
     [['contabil', -150, -400], ['marketing', 150, -400], ['estoque', -150, 380], ['producao', 150, 380], ['vendas', -150, 700], ['consignacao', 150, 700]].forEach(([id, x, y]) => { p[id] = { x, y }; });
     p.shopee = { x: -150, y: 1020 }; p.dev = { x: 150, y: 1020 }; p.prospeccao = { x: 0, y: -720 }; // fase 10: no celular eles não tinham lugar (ficavam no meio)
     p.primo = { x: 150, y: 1290 }; // fase 12: o Primo pendurado embaixo do Desenvolvedor (chefe dele)
-    ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'prospeccao' && a.id !== 'primo').forEach((a, i) => { p[a.id] = { x: (i % 2 ? 150 : -150), y: 1580 + Math.floor(i / 2) * 320 }; });
+    p.embalagens = { x: -150, y: 1290 }; // 18/10/2026: o Designer de Embalagens embaixo da Shopee
+    ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'prospeccao' && a.id !== 'primo' && a.id !== 'embalagens').forEach((a, i) => { p[a.id] = { x: (i % 2 ? 150 : -150), y: 1580 + Math.floor(i / 2) * 320 }; });
     return p;
   }
   CV_PRIMOS.forEach((id, i) => { const a = -Math.PI / 2 + i / CV_PRIMOS.length * Math.PI * 2; p[id] = { x: Math.round(Math.cos(a) * R1 * 1.35), y: Math.round(Math.sin(a) * R1) }; });
@@ -8006,7 +8022,8 @@ function posPadraoCanvas() {
   p.prospeccao = { x: 0, y: -860 }; // fase 10: o analista em cima do círculo, lendo todos
   p.patentes = { x: 920, y: 1080 }; // fase 11: ao lado do Desenvolvedor (protege o que ele cria)
   p.primo = { x: 460, y: 1150 }; // fase 12: o Primo (placas) pendurado embaixo do Desenvolvedor, o chefe dele
-  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee' && a.id !== 'digital' && a.id !== 'prospeccao' && a.id !== 'patentes' && a.id !== 'primo'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
+  p.embalagens = { x: -920, y: 1080 }; // 18/10/2026: o Designer de Embalagens à esquerda, ao lado da Shopee (os dois cuidam da apresentação do produto)
+  const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee' && a.id !== 'digital' && a.id !== 'prospeccao' && a.id !== 'patentes' && a.id !== 'primo' && a.id !== 'embalagens'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
   return p;
 }
 function posCanvas(id) { const s = (prefs[chavePosCanvas()] || {})[id]; return s || posPadraoCanvas()[id] || { x: 0, y: 0 }; }
@@ -8029,6 +8046,10 @@ function fiosCanvas() {
   F.push({ de: 'dev', para: 'patentes', rot: candPat ? plural(candPat, 'candidato a registro', 'candidatos a registro') : 'modelos próprios', lateral: true });
   F.push({ de: 'producao', para: 'patentes', rot: 'peças testadas e aprovadas', lateral: true });
   F.push({ de: 'patentes', para: 'marketing', rot: 'segure o post até depositar', lateral: true });
+  // 18/10/2026: o Designer de Embalagens pergunta ao Estoque que embalagem foi comprada, à Produção o que foi impresso e ao Marketing a cara da marca
+  F.push({ de: 'estoque', para: 'embalagens', rot: 'embalagens compradas', lateral: true });
+  F.push({ de: 'producao', para: 'embalagens', rot: 'o que foi impresso', lateral: true });
+  F.push({ de: 'marketing', para: 'embalagens', rot: 'marca e público', lateral: true });
   // fase 10: a Prospecção lê os outros (capacidade, custos, giro, anúncios, e-book)
   [['producao', 'capacidade'], ['contabil', 'custos e margens'], ['consignacao', 'giro dos expositores'], ['shopee', 'anúncios e preços'], ['digital', 'e-book']].forEach(([de, rot]) => F.push({ de, para: 'prospeccao', rot, lateral: true }));
   // fase 10: a CONVERSA dos agentes no quadro (últimas 24 h)
@@ -8049,6 +8070,7 @@ function tarefaCanvas(a) {
   const ex = cc.execucao || {}, t = (ex.tarefas || {})[a.id];
   if (t && (t.status === 'rodando' || t.status === 'fila')) return t.instrucao ? `Executando: ${t.instrucao}` : 'Gerando o relatório agora…';
   if (a.id === 'primo') return tarefaPrimo(); // fase 12: trabalha no PC, não tem rodada na nuvem
+  if (a.id === 'embalagens') return tarefaEmbalagens();
   const r = relatorioAgente(a.id); if (r && (r.acoes || []).length) return r.acoes[0];
   return a.aba || AGENTES_NUVEM.includes(a.id) ? 'Aguardando a rodada das 7h' : a.missao || a.funcao || '';
 }
@@ -8928,6 +8950,7 @@ function renderPaginaAgente() {
   if (id === 'conversas') return renderPaginaConversas();
   if (id === 'dev') return renderPaginaDev(); // fase 11: estúdio claro
   if (id === 'primo') return renderPaginaPrimo(); // fase 12: o estúdio das placas (mesmo visual claro do chefe)
+  if (id === 'embalagens') return renderPaginaEmbalagens(); // 18/10/2026: o estúdio de embalagens
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -9000,6 +9023,10 @@ function itensAgente(id) {
   if (id === 'dev') {
     ((pedidosDev && pedidosDev.pedidos) || []).slice(0, 10).forEach(p => add({ id: `pd:${p.id}:${p.status}`, tipo: p.status === 'duvida' ? 'pendencia' : 'novidade', prio: 1, texto: `${p.status === 'feito' ? 'Pronto' : p.status === 'duvida' ? 'Precisa de você' : p.status === 'andamento' ? 'Modelando' : 'Pedido na fila'}: ${String(p.texto).slice(0, 110)}${p.resposta ? ' — ' + p.resposta : ''}`, quando: p.quando, origem: p.origem === 'voz' ? 'voz' : p.origem === 'chat' ? 'chat' : 'app' }));
     ((devDados && devDados.projetos) || []).forEach(p => add({ id: `proj:${p.codigo}:${p.status}:${p.versao || ''}`, tipo: 'novidade', texto: `${p.nome} → ${(ETAPAS_DEV[p.status] || ETAPAS_DEV.ideia)[0]}`, quando: p.atualizadoEm || '', origem: 'Desenvolvedor no PC', acao: ['Ver projeto', `abrirProjetoDev(${jsa(p.codigo)})`] }));
+  }
+  if (id === 'embalagens') { // 18/10/2026
+    ((embalagensDados && embalagensDados.projetos) || []).forEach(pj => (pj.itens || []).forEach(x => add({ id: `emb:${pj.codigo}:${x.id}:${x.estado}`, tipo: (x.pendencias || []).length ? 'pendencia' : 'novidade', texto: `${x.nome} (${pj.nome}) → ${x.estado}${(x.pendencias || []).length ? ' · ' + plural(x.pendencias.length, 'pendência', 'pendências') : ''}`, quando: pj.data || '', origem: 'Designer no PC' })));
+    filaEmbalagens().slice(0, 10).forEach(p => add({ id: `pe:${p.id}:${p.status}`, tipo: p.status === 'duvida' ? 'pendencia' : 'novidade', prio: 1, texto: `${(ESTADOS_PEDIDO_DEV[p.status] || ESTADOS_PEDIDO_DEV.novo)[0]}: ${tituloPedidoDev(p.texto).titulo}${p.resposta ? ' — ' + p.resposta : ''}`, quando: p.quando, origem: 'Designer no PC' }));
   }
   if (id === 'primo') { // fase 12
     const rd = (primoDados && primoDados.radar) || {}; if (rd.dia && (rd.itens || []).length) add({ id: `radar:${rd.dia}`, tipo: 'novidade', texto: `Radar de placas: ${plural(rd.itens.length, 'referência nova', 'referências novas')}`, quando: rd.dia, origem: 'Primo no PC' });
@@ -9746,11 +9773,12 @@ async function pedirAoDesenvolvedor(texto, origem, anexos = []) {
   const id = novoId(), prints = [];
   for (const [k, a] of anexos.entries()) { const caminho = `entrada/dev-${hojeISO()}-${id}-${k + 1}.jpg`; try { await gh(`/contents/${caminho}`, { method: 'PUT', body: JSON.stringify({ message: 'J.A.R.V.I.S.: referência para o Desenvolvedor', content: a.dados.split(',')[1] }) }); prints.push(caminho); } catch (e) { } }
   const item = { id, quando: new Date().toISOString().slice(0, 16), texto: texto.slice(0, 1500), origem: origem || 'app', status: 'novo', prints };
-  if (ehPedidoPlaca(texto) || origem === 'agente:primo') item.agente = 'primo'; // fase 12: placa profissional vai para o Primo (o Desenvolvedor, chefe dele, revisa)
+  if (ehPedidoEmbalagem(texto) || origem === 'agente:embalagens') item.agente = 'embalagens'; // 18/10/2026: arte de embalagem vai para o Designer de Embalagens
+  else if (ehPedidoPlaca(texto) || origem === 'agente:primo') item.agente = 'primo'; // fase 12: placa profissional vai para o Primo (o Desenvolvedor, chefe dele, revisa)
   try { await gravarCofreJson('dados/pedidos-dev.json', x => { x = x && x.pedidos ? x : { tipo: 'jarvis-pedidos-dev', pedidos: [] }; x.pedidos.unshift(item); x.pedidos = x.pedidos.slice(0, 60); return x; }, 'J.A.R.V.I.S.: pedido ao Desenvolvedor'); }
   catch (e) { toast(`Não consegui mandar ao Desenvolvedor (${e.message}). Tente de novo.`, 6000); return null; }
   pedidosDev = { tipo: 'jarvis-pedidos-dev', pedidos: [item, ...((pedidosDev && pedidosDev.pedidos) || [])].slice(0, 60) }; try { localStorage.setItem('lifeos_pedidosdev', JSON.stringify(pedidosDev)); } catch (e) { }
-  registrarRecado(['dev'], 'Pedido do Rafael: ' + texto.slice(0, 300), 'pedido', origem || 'app');
+  registrarRecado([item.agente === 'embalagens' ? 'embalagens' : 'dev'], 'Pedido do Rafael: ' + texto.slice(0, 300), 'pedido', origem || 'app');
   if (cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente');
   return item;
 }
@@ -10016,6 +10044,102 @@ function renderPaginaPrimo() {
   if (destaque) montarGiroDev($j('prm-giro'), destaque.folha);
   posRenderPagina();
 }
+// =====================================================================================================================
+// DESIGNER DE EMBALAGENS (pedido do Rafael, 18/10/2026): o agente que cria as artes impressas das embalagens da Primos 3D —
+// adesivos, etiquetas, rótulos, cartões, encartes, panfletos, solapas e cintas. Trabalha no PC (Inkscape + gerador próprio em
+// .claude/jarvis/dev/embalagens, 8 skills em skills/*/SKILL.md) e publica no cofre: dados/embalagens.json + prévias em midia/emb/.
+// { tipo: 'jarvis-embalagens', atualizadoEm, diz, embalagens: [{ tipo, status, uso, medidas, fonte }],
+//   projetos: [{ codigo, nome, data, estado, formatos, pendencias, itens: [{ id, codigo, nome, estado, previa, verificacoes, pendencias, modelo }] }] }
+// Pedidos: os de arte de embalagem entram em dados/pedidos-dev.json com agente 'embalagens' (o Desenvolvedor não pega esses).
+// Estados (nunca pular): conceito com pendências → final (revisão digital) → prova física pendente → prova física confirmada.
+// =====================================================================================================================
+let embalagensDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_embalagens')); } catch (e) { return null; } })();
+const RE_EMBALAGEM = /\b(embalage(m|ns)|r[oó]tulos?|etiquetas?|adesivos?|panfletos?|encartes?|solapas?|cintas?|tags?|cart(ã|a)o(es|zinho)? de (agradecimento|apresenta[cç][aã]o)|arte (da|para a|pra) (caixa|caixinha|sacol))/i;
+function ehPedidoEmbalagem(t) { return RE_EMBALAGEM.test(String(t || '')); }
+function filaEmbalagens() { return ((pedidosDev && pedidosDev.pedidos) || []).filter(p => p.agente === 'embalagens'); }
+const ESTADOS_EMB = { 'conceito com pendências': ['Conceito · pendências', '#ff9f0a'], 'final — revisão digital concluída': ['Final (revisão digital)', '#0a84ff'], 'prova física pendente': ['Prova física pendente', '#5e5ce6'], 'prova física confirmada': ['Prova confirmada', '#30d158'] };
+function chipEstadoEmb(e) { const x = ESTADOS_EMB[e] || [e || 'Conceito', '#8e8e93']; return `<span class="dev-etapa" style="--c:${x[1]}">${esc(x[0])}</span>`; }
+function resumoEmbalagens() {
+  const ps = (embalagensDados && embalagensDados.projetos) || [], itens = ps.flatMap(p => p.itens || []);
+  return { projetos: ps.length, artes: itens.length, pend: itens.reduce((s, x) => s + (x.pendencias || []).length, 0), bloqueios: itens.filter(x => (x.pendencias || []).some(p => /^BLOQUEADO/.test(p))).length, finais: itens.filter(x => /final|confirmada/.test(x.estado || '')).length };
+}
+function tarefaEmbalagens() {
+  const ord = { andamento: 0, ajustar: 1, novo: 2, revisao: 3 }, atual = filaEmbalagens().filter(p => ord[p.status] !== undefined).sort((a, b) => ord[a.status] - ord[b.status])[0];
+  if (atual) return `${(ESTADOS_PEDIDO_DEV[atual.status] || ESTADOS_PEDIDO_DEV.novo)[0]}: ${tituloPedidoDev(atual.texto).titulo}`;
+  const pj = ((embalagensDados && embalagensDados.projetos) || [])[0];
+  return pj ? `${pj.nome}: ${plural((pj.itens || []).length, 'arte', 'artes')} · ${pj.estado || 'conceito'}` : 'Peça uma arte de embalagem pelo chat ou pela página dele';
+}
+/** Galeria de artes (claro = página em estúdio claro; senão o painel escuro da Central). */
+function htmlArtesEmbalagens(pj, n, claro) {
+  const it = (pj.itens || []).slice(0, n || 99);
+  if (!it.length) return `<p class="${claro ? 'dvs-vazio' : 'cc-txt'}">Nenhuma arte publicada ainda neste projeto.</p>`;
+  return `<div class="emb-galeria${claro ? '' : ' escuro'}">${it.map((x, k) => { const v = x.verificacoes || {}, pend = x.pendencias || [], m = x.modelo || {}, u = urlSegura(m.url);
+    return `<details class="emb-arte" style="--k:${k}"><summary><span class="emb-palco">${x.previa ? `<img data-cofre="${esc(x.previa)}" alt="Prévia da arte: ${esc(x.nome)}" loading="lazy">` : '<i aria-hidden="true">✦</i>'}</span>
+      <span class="emb-txt">${chipEstadoEmb(x.estado)}<b>${esc(x.nome)}</b><small>${esc(x.codigo || '')}${pend.length ? ' · ' + plural(pend.length, 'pendência', 'pendências') : ''}</small></span></summary>
+      <div class="emb-det"><ul class="emb-checks">${[['Textos dentro da área', v.textos], ['QR lido de volta do arquivo', v.qr], ['Foto com 300 ppi ou mais', v.ppi >= 300, v.ppi ? v.ppi + ' ppi' : ''], ['PDFs no tamanho certo', v.pdfs]].map(([t, ok, extra]) => `<li class="${ok ? 'ok' : 'nao'}">${ok ? '✓' : '•'} ${esc(t)}${extra ? ' · ' + esc(extra) : ''}</li>`).join('')}</ul>
+      ${pend.length ? `<p class="emb-pend-tit">Falta para liberar</p><ul class="emb-pend">${pend.map(p => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
+      ${m.titulo ? `<p class="emb-modelo">Modelo: ${esc(m.titulo)}${m.autor ? ' · ' + esc(m.autor) : ''}${u ? ` · <a href="${esc(u)}" target="_blank" rel="noopener noreferrer">ver no MakerWorld ↗</a>` : ''}</p>` : ''}</div></details>`; }).join('')}</div>`;
+}
+function htmlEmbalagensCompradas(claro) {
+  const L = (embalagensDados && embalagensDados.embalagens) || [];
+  if (!L.length) return `<p class="${claro ? 'dvs-vazio' : 'cc-txt'}">Nenhuma embalagem registrada. Conte ao Estoque o que você comprou (tipo, medida e quantidade).</p>`;
+  return `<ul class="prm-lista">${L.map(e => `<li><b>${esc(e.tipo || '')}</b><span>${esc([e.uso, e.medidas ? 'medidas ' + e.medidas : 'medidas: falta medir', e.fonte].filter(Boolean).join(' · '))}</span><em>${esc(e.status || '')}</em></li>`).join('')}</ul>`;
+}
+function htmlAgenteEmbalagens(a) {
+  const d = embalagensDados || {}, r = resumoEmbalagens(), f = filaEmbalagens().filter(p => p.status !== 'feito'), pj = (d.projetos || [])[0], sk = (a.skills || []).filter(k => SKILLS_DESC[k]);
+  return cabecalhoAgente(a, '<p class="cc-nota">Trabalha no computador e conversa com o <b>Estoque</b> (embalagens compradas), a <b>Produção</b> (o que foi impresso) e o <b>Marketing</b> (marca e público).</p>')
+    + `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('embalagens')">Abrir o estúdio de embalagens ›</button>`
+    + `<button type="button" class="cc-falar" style="--ag:${COR_AGENTE.embalagens}" onclick="falarComAgente('embalagens')"><i></i>Falar com a Designer</button>`
+    + ccNums([[r.artes, 'artes'], [r.finais, 'prontas p/ produção'], [r.pend, 'pendências', r.pend ? '#ff9f0a' : ''], [f.length, 'pedidos na fila']])
+    + (d.diz ? ccBloco('A Designer diz', `<p class="cc-txt">${textoAgente(d.diz)}</p>`) : '')
+    + (pj ? ccBloco(esc(pj.nome), htmlArtesEmbalagens(pj, 4)) : ccBloco('Primeiro trabalho', '<p class="cc-txt">Peça pelo chat: <i>“faz a etiqueta da girafa articulada para a caixinha de acetato”</i>.</p>'))
+    + ccBloco('Embalagens compradas', htmlEmbalagensCompradas())
+    + (sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '')
+    + botaoConversarAgente(a);
+}
+async function enviarPedidoEmbalagem(ev) {
+  ev.preventDefault(); const ta = $j('emb-pedido'), t = ta ? ta.value.trim() : ''; if (!t) return;
+  const pd = await pedirAoDesenvolvedor(ehPedidoEmbalagem(t) ? t : 'Arte de embalagem: ' + t, 'app'); if (pd) { ta.value = ''; toast('Pedido enviado à Designer de Embalagens. Ele aparece em “Na fila”.', 3500); renderPaginaEmbalagens(); }
+}
+function renderPaginaEmbalagens() {
+  const el = $j('ag-pag'); if (!el) return;
+  const a = todosAgentes().find(x => x.id === 'embalagens'), d = embalagensDados || {}, r = resumoEmbalagens(), f = filaEmbalagens(), ps = d.projetos || [];
+  const nums = [[r.artes, 'artes criadas'], [r.finais, 'prontas para produção'], [r.pend, 'pendências'], [f.filter(p => p.status !== 'feito').length, 'pedidos na fila']];
+  const semana = new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10);
+  const colunas = [['novo', 'Na fila', '#ff9f0a', x => x.status === 'novo' || x.status === 'duvida'], ['fazendo', 'Criando', '#0071e3', x => x.status === 'andamento' || x.status === 'ajustar' || x.status === 'revisao'], ['feito', 'Pronto', '#34c759', x => x.status === 'feito' && String(x.quando || '') >= semana]];
+  const card = x => { const t = tituloPedidoDev(x.texto); return `<details class="dvs-ped"><summary><b>${esc(t.titulo)}</b><small>${esc((ESTADOS_PEDIDO_DEV[x.status] || ESTADOS_PEDIDO_DEV.novo)[0])}</small></summary><p>${esc(t.completo)}</p>${x.resposta ? `<p class="dvs-resp"><b>Designer:</b> ${esc(x.resposta)}</p>` : ''}</details>`; };
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Primos 3D · agente</small><strong>${esc(a.nome)}</strong></div>
+      <button type="button" class="ag-falar" onclick="falarComAgente('embalagens')">🎙 Falar</button></header>
+    <div class="ag-rolo dvs emb" id="ag-rolo">
+      <section class="dvs-heroi"><div class="dvs-heroi-txt"><small>Estúdio de embalagens</small><h1>Designer de Embalagens</h1><p>${esc(a.funcao)}.</p>
+        <ul class="dvs-nums">${nums.map(([v, t], k) => `<li style="--k:${k}"><b>${v}</b><span>${esc(t)}</span></li>`).join('')}</ul></div></section>
+      ${d.diz ? `<section class="dvs-sec"><div class="dvs-tarefa"><small>A Designer diz${d.atualizadoEm ? ' · ' + esc(quandoTxt(d.atualizadoEm)) : ''}</small><p>${textoAgente(d.diz)}</p></div></section>` : ''}
+      ${ps.map(pj => `<section class="dvs-sec"><header class="dvs-tit"><h2>${esc(pj.nome)}</h2><p>${esc(pj.codigo || '')}${pj.data ? ' · ' + esc(isoParaBR(pj.data)) : ''} · ${chipEstadoEmb(pj.estado)} · ${plural((pj.itens || []).length, 'arte', 'artes')}${(pj.formatos || []).length ? ' · ' + esc(pj.formatos.join(' · ')) : ''}</p></header>
+        ${htmlArtesEmbalagens(pj, 99, true)}
+        ${(pj.pendencias || []).length ? `<div class="emb-aviso"><b>Antes de imprimir para vender</b><ul>${pj.pendencias.map(p => `<li>${esc(p)}</li>`).join('')}</ul></div>` : ''}
+        ${pj.pasta ? `<p class="prm-nota">Arquivos no PC: ${esc(pj.pasta)} (PDF em escala real, folha A4 para imprimir em casa, SVG editável no Inkscape e prévia).</p>` : ''}</section>`).join('') || '<section class="dvs-sec"><p class="dvs-vazio">Os projetos aparecem aqui quando o PC publicar o primeiro.</p></section>'}
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Pedidos</h2><p>Peça uma arte: diga o produto, a embalagem (organza, acetato, caixa…) e, se souber, a medida. Ela pergunta só o que faltar.</p></header>
+        <div class="dvs-quadro">${colunas.map(([k, nome, cor, filtro]) => { const L = f.filter(filtro); return `<section class="dvs-col" style="--c:${cor}"><h3><i></i>${esc(nome)}<span>${L.length}</span></h3>${L.length ? L.slice(0, 6).map(card).join('') : '<p class="dvs-col-vazia">—</p>'}</section>`; }).join('')}</div>
+        <form class="dvs-pedir" onsubmit="enviarPedidoEmbalagem(event)"><label for="emb-pedido">Pedir uma arte</label><div><textarea id="emb-pedido" rows="2" maxlength="1500" placeholder="Ex.: etiqueta da girafa para a caixinha de acetato 8 × 8 cm, impressão em casa"></textarea><button type="submit">Pedir</button></div></form></section>
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Embalagens compradas</h2><p>O que o Estoque sabe das embalagens da Primos (a arte é feita para a medida delas).</p></header>${htmlEmbalagensCompradas(true)}</section>
+      <section class="dvs-sec"><header class="dvs-tit"><h2>Como ela trabalha</h2><p>As 8 skills, na ordem do atendimento.</p></header>
+        <div class="dvs-datas">${(a.skills || []).map((k, i) => `<article><b>${i + 1}. ${esc(k)}</b><p>${esc(SKILLS_DESC[k] || '')}</p></article>`).join('')}</div></section>
+      <footer class="ag-fim">J.A.R.V.I.S. · Estúdio de embalagens</footer>
+    </div>`;
+  carregarMidiasCofre(el);
+  posRenderPagina();
+}
+/** Dados da Designer para o cérebro dela (chat e voz): projetos, artes, pendências, embalagens e pedidos. */
+function dadosEmbalagensIA() {
+  const d = embalagensDados || {};
+  return `=== SEU TRABALHO NO PC (Designer de Embalagens) ===
+Projetos: ${(d.projetos || []).map(pj => `${pj.codigo} ${pj.nome} (${pj.estado}): ${(pj.itens || []).map(x => `${x.nome} [${x.estado}${(x.pendencias || []).length ? '; ' + x.pendencias.length + ' pend.' : ''}]`).join(', ')}${(pj.pendencias || []).length ? ' · pendências do projeto: ' + pj.pendencias.join(' | ') : ''}`).join('\n') || '—'}
+Embalagens compradas: ${(d.embalagens || []).map(e => `${e.tipo} (${e.status || ''}${e.medidas ? ', ' + e.medidas : ', sem medida'})`).join('; ') || 'nenhuma registrada'}
+Pedidos na sua fila: ${filaEmbalagens().filter(p => p.status !== 'feito').map(p => `${(ESTADOS_PEDIDO_DEV[p.status] || ESTADOS_PEDIDO_DEV.novo)[0]}: ${tituloPedidoDev(p.texto).titulo}`).join(' | ') || 'vazia'}
+REGRAS: faixa etária e advertências de brinquedo só com base técnica (Inmetro, Portaria 302/2021) — nunca pela aparência e nunca selo decorativo; não usar nome ou logo de personagem de terceiros; licença do modelo do MakerWorld é pendência; nada de "atóxico/educativo/antibacteriano" sem fundamento.
+Para saber que embalagem foi comprada, pergunte ao Estoque: ⟦AGENTES: estoque | …⟧. Pedido de arte nova → ⟦DEV: Arte de embalagem: …⟧ (cai na SUA fila).${d.diz ? '\nO que você disse na última rodada: ' + semNegrito(d.diz) : ''}
+`;
+}
 /** Dados do Primo para o cérebro dele (chat e voz): radar, fila e regras. */
 function dadosPrimoIA() {
   const d = primoDados || {}, r = radarPlacas(5), f = filaPrimo().filter(p => p.status !== 'feito');
@@ -10209,11 +10333,13 @@ const VOZ_AGENTES = {
   producao: { voz: 'Orus', persona: 'Homem, voz firme de chefe de fábrica. Criativo, mas totalmente centrado: você gerencia a produção inteira (fila, máquinas, prazos, filamento, qualidade). Fala com segurança, organiza as ideias do Rafael numa fila clara e sempre diz o próximo passo da produção. Quando ele falar algo que quer imprimir, anote na fila com a ferramenta.' },
   marketing: { voz: 'Aoede', persona: 'Mulher, extrovertida, animada e falante, com humor — obcecada por viralizar a Primos 3D no TikTok e no Instagram. Dá ideias de vídeo concretas (gancho, formato, áudio, horário), cita o que está bombando e avisa quando algo deve ir para a fila de impressão. Animada, mas sempre com dados.' },
   // fase 12 (pedido do Rafael 10/10/2026: "voz própria e personalidade própria")
+  // 18/10/2026 (pedido do Rafael: "personalidade própria")
+  embalagens: { voz: 'Despina', persona: 'Mulher, voz leve e animada de diretora de arte: a DESIGNER DE EMBALAGENS da Primos 3D. Apaixonada por detalhe e por papel bem impresso, fala de igual para igual com o Rafael e sempre mostra o porquê de cada escolha (cor tirada do próprio brinquedo, foto real, letra que dá para ler a 30 cm). Honesta: diz o que está pronto e o que ainda é conceito; nunca escolhe faixa etária pela aparência, nunca desenha selo do Inmetro, nunca usa nome de personagem de terceiros. Antes de desenhar pergunta só o que falta (medida da embalagem, quantidade, onde vai imprimir) e conversa com o Estoque (embalagens compradas), a Produção (o que foi impresso) e o Marketing (cara da marca). Termina com o próximo passo: imprimir a prova, medir a caixa, confirmar um texto.' },
   primo: { voz: 'Sadachbia', persona: 'Homem jovem, voz animada e calorosa: o PRIMO, o designer de placas profissionais da Primos 3D — trata o Rafael como primo, de igual para igual, com bom humor, e é perfeccionista assumido. Trabalha para o Desenvolvedor (o chefe dele, que revisa tudo antes de chegar ao Rafael). Sempre explica a escolha da placa pelo AMBIENTE da profissão (consultório clean, escritório sóbrio, obra industrial) e pelo gênero (mulher: tons claros e traço sutil; homem: contraste e presença), diz o tamanho, o peso de chumbo e as folgas, e cita uma referência do radar do dia. Quando falta a cor certa no catálogo, sugere comprar e diz por quê. Nunca diz que a placa está aprovada sem o teste físico; nunca copia arquivo de ninguém (referência é só ideia).' },
   dev: { voz: 'Achird', persona: 'Homem, voz suave e calma, criativo de verdade — designer de produto que entende de tendência, de moda e de forma, mas com cabeça de engenheiro de impressão 3D (encaixe, folga, camada, cor, AMS). Fala com entusiasmo tranquilo, propõe ideias concretas (placas de profissão, carimbos, chaveiros com logo de comércio, kits empresariais, luminárias, camisa da marca), sempre diz em que etapa cada projeto está (conceito, modelo digital, fatiado, testado) e o que ele precisa do Rafael para seguir. Nunca diz que algo está aprovado sem teste físico.' },
 };
 // fase 9: a cor de cada agente (a bolinha da voz e o destaque da página dele)
-const COR_AGENTE = { prospeccao: '#2dd4bf', contabil: '#30d158', marketing: '#ff375f', estoque: '#ff9f0a', producao: '#0a84ff', vendas: '#ffd60a', consignacao: '#bf5af2', shopee: '#ff6b2c', dev: '#64d2ff', digital: '#e9c46a', patentes: '#5e5ce6', primo: '#c9a227' };
+const COR_AGENTE = { embalagens: '#ff9ebb', prospeccao: '#2dd4bf', contabil: '#30d158', marketing: '#ff375f', estoque: '#ff9f0a', producao: '#0a84ff', vendas: '#ffd60a', consignacao: '#bf5af2', shopee: '#ff6b2c', dev: '#64d2ff', digital: '#e9c46a', patentes: '#5e5ce6', primo: '#c9a227' };
 function falarComAgente(id) { const a = todosAgentes().find(x => x.id === id), v = VOZ_AGENTES[id]; if (!a || !v) return conversarComAgente(id); iniciarConversaVoz(`Central › agente ${a.nome}`, 'primos', { voz: v.voz, persona: v.persona, nomeAgente: a.nome, cor: COR_AGENTE[id], funcao: a.funcao, agenteId: id }); }
 function conversarComAgente(id) {
   const a = todosAgentes().find(x => x.id === id); if (!a) return;
@@ -10358,7 +10484,7 @@ LINHAS ESPECIAIS (no fim da resposta, só quando necessário): ⟦AGENTES: id1, 
 MEMÓRIA: quando ele der uma instrução ou decisão duradoura ("a partir de agora…", "sempre…", "prefiro…"), confirme em uma frase que vai levar isso para as próximas rodadas — esta conversa vai para os agentes da nuvem.
 PRIVACIDADE: nos DADOS, clientes aparecem como códigos ("Cliente 1", "Expositor A"); use os códigos como estão. Nunca peça senhas ou dados bancários.
 ${jeitoIdeiasIA()}AGORA: ${dia}, ${hora}.
-${rel ? `=== SEU ÚLTIMO RELATÓRIO (${r.dia || 'sem data'}) ===\n${anonimizar(rel, mapa)}\n` : ''}${passou ? `=== O QUE O J.A.R.V.I.S. E OS OUTROS AGENTES TROCARAM COM VOCÊ (7 dias) ===\n${anonimizar(passou, mapa)}\n` : ''}${id === 'primo' ? anonimizar(dadosPrimoIA(), mapa) + 'SEU CHEFE: o Desenvolvedor (ele repassa as placas e revisa antes de chegar ao Rafael). Pedido de placa nova → ⟦DEV: …⟧ (vai para a sua fila).\n' : ''}=== DADOS ===
+${rel ? `=== SEU ÚLTIMO RELATÓRIO (${r.dia || 'sem data'}) ===\n${anonimizar(rel, mapa)}\n` : ''}${passou ? `=== O QUE O J.A.R.V.I.S. E OS OUTROS AGENTES TROCARAM COM VOCÊ (7 dias) ===\n${anonimizar(passou, mapa)}\n` : ''}${id === 'primo' ? anonimizar(dadosPrimoIA(), mapa) + 'SEU CHEFE: o Desenvolvedor (ele repassa as placas e revisa antes de chegar ao Rafael). Pedido de placa nova → ⟦DEV: …⟧ (vai para a sua fila).\n' : ''}${id === 'embalagens' ? anonimizar(dadosEmbalagensIA(), mapa) : ''}=== DADOS ===
 ${dadosCompletosIA()}`;
 }
 /** Manda a mensagem ao agente e grava a resposta na conversa dele. op: { ref (o aviso respondido), via: chat|inicio|voz } */
@@ -10398,7 +10524,7 @@ async function ordensDoAgente(id, resp, bruto, texto, mapa) {
   ordens.filter(o => o[0] === 'AGENTES').forEach(o => { const [ids, rec] = o[1].split('|'); const r = registrarRecado(String(ids || '').split(/[,\s]+/).filter(x => x && x !== id), (t => t.toLowerCase().startsWith(a.nome.toLowerCase()) ? t : `${a.nome}: ${t}`)(desanonimizar(String(rec || '').trim(), mapa)), 'fato', 'agente'); if (r) notas.push(`✦ Passei para ${r.agentes.map(nomeConv).join(', ')}.`); });
   const abrir = ordens.find(o => o[0] === 'ABRIR'); if (abrir && DESTINOS_JARVIS[abrir[1]]) resp.acoes.push([DESTINOS_JARVIS[abrir[1]][0], `fecharChatAgente(); irDestinoJarvis('${abrir[1]}')`]);
   const dev = ordens.find(o => o[0] === 'DEV');
-  if (dev) { const pd = await pedirAoDesenvolvedor(desanonimizar(dev[1], mapa), 'agente:' + id, []); if (pd) notas.push(`🧩 Pedido anotado ${pd.agente === 'primo' ? 'na fila do Primo (placas)' : 'no Desenvolvedor'}: ${String(pd.texto).slice(0, 160)}`); }
+  if (dev) { const pd = await pedirAoDesenvolvedor(desanonimizar(dev[1], mapa), 'agente:' + id, []); if (pd) notas.push(`🧩 Pedido anotado ${pd.agente === 'primo' ? 'na fila do Primo (placas)' : pd.agente === 'embalagens' ? 'na fila do Designer de Embalagens' : 'no Desenvolvedor'}: ${String(pd.texto).slice(0, 160)}`); }
   const pc = ordens.find(o => o[0] === 'PC');
   if (pc) {
     const tarefa = desanonimizar(pc[1], mapa), tipo = classificarPedidoPC(texto, tarefa), ctx = `Conversa com o agente ${a.nome}`;
@@ -10505,6 +10631,7 @@ function htmlPainelAgenteBase(id) {
   }
   if (a.id === 'dev') return htmlAgenteDev(a);
   if (a.id === 'primo') return htmlAgentePrimo(a);
+  if (a.id === 'embalagens') return htmlAgenteEmbalagens(a);
   if (a.id === 'patentes') return htmlAgentePatentes(a);
   if (a.id === 'shopee') return htmlAgenteShopee(a);
   return cabecalhoAgente(a) + ccBloco('Missão', `<p class="cc-txt">${esc(a.missao || 'Sem missão definida.')}</p>`)

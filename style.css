@@ -4361,3 +4361,27 @@ body.jv-ouvindo #ag-chat .agc-mic { background: #ff453a; color: #fff; }
 .prm-bola { width: 22px; height: 22px; border-radius: 50%; background: var(--c); flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.14); }
 .dvs-ped summary em.dvs-primo { --c: #c9a227; }
 @media (max-width: 600px) { .prm-lista li { flex-wrap: wrap; } .prm-lista b { white-space: normal; } }
+/* ===== DESIGNER DE EMBALAGENS (18/10/2026) — galeria de artes, no estúdio claro (dvs) e no painel escuro da Central ===== */
+.emb-galeria { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; align-items: start; }
+.emb-arte { border-radius: 24px; background: var(--dv-card, #fff); box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 10px 30px rgba(0,0,0,0.06); overflow: hidden; color: var(--dv-txt, #1d1d1f); animation: dvsSobe .55s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(min(var(--k), 8) * 50ms); }
+.emb-arte > summary { list-style: none; cursor: pointer; display: flex; flex-direction: column; }
+.emb-arte > summary::-webkit-details-marker { display: none; }
+.emb-palco { display: grid; place-items: center; aspect-ratio: 16 / 10; background: #f2eee8; }
+.emb-palco img { width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity .35s; } .emb-palco img.ok { opacity: 1; }
+.emb-palco i { font-style: normal; font-size: 2rem; color: #c9c4bd; }
+.emb-txt { display: grid; gap: 6px; padding: 14px 18px 16px; justify-items: start; }
+.emb-txt b { font-size: 1.05rem; line-height: 1.3; } .emb-txt small { font-size: 0.82rem; color: var(--dv-txt3, #86868b); }
+.emb-det { padding: 0 18px 18px; font-size: 0.88rem; line-height: 1.45; color: var(--dv-txt2, #515154); overflow-wrap: anywhere; }
+.emb-checks, .emb-pend { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.emb-checks li.ok { color: #248a3d; } .emb-checks li.nao { color: #b25000; }
+.emb-pend-tit { margin: 12px 0 4px; font-weight: 700; color: var(--dv-txt, #1d1d1f); }
+.emb-pend li { position: relative; padding-left: 14px; } .emb-pend li::before { content: ''; position: absolute; left: 2px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: #ff9f0a; }
+.emb-modelo { margin: 12px 0 0; font-size: 0.82rem; color: var(--dv-txt3, #86868b); } .emb-modelo a { color: var(--dv-azul, #0071e3); }
+.emb-aviso { margin-top: 18px; padding: 16px 18px; border-radius: 20px; background: #fff4e5; color: #6b3d00; font-size: 0.9rem; line-height: 1.45; }
+.emb-aviso b { display: block; margin-bottom: 6px; } .emb-aviso ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.emb-galeria.escuro { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.emb-galeria.escuro .emb-arte { background: rgba(255,255,255,0.06); box-shadow: none; border-radius: 16px; color: #f2f2f7; }
+.emb-galeria.escuro .emb-txt { padding: 10px 12px 12px; } .emb-galeria.escuro .emb-txt b { font-size: 0.9rem; } .emb-galeria.escuro .emb-det { padding: 0 12px 12px; color: #c7c7cc; font-size: 0.8rem; }
+.emb-galeria.escuro .emb-pend-tit { color: #f2f2f7; }
+@media (max-width: 600px) { .emb-galeria { grid-template-columns: 1fr; gap: 12px; } .emb-galeria.escuro { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { .emb-arte { animation: none; } }
