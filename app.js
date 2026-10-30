@@ -6299,6 +6299,7 @@ async function sincronizarCofreAgora(forcar, silencioso) {
     try { const dv = await (await cofreBruto('dados/dev.json')).json(); if (dv && dv.tipo === 'jarvis-dev') { const mudou = JSON.stringify(dv) !== JSON.stringify(devDados); devDados = dv; if (mudou) res.mudou.push('dev'); try { localStorage.setItem('lifeos_dev', JSON.stringify(dv)); } catch (e) { } if (mudou && cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // projetos do Desenvolvedor (fase 8)
     try { const pd = await (await cofreBruto('dados/pedidos-dev.json')).json(); if (pd && pd.tipo === 'jarvis-pedidos-dev' && JSON.stringify(pd) !== JSON.stringify(pedidosDev)) { pedidosDev = pd; res.mudou.push('pedidosdev'); try { localStorage.setItem('lifeos_pedidosdev', JSON.stringify(pd)); } catch (e) { } if (cc.agente === 'dev' || cc.agente === 'primo') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 10: pedidos ao Desenvolvedor
     try { const em = await (await cofreBruto('dados/embalagens.json')).json(); if (em && em.tipo === 'jarvis-embalagens' && JSON.stringify(em) !== JSON.stringify(embalagensDados)) { embalagensDados = em; res.mudou.push('embalagens'); try { localStorage.setItem('lifeos_embalagens', JSON.stringify(em)); } catch (e) { } if (cc.agente === 'embalagens' || cc.pagina === 'embalagens') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // 18/10/2026: o Designer de Embalagens
+    try { const vg = await (await cofreBruto('dados/vagas.json')).json(); if (vg && vg.tipo === 'jarvis-vagas' && JSON.stringify(vg) !== JSON.stringify(vagasDados)) { vagasDados = vg; res.mudou.push('vagas'); try { localStorage.setItem('lifeos_vagas', JSON.stringify(vg)); } catch (e) { } if (cc.agente === 'vagas' || cc.agente === 'jveng' || cc.pagina === 'vagas') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // 30/10/2026: o Radar de Vagas
     try { const pm = await (await cofreBruto('dados/primo.json')).json(); if (pm && pm.tipo === 'jarvis-primo' && JSON.stringify(pm) !== JSON.stringify(primoDados)) { primoDados = pm; res.mudou.push('primo'); try { localStorage.setItem('lifeos_primo', JSON.stringify(pm)); } catch (e) { } if (cc.agente === 'primo' || cc.agente === 'dev') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // fase 12: o Primo (radar, paletas, regras)
     try { const g = await (await cofreBruto('dados/giros.json')).json(); if (g && g.tipo === 'jarvis-giros' && (!girosDados || g.atualizadoEm !== girosDados.atualizadoEm)) { girosDados = g; res.mudou.push('giros'); try { localStorage.setItem('lifeos_giros', JSON.stringify(g)); } catch (e) { } if (cc.agente === 'producao') atualizarTelasSincronizadas('central', 'agente'); } } catch (e) { } // miniaturas 3D da fila
     try { const g = await (await cofreBruto('dados/engenharia.json')).json(); if (g && g.tipo === 'jarvis-engenharia' && (!engenhariaDados || g.geradoEm !== engenhariaDados.geradoEm)) { engenhariaDados = g; res.mudou.push('engenharia'); guardarEngenhariaLocal(); jv.atualizado.eng = Date.now(); if (jv.menu === 'eng') renderMenuArea(); } } catch (e) { } // cartilha da Engenharia (fase 8)
@@ -6957,7 +6958,8 @@ const DESTINOS_JARVIS = {
   engenharia: ['Abrir Engenharia Civil', () => abrirMenuArea('eng')], seguranca: ['Abrir Segurança do Trabalho', () => abrirMenuArea('sst')], mercado: ['Abrir Mercado', () => abrirMenuArea('mercado')],
   academia: ['Abrir Academia', () => abrirMenuArea('academia')], familia: ['Abrir Família', () => abrirMenuArea('familia')], diaadia: ['Abrir Dia a dia', () => abrirMenuArea('dia')],
   ebook: ['Abrir a prévia do e-book', () => abrirLeitorEbook()], // fase 10: o leitor do e-book do Produto Digital
-  embalagens: ['Abrir o Designer de Embalagens', () => { abrirCentral('primos'); abrirPaginaAgente('embalagens'); }] // 18/10/2026
+  embalagens: ['Abrir o Designer de Embalagens', () => { abrirCentral('primos'); abrirPaginaAgente('embalagens'); }], // 18/10/2026
+  vagas: ['Abrir o Radar de Vagas', () => { abrirCentral('primos'); abrirPaginaAgente('vagas'); }] // 30/10/2026
 };
 const DESTINOS_NA_CASA = ['engenharia', 'seguranca', 'mercado', 'academia', 'familia', 'diaadia']; // menus que vivem na página inicial, como a Primos
 function irDestinoJarvis(d) { const x = DESTINOS_JARVIS[d]; if (!x) return; if (d.startsWith('primos') || DESTINOS_NA_CASA.includes(d)) { fecharChatJarvis(); if (abaAtual() !== 'cerebro') changeTab('cerebro'); } else if (d !== 'ajustes') fecharChatJarvis(); x[1](); }
@@ -7627,10 +7629,23 @@ const AGENTES_BASE = [ // a Central de Comando é da PRIMOS 3D (decisão do Rafa
   { id: 'embalagens', setor: 'primos', nome: 'Designer de Embalagens', semNuvem: true, funcao: 'Cria as artes impressas das embalagens da Primos 3D (adesivos, etiquetas, rótulos, cartões, encartes, panfletos, solapas e cintas) a partir das fotos e dos dados reais de cada produto, prontas para imprimir e recortar', skills: ['Pesquisa e entendimento do produto', 'Identidade visual e marcas dos clientes', 'Design gráfico de embalagens', 'Criação e tratamento de imagens', 'Textos, instruções e cuidados', 'Rotulagem no Brasil (Inmetro)', 'Preparação para impressão', 'Revisão, versões e entrega'] },
   { id: 'digital', setor: 'primos', nome: 'Produto Digital', funcao: 'E-book e mentoria: documenta tudo o que o J.A.R.V.I.S. e os agentes produzem e transforma em produto digital', skills: ['Documentação viva', 'E-book', 'Mentoria', 'Lançamento digital', 'Prova e resultados'], semNuvem: true }, // fase 10 (pedido do Rafael 04/10/2026): por enquanto o Claude escreve no PC
   { id: 'patentes', setor: 'primos', nome: 'Gestão de Patentes', funcao: 'Protege e monetiza os modelos próprios da Primos: desenho industrial, modelo de utilidade, direito autoral e marca, em consenso com o Desenvolvedor e a Produção', skills: ['Triagem do que proteger', 'Escolha do instrumento (INPI)', 'Prazo e novidade', 'Dossiê de depósito', 'Retorno para a Primos'] }, // fase 11 (pedido do Rafael 05/10/2026): atua pouco por enquanto
-  { id: 'prospeccao', setor: 'primos', nome: 'Prospecção de Vendas', funcao: 'O analista: lê todos os agentes e mostra quanto cada canal e cada item já deu, quanto dá de forma realista e quanto dá em escala, preso à capacidade real', skills: ['Capacidade e gargalo', 'Lucro por hora de máquina', 'Previsão realista por canal', 'Economia de marketplace', 'Consignação e pontos de venda', 'Produto digital e funil', 'Produto novo: vale a pena?', 'Cenários de escala'] } // fase 10 (pedido do Rafael 04/10/2026)
+  { id: 'prospeccao', setor: 'primos', nome: 'Prospecção de Vendas', funcao: 'O analista: lê todos os agentes e mostra quanto cada canal e cada item já deu, quanto dá de forma realista e quanto dá em escala, preso à capacidade real', skills: ['Capacidade e gargalo', 'Lucro por hora de máquina', 'Previsão realista por canal', 'Economia de marketplace', 'Consignação e pontos de venda', 'Produto digital e funil', 'Produto novo: vale a pena?', 'Cenários de escala'] }, // fase 10 (pedido do Rafael 04/10/2026)
+  // pedido do Rafael (30/10/2026): o 1º agente da ENGENHARIA na Central, pendurado no nó "J.A.R.V.I.S. Engenharia" (hub: 'jveng').
+  // Trabalha no PC (8h e 18h): lê o currículo, busca estágio/júnior/SST/freela na web, pontua e publica o top em dados/vagas.json. Nunca se candidata.
+  { id: 'vagas', setor: 'eng', hub: 'jveng', nome: 'Radar de Vagas', semNuvem: true, funcao: 'Lê o seu currículo e caça, duas vezes por dia, as melhores vagas para você: estágio home office em engenharia civil (bolsa de R$ 2.000 a 2.500 ou mais), estágios em BH e em empresas grandes com plano de carreira, júnior/trainee para depois da formatura, Segurança do Trabalho (Viçosa ou remoto) e freelas de projeto. Só encontra e explica; quem se candidata é você', skills: ['Leitura do currículo e do perfil', 'Busca nas fontes certas', 'Filtro de vaga real e golpe', 'Nota da vaga', 'Bolsa, salário e benefícios', 'Regras de estágio e formatura', 'Segurança do Trabalho', 'Freelas de projeto', 'Dica de candidatura'] }
 ];
 /** O que cada skill faz (pedido do Rafael 02/10/2026) — aparece no painel do agente e vai no "manual" dele na nuvem (rodar.mjs). */
 const SKILLS_DESC = {
+  // Radar de Vagas (30/10/2026)
+  'Leitura do currículo e do perfil': 'Parte do seu currículo (UFV, técnico em Segurança do Trabalho, orçamento e projetos na Construtora Alcance, solos no DEC/UFV, AutoCAD/Revit/Excel, inglês fluente) e cruza com o que cada vaga pede: o que você já cumpre, o que falta e se vale tentar mesmo assim.',
+  'Busca nas fontes certas': 'Procura onde as vagas de verdade aparecem: LinkedIn, Gupy, Indeed, Catho, Vagas.com, CIEE, Nube, Companhia de Estágios, Super Estágios e as páginas de carreira das construtoras e projetistas grandes; para freela, Workana, 99Freelas e GetNinjas. Só leitura, sem login.',
+  'Filtro de vaga real e golpe': 'Descarta vaga vencida, repetida, sem empresa identificável ou que cobra taxa, curso ou kit para participar. Prefere vaga com data recente e link direto da empresa ou de plataforma conhecida.',
+  'Nota da vaga': 'Nota de 0 a 100 que pesa a bolsa ou o salário (mira o maior), o porte da empresa e o plano de carreira, o home office (que combina com a Primos 3D), a aderência ao seu currículo e o tempo até fechar. As melhores ficam no topo.',
+  'Bolsa, salário e benefícios': 'Separa bolsa de auxílio-transporte e de benefícios, avisa quando a faixa está abaixo de R$ 2.000 (estágio) e compara com o que o mercado paga para a função e a cidade.',
+  'Regras de estágio e formatura': 'Estágio exige matrícula ativa (Lei 11.788/2008): no máximo 6 h por dia e 30 h por semana, com termo de compromisso. Como você forma em breve, olha se o estágio cabe até a formatura e já separa vagas de engenheiro júnior e trainee para depois.',
+  'Segurança do Trabalho': 'Vagas de técnico e de analista de SST (registro no MTE), de preferência em Viçosa ou remotas: PGR, laudos, inspeções, treinamentos de NR e eSocial SST. Mira os salários mais altos.',
+  'Freelas de projeto': 'Freelas de projeto arquitetônico, estrutural, elétrico ou hidrossanitário, de orçamento, de modelagem BIM e de laudos e PGR de SST. Mostra o escopo, se precisa de ART e um preço justo para propor.',
+  'Dica de candidatura': 'Para cada vaga boa: o que destacar do seu currículo, a palavra-chave que o filtro da empresa procura e o prazo. A candidatura é sempre sua: o agente nunca se candidata, não manda mensagem e não cria conta.',
   'Pesquisa e entendimento do produto': 'Antes de desenhar: o que é o produto, para quem, o que vai dentro, como funciona, fotos, medidas e a embalagem. Busca no histórico da Bambu, na página do modelo e nos outros agentes, e separa o confirmado do que é sugestão ou está pendente.',
   'Identidade visual e marcas dos clientes': 'A logo oficial da Primos (o P de camadas) sem redesenho, paleta e tipografia consistentes entre os produtos; nos kits de hotel e empresa, a marca do cliente em primeiro plano com a assinatura discreta da Primos.',
   'Design gráfico de embalagens': 'Arte pensada para a peça física: medidas em milímetros, área útil, frente e verso, dobras, furos, transparência (organza, acetato, papelão) e a ordem de leitura — marca, nome, foto, como usar.',
@@ -7959,6 +7974,7 @@ function estadoAgenteBase(a) {
   }
   if (a.aba) { const r = relatorioAgente(a.id); return r ? { nivel: 'ok', metrica: `Relatório de ${isoParaBR(r.dia || '').slice(0, 5)}` } : { nivel: 'sem', metrica: 'Aguardando o 1º relatório' }; }
   if (a.id === 'mercado') return { nivel: 'ok', metrica: 'Cotações ao vivo' };
+  if (a.id === 'vagas') { const t = vagasTop(), d = vagasDados || {}; return { nivel: vagasDados ? (String(d.atualizadoEm || '').slice(0, 10) === hojeISO() ? 'ok' : 'atencao') : 'sem', metrica: vagasDados ? `${plural(t.length, 'vaga', 'vagas')}${t.filter(vagaNova).length ? ` · ${t.filter(vagaNova).length} nova${t.filter(vagaNova).length > 1 ? 's' : ''}` : ''}` : 'Aguardando a 1ª busca' }; }
   if (a.id === 'embalagens') { const r = resumoEmbalagens(); return { nivel: embalagensDados ? (r.bloqueios ? 'atencao' : 'ok') : 'sem', metrica: embalagensDados ? `${plural(r.artes, 'arte', 'artes')} · ${plural(r.pend, 'pendência', 'pendências')}` : 'Aguardando o 1º projeto' }; }
   if (a.id === 'primo') { const f = filaPrimo().filter(x => x.status !== 'feito'), r = (primoDados && primoDados.radar) || {}; // fase 12
     return { nivel: primoDados || f.length ? 'ok' : 'sem', metrica: `${plural(f.length, 'placa na fila', 'placas na fila')}${r.dia ? ` · radar ${r.dia === hojeISO() ? 'de hoje' : isoParaBR(r.dia).slice(0, 5)}` : ''}` }; }
@@ -8001,6 +8017,11 @@ window.addEventListener('resize', () => { if ($j('jv-central') && !$j('jv-centra
 
 /** A Central é da Primos 3D: só os agentes dela (os criados pelo Rafael em outros setores não entram no canvas). */
 function agentesCentral() { return todosAgentes().filter(a => a.setor === 'primos'); }
+// 30/10/2026: os NÓS DE ÁREA no quadro (um J.A.R.V.I.S. por área, ligado ao principal). Os agentes deles têm `hub` e ficam
+// fora de agentesCentral() (que continua sendo SÓ a Primos para o mastermind, as conversas e a nuvem); o quadro usa agentesCanvas().
+const HUBS_CANVAS = [{ id: 'jveng', setor: 'eng', nome: 'J.A.R.V.I.S. Engenharia', sub: 'engenharia civil · carreira' }];
+function agentesCanvas() { return [...agentesCentral(), ...todosAgentes().filter(a => a.hub && HUBS_CANVAS.some(h => h.id === a.hub))]; }
+function idsCanvas() { return ['jarvis', ...HUBS_CANVAS.map(h => h.id), ...agentesCanvas().map(a => a.id)]; }
 // --- CANVAS INFINITO (fase 6, inspirado no React Flow / Flowise / Slashspace + a foto do mármore do Rafael) ---
 // Fundo branco com pontinhos; o J.A.R.V.I.S. no centro e os agentes em blocos de MÁRMORE PRETO, ligados por fios que
 // mostram a troca de informação (com o número real que passa). Arrastar o fundo = mover; roda/pinça = zoom; arrastar o
@@ -8017,6 +8038,7 @@ function posPadraoCanvas() {
     p.shopee = { x: -150, y: 1020 }; p.dev = { x: 150, y: 1020 }; p.prospeccao = { x: 0, y: -720 }; // fase 10: no celular eles não tinham lugar (ficavam no meio)
     p.primo = { x: 150, y: 1290 }; // fase 12: o Primo pendurado embaixo do Desenvolvedor (chefe dele)
     p.embalagens = { x: -150, y: 1290 }; // 18/10/2026: o Designer de Embalagens embaixo da Shopee
+    p.jveng = { x: 0, y: -1060 }; p.vagas = { x: 0, y: -1390 }; // 30/10/2026: a Engenharia em cima da Prospecção
     ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'prospeccao' && a.id !== 'primo' && a.id !== 'embalagens').forEach((a, i) => { p[a.id] = { x: (i % 2 ? 150 : -150), y: 1580 + Math.floor(i / 2) * 320 }; });
     return p;
   }
@@ -8026,6 +8048,7 @@ function posPadraoCanvas() {
   p.patentes = { x: 920, y: 1080 }; // fase 11: ao lado do Desenvolvedor (protege o que ele cria)
   p.primo = { x: 460, y: 1150 }; // fase 12: o Primo (placas) pendurado embaixo do Desenvolvedor, o chefe dele
   p.embalagens = { x: -920, y: 1080 }; // 18/10/2026: o Designer de Embalagens à esquerda, ao lado da Shopee (os dois cuidam da apresentação do produto)
+  p.jveng = { x: 1450, y: -300 }; p.vagas = { x: 1450, y: 120 }; // 30/10/2026: a Engenharia à direita, fora da Primos
   const fora = ag.filter(a => !CV_PRIMOS.includes(a.id) && a.id !== 'dev' && a.id !== 'shopee' && a.id !== 'digital' && a.id !== 'prospeccao' && a.id !== 'patentes' && a.id !== 'primo' && a.id !== 'embalagens'); fora.forEach((a, i) => { p[a.id] = { x: -760 - (i % 2) * 300, y: -200 + Math.floor(i / 2) * 230 + (i % 2) * 115 }; });
   return p;
 }
@@ -8055,6 +8078,9 @@ function fiosCanvas() {
   F.push({ de: 'marketing', para: 'embalagens', rot: 'marca e público', lateral: true });
   // fase 10: a Prospecção lê os outros (capacidade, custos, giro, anúncios, e-book)
   [['producao', 'capacidade'], ['contabil', 'custos e margens'], ['consignacao', 'giro dos expositores'], ['shopee', 'anúncios e preços'], ['digital', 'e-book']].forEach(([de, rot]) => F.push({ de, para: 'prospeccao', rot, lateral: true }));
+  // 30/10/2026: os nós de área respondem ao J.A.R.V.I.S. principal; os agentes deles, ao nó da área
+  HUBS_CANVAS.forEach(h => { const ags = todosAgentes().filter(a => a.hub === h.id); F.push({ de: h.id, para: 'jarvis', rot: h.id === 'jveng' && vagasDados ? plural(vagasTop().length, 'vaga boa', 'vagas boas') + ' hoje' : plural(ags.length, 'agente', 'agentes'), forte: true });
+    ags.forEach(a => F.push({ de: a.id, para: h.id, rot: estadoAgente(a).metrica, forte: true, sub: true })); });
   // fase 10: a CONVERSA dos agentes no quadro (últimas 24 h)
   const noQuadro = new Set(['jarvis', ...agentesCentral().map(a => a.id)]);
   conversaAgentes(24).forEach(m => { if (!noQuadro.has(m.de) || !noQuadro.has(m.para) || m.de === m.para) return;
@@ -8074,6 +8100,7 @@ function tarefaCanvas(a) {
   if (t && (t.status === 'rodando' || t.status === 'fila')) return t.instrucao ? `Executando: ${t.instrucao}` : 'Gerando o relatório agora…';
   if (a.id === 'primo') return tarefaPrimo(); // fase 12: trabalha no PC, não tem rodada na nuvem
   if (a.id === 'embalagens') return tarefaEmbalagens();
+  if (a.id === 'vagas') return tarefaVagas();
   const r = relatorioAgente(a.id); if (r && (r.acoes || []).length) return r.acoes[0];
   return a.aba || AGENTES_NUVEM.includes(a.id) ? 'Aguardando a rodada das 7h' : a.missao || a.funcao || '';
 }
@@ -8092,7 +8119,11 @@ function renderCanvasCentral() {
     <div class="cv-alca"><img src="icon-180.png" alt=""><div><b>J.A.R.V.I.S.</b><small>mastermind · ${plural(ag.length, 'agente', 'agentes')}</small></div><span class="cv-estado" style="--e:${ex.rodando ? '#0a84ff' : '#30d158'}">${ex.rodando ? 'Coordenando' : 'Online'}</span></div>
     <p class="cv-tarefa"><em>Agora</em>${hoje[0] ? textoAgente(hoje[0].texto) : rj ? textoAgente(rj.manchete) : 'Esperando o 1º relatório dos agentes (todo dia às 7h).'}</p>
     <div class="cv-acoes"><button type="button" data-acao="rodar" data-ag="todos">▶ Rodar todos</button><button type="button" data-acao="abrir" data-ag="jarvis">Abrir</button></div></div>`;
-  ag.forEach(a => {
+  HUBS_CANVAS.forEach(hb => { const hp = posCanvas(hb.id), s = setorCentral(hb.setor), ags = todosAgentes().filter(a => a.hub === hb.id); // 30/10/2026: o J.A.R.V.I.S. da área
+    h += `<div class="cv-no cv-jarvis cv-hub${cc.agente === hb.id ? ' sel' : ''}" data-id="${esc(hb.id)}" style="left:${hp.x}px; top:${hp.y}px; --cor:${s.cor}">
+      <div class="cv-alca"><img src="icon-180.png" alt=""><div><b>${esc(hb.nome)}</b><small>${esc(hb.sub)} · ${plural(ags.length, 'agente', 'agentes')}</small></div><span class="cv-estado" style="--e:${s.cor}">Online</span></div>
+      <p class="cv-tarefa"><em>Agora</em>${textoAgente(hb.id === 'jveng' ? agoraEngenharia() : '')}</p></div>`; });
+  agentesCanvas().forEach(a => {
     const p = posCanvas(a.id), s = setorCentral(a.setor), est = estadoCanvas(a), E = ESTADOS_CV[est] || ESTADOS_CV.sem, pausado = est === 'pausado', rodando = est === 'rodando' || est === 'fila';
     const chefe = a.chefe ? todosAgentes().find(x => x.id === a.chefe) : null; // fase 12: agente de um agente (o Primo é do Desenvolvedor)
     h += `<div class="cv-no cv-agente${a.mini ? ' cv-subagente' : ''}${cc.agente === a.id ? ' sel' : ''}${rodando ? ' rodando' : ''}" data-id="${esc(a.id)}" style="left:${p.x}px; top:${p.y}px; --cor:${s.cor}${COR_AGENTE[a.id] && a.mini ? '; --ag:' + COR_AGENTE[a.id] : ''}">
@@ -8112,7 +8143,7 @@ function aplicarCamCanvas() {
   q.classList.toggle('longe', CV.cam.k < 0.42); desenharMiniCanvas();
 }
 function salvarCamCanvas() { clearTimeout(CV.tSalvar); CV.tSalvar = setTimeout(() => { prefs.ccCam = { x: Math.round(CV.cam.x), y: Math.round(CV.cam.y), k: Math.round(CV.cam.k * 1000) / 1000 }; salvarPrefsJarvis(); }, 400); }
-function limitesCanvas(soPrimos) { const ids = soPrimos ? ['jarvis', ...CV_PRIMOS] : ['jarvis', ...agentesCentral().map(a => a.id)], ps = ids.map(posCanvas); return { x0: Math.min(...ps.map(p => p.x)) - 200, x1: Math.max(...ps.map(p => p.x)) + 200, y0: Math.min(...ps.map(p => p.y)) - 140, y1: Math.max(...ps.map(p => p.y)) + 160 }; }
+function limitesCanvas(soPrimos) { const ids = soPrimos ? ['jarvis', ...CV_PRIMOS] : idsCanvas(), ps = ids.map(posCanvas); return { x0: Math.min(...ps.map(p => p.x)) - 200, x1: Math.max(...ps.map(p => p.x)) + 200, y0: Math.min(...ps.map(p => p.y)) - 140, y1: Math.max(...ps.map(p => p.y)) + 160 }; }
 function enquadrarCanvas(anima) {
   const q = $j('cc-quadro'); if (!q) return; const w = q.clientWidth || innerWidth, h = q.clientHeight || innerHeight, b = limitesCanvas(celCanvas()); // celular: enquadra a Primos (Mercado e Treino ficam ao lado, é só arrastar)
   const k = Math.max(0.18, Math.min(1.1, Math.min(w / (b.x1 - b.x0), h / (b.y1 - b.y0)) * 0.92));
@@ -8954,6 +8985,7 @@ function renderPaginaAgente() {
   if (id === 'dev') return renderPaginaDev(); // fase 11: estúdio claro
   if (id === 'primo') return renderPaginaPrimo(); // fase 12: o estúdio das placas (mesmo visual claro do chefe)
   if (id === 'embalagens') return renderPaginaEmbalagens(); // 18/10/2026: o estúdio de embalagens
+  if (id === 'vagas') return renderPaginaVagas(); // 30/10/2026: o Radar de Vagas (página simples)
   const a = todosAgentes().find(x => x.id === id), s = setorCentral(a.setor), pc = primosCentral, aba = PAG_AGENTE[id];
   let painel = htmlPainelAgente(id).replace(/<header class="cc-p-topo"[\s\S]*?<\/header>/, '').replace(/<section class="cc-bloco cc-(seca|fab)-bloco">[\s\S]*?<\/section>/, '').replace(/<button type="button" class="cc-btn" onclick="fecharCentral\(\); abrirPrimos\([^)]*\)">[^<]*<\/button>/g, '');
   const nums = numerosPagina(id);
@@ -9070,7 +9102,7 @@ function posRenderPagina() {
     c.onclick = () => id === 'jarvis' ? abrirChatJarvis({ contexto: 'Página do J.A.R.V.I.S.' }) : abrirChatAgente(id);
     topo.insertBefore(c, topo.querySelector('.ag-falar'));
   }
-  const rolo = $j('ag-rolo'); if (!rolo) return;
+  const rolo = $j('ag-rolo'); if (!rolo || id === 'vagas') return; // o Radar de Vagas é simples: a própria lista já mostra o que é novo
   let bloco = $j('ag-novidades');
   if (!bloco) { bloco = document.createElement('section'); bloco.id = 'ag-novidades'; bloco.className = 'ag-sec ag-novidades'; const heroi = rolo.querySelector('.ag-heroi, .est-heroi, .jvpg-abre, section'); if (heroi && heroi.parentNode) heroi.parentNode.insertBefore(bloco, heroi.nextSibling); else rolo.prepend(bloco); }
   bloco.innerHTML = htmlNovidades(id);
@@ -9177,7 +9209,7 @@ function desenharMiniCanvas() {
   const mini = $j('cv-mini'), q = $j('cc-quadro'); if (!mini || !q || !CV.cam) return;
   const b = limitesCanvas(), W = 150, H = 96, k = Math.min(W / (b.x1 - b.x0), H / (b.y1 - b.y0)), ox = (W - (b.x1 - b.x0) * k) / 2, oy = (H - (b.y1 - b.y0) * k) / 2;
   const P = (x, y) => [ox + (x - b.x0) * k, oy + (y - b.y0) * k];
-  const blocos = ['jarvis', ...agentesCentral().map(a => a.id)].map(id => { const p = posCanvas(id), [x, y] = P(p.x, p.y); return `<rect x="${(x - (id === 'jarvis' ? 9 : 7)).toFixed(1)}" y="${(y - 4).toFixed(1)}" width="${id === 'jarvis' ? 18 : 14}" height="8" rx="2" class="${id === 'jarvis' ? 'j' : ''}"/>`; }).join('');
+  const blocos = idsCanvas().map(id => { const p = posCanvas(id), [x, y] = P(p.x, p.y); return `<rect x="${(x - (id === 'jarvis' ? 9 : 7)).toFixed(1)}" y="${(y - 4).toFixed(1)}" width="${id === 'jarvis' ? 18 : 14}" height="8" rx="2" class="${id === 'jarvis' ? 'j' : ''}"/>`; }).join('');
   const [vx, vy] = P(-CV.cam.x / CV.cam.k, -CV.cam.y / CV.cam.k), vw = q.clientWidth / CV.cam.k * k, vh = q.clientHeight / CV.cam.k * k;
   mini.setAttribute('viewBox', `0 0 ${W} ${H}`); mini.innerHTML = blocos + `<rect class="vista" x="${vx.toFixed(1)}" y="${vy.toFixed(1)}" width="${vw.toFixed(1)}" height="${vh.toFixed(1)}" rx="3"/>`;
 }
@@ -10154,6 +10186,95 @@ Regras: tamanho ${REGRAS_PRIMO.tamanho}; peso ${REGRAS_PRIMO.peso}; folgas ${REG
 `;
 }
 // =====================================================================================================================
+// RADAR DE VAGAS (pedido do Rafael 30/10/2026): o 1º agente da ENGENHARIA na Central, ligado ao nó "J.A.R.V.I.S. Engenharia".
+// Trabalha no PC (tarefa jarvis-radar-vagas, 8h e 18h; manual em .claude/jarvis/engenharia/vagas/HABILIDADES-VAGAS.md): lê o
+// currículo, busca na web (só leitura), pontua e publica no cofre dados/vagas.json →
+//   { tipo: 'jarvis-vagas', atualizadoEm, diz, fontes, vagas: [{ id, cat, titulo, empresa, porte, local, modo, valor, valorNum,
+//     fonte, url, publicada, vistaEm, prazo, nota (0–100), porque, atencao, dica }] }
+// O Rafael marca cada vaga (salva | candidatei | descartei) no módulo `vagasmarcas` (sincroniza). O agente NUNCA se candidata.
+// =====================================================================================================================
+let vagasDados = (() => { try { return JSON.parse(localStorage.getItem('lifeos_vagas')); } catch (e) { return null; } })();
+let vagasMarcas = (() => { try { return JSON.parse(localStorage.getItem('lifeos_vagasmarcas')) || []; } catch (e) { return []; } })();
+const CATS_VAGAS = { estagio_home: ['Estágio home office', '#0a84ff'], estagio_bh: ['Estágio em BH', '#5e5ce6'], estagio_outras: ['Estágio · empresa grande', '#bf5af2'], junior: ['Júnior / trainee', '#30d158'], sst: ['Segurança do Trabalho', '#ff453a'], freela: ['Freela', '#ff9f0a'] };
+const MARCAS_VAGA = { salva: ['Salva', '#ff9f0a'], candidatei: ['Me candidatei', '#30d158'], descartei: ['Descartada', '#8e8e93'] };
+function marcaVaga(id) { const m = vagasMarcas.find(x => x.id === id); return m ? m.status : ''; }
+function vagasTodas() { return ((vagasDados && vagasDados.vagas) || []).filter(v => v && v.id && v.titulo); }
+/** As vagas que valem a pena (sem as descartadas), da maior nota para a menor. */
+function vagasTop() { return vagasTodas().filter(v => marcaVaga(v.id) !== 'descartei').sort((a, b) => (b.nota || 0) - (a.nota || 0)); }
+function vagaNova(v) { return !marcaVaga(v.id) && v.vistaEm && diasEntre(v.vistaEm, hojeISO()) <= 0; }
+/** Marca a vaga (tocar de novo na mesma marca desfaz). Grava no módulo `vagasmarcas` (sincroniza). */
+function marcarVaga(id, status) {
+  const antes = vagasMarcas, atual = marcaVaga(id);
+  vagasMarcas = vagasMarcas.filter(x => x.id !== id);
+  if (atual !== status) { const v = vagasTodas().find(x => x.id === id) || {}; vagasMarcas.push({ id, status, quando: hojeISO(), titulo: String(v.titulo || '').slice(0, 120), empresa: String(v.empresa || '').slice(0, 80), url: urlSegura(v.url) }); }
+  vagasMarcas = vagasMarcas.slice(-300);
+  if (salvar('vagasmarcas', vagasMarcas) === false) { vagasMarcas = antes; return; }
+  if (status === 'candidatei' && atual !== status) toast('Anotado: candidatura enviada. Boa sorte! 🍀', 2500);
+  renderPaginaVagas();
+}
+function tarefaVagas() {
+  const d = vagasDados, t = vagasTop(); if (!d) return 'A 1ª busca roda às 8h ou às 18h, no seu PC';
+  const melhor = t[0]; return melhor ? `Melhor agora: ${melhor.titulo}${melhor.empresa ? ' · ' + melhor.empresa : ''} (nota ${melhor.nota || '—'})` : 'Nenhuma vaga boa na última busca';
+}
+function agoraEngenharia() {
+  const d = vagasDados, n = vagasTop().filter(vagaNova).length;
+  return d ? `${n ? plural(n, 'vaga nova', 'vagas novas') + ' no Radar' : 'Sem vaga nova'} · última busca ${quandoTxt(d.atualizadoEm)}` : 'O Radar de Vagas faz a 1ª busca às 8h ou às 18h.';
+}
+function chipCatVaga(c) { const x = CATS_VAGAS[c] || [c || 'Vaga', '#8e8e93']; return `<span class="vg-cat" style="--c:${x[1]}">${esc(x[0])}</span>`; }
+function htmlHubEngenharia() {
+  const ags = todosAgentes().filter(a => a.hub === 'jveng');
+  return `<header class="cc-p-topo" style="--cor:#0a84ff"><button type="button" class="cc-x" onclick="fecharPainelCentral()" aria-label="Fechar">✕</button><small>comando · engenharia civil e carreira</small><h3><i class="cc-luz ok"></i>J.A.R.V.I.S. Engenharia</h3><p>O J.A.R.V.I.S. da sua área de engenharia: coordena os agentes da Engenharia Civil e da Segurança do Trabalho e passa ao J.A.R.V.I.S. principal só o que importa.</p></header>`
+    + ccBloco('Agentes desta área', `<ul class="cc-lista">${ags.map(a => { const st = estadoAgente(a); return `<li onclick="abrirAgenteCentral(${jsa(a.id)})"><i class="cc-luz ${st.nivel}"></i><span><b>${esc(a.nome)}</b><small>${esc(st.metrica)}</small></span><em>›</em></li>`; }).join('')}</ul>`)
+    + `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('vagas')">Abrir o Radar de Vagas ›</button>`
+    + `<button type="button" class="cc-btn sec" onclick="fecharCentral(); abrirMenuArea('eng')">Abrir o menu da Engenharia (projetos, orçamentos, estudos, normas e currículo) ›</button>`;
+}
+function htmlAgenteVagas(a) {
+  const d = vagasDados || {}, t = vagasTop(), sk = (a.skills || []).filter(k => SKILLS_DESC[k]);
+  return cabecalhoAgente(a, '<p class="cc-nota">Trabalha no seu computador às <b>8h</b> e às <b>18h</b> e responde ao <b>J.A.R.V.I.S. Engenharia</b>. Só encontra e explica as vagas: quem se candidata é você.</p>')
+    + `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('vagas')">Abrir o Radar de Vagas ›</button>`
+    + ccNums([[t.length, 'vagas boas'], [t.filter(vagaNova).length, 'novas hoje'], [t.filter(v => v.modo === 'remoto').length, 'home office'], [vagasMarcas.filter(m => m.status === 'candidatei').length, 'candidaturas']])
+    + (d.diz ? ccBloco('O Radar diz', `<p class="cc-txt">${textoAgente(d.diz)}</p>`) : '')
+    + ccBloco('As 3 melhores agora', t.length ? `<ul class="cc-lista">${t.slice(0, 3).map(v => `<li onclick="abrirPaginaAgente('vagas')"><i class="cc-luz ok"></i><span><b>${esc(v.titulo)}</b><small>${esc([v.empresa, v.local, v.valor].filter(Boolean).join(' · '))} · nota ${esc(String(v.nota || '—'))}</small></span><em>›</em></li>`).join('')}</ul>` : '<p class="cc-txt">A primeira busca aparece aqui assim que o PC rodar (8h ou 18h).</p>')
+    + (sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '')
+    + `<button type="button" class="cc-btn" onclick="conversarComVagas()">Perguntar a este agente</button>`;
+}
+function filtrarVagas(c) { cc.vagasFiltro = cc.vagasFiltro === c ? '' : c; renderPaginaVagas(); }
+function renderPaginaVagas() {
+  const el = $j('ag-pag'); if (!el || el.hidden || cc.pagina !== 'vagas') return;
+  const a = todosAgentes().find(x => x.id === 'vagas'), d = vagasDados || {}, top = vagasTop(), f = cc.vagasFiltro || '';
+  const cats = Object.keys(CATS_VAGAS).filter(c => top.some(v => v.cat === c)), lista = top.filter(v => !f || v.cat === f);
+  const cand = vagasMarcas.filter(m => m.status === 'candidatei').slice().reverse();
+  const card = (v, k) => { const m = marcaVaga(v.id), u = urlSegura(v.url), nota = Math.max(0, Math.min(100, Number(v.nota) || 0));
+    return `<article class="vg-card${m ? ' vg-' + m : ''}" style="--k:${Math.min(k, 8)}"><div class="vg-nota" style="--n:${nota}"><b>${nota || '—'}</b><small>nota</small></div>
+      <div class="vg-corpo"><p class="vg-tags">${chipCatVaga(v.cat)}${vagaNova(v) ? '<span class="vg-nova">nova</span>' : ''}${m ? `<span class="vg-marca" style="--c:${MARCAS_VAGA[m][1]}">${esc(MARCAS_VAGA[m][0])}</span>` : ''}</p>
+        <h3>${esc(v.titulo)}</h3><p class="vg-onde">${esc([v.empresa, v.porte ? 'empresa ' + v.porte : '', v.local, v.modo === 'remoto' ? 'home office' : v.modo].filter(Boolean).join(' · '))}</p>
+        ${v.valor ? `<p class="vg-valor">${esc(v.valor)}</p>` : ''}
+        ${v.porque ? `<p class="vg-porque">${textoAgente(v.porque)}</p>` : ''}
+        ${v.atencao ? `<p class="vg-atencao">⚠️ ${textoAgente(v.atencao)}</p>` : ''}
+        ${v.dica ? `<details class="vg-dica"><summary>Como se candidatar bem</summary><p>${textoAgente(v.dica)}</p></details>` : ''}
+        <p class="vg-rodape">${esc([v.fonte, v.publicada ? 'publicada ' + isoParaBR(v.publicada).slice(0, 5) : '', v.prazo ? 'até ' + isoParaBR(v.prazo).slice(0, 5) : ''].filter(Boolean).join(' · '))}</p>
+        <div class="vg-acoes">${u ? `<a class="vg-abrir" href="${esc(u)}" target="_blank" rel="noopener noreferrer">Abrir a vaga ↗</a>` : ''}
+          <button type="button" class="${m === 'salva' ? 'on' : ''}" onclick="marcarVaga(${jsa(v.id)}, 'salva')">☆ Salvar</button><button type="button" class="${m === 'candidatei' ? 'on' : ''}" onclick="marcarVaga(${jsa(v.id)}, 'candidatei')">✓ Me candidatei</button><button type="button" onclick="marcarVaga(${jsa(v.id)}, 'descartei')" aria-label="Descartar esta vaga">✕</button></div></div></article>`; };
+  el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Engenharia · agente</small><strong>${esc(a.nome)}</strong></div>
+      <button type="button" class="ag-falar" onclick="conversarComVagas()">💬 Conversar</button></header>
+    <div class="ag-rolo dvs vg" id="ag-rolo">
+      <section class="vg-heroi"><small>J.A.R.V.I.S. Engenharia · carreira</small><h1>Radar de Vagas</h1>
+        <p>${vagasDados ? `Última busca ${esc(quandoTxt(d.atualizadoEm))} · a próxima às ${new Date().getHours() < 18 ? '18h' : '8h'}` : 'A primeira busca roda no seu PC às 8h ou às 18h.'}</p>
+        <ul class="dvs-nums">${[[top.length, 'vagas boas'], [top.filter(vagaNova).length, 'novas hoje'], [top.filter(v => v.modo === 'remoto').length, 'home office'], [cand.length, 'candidaturas']].map(([v, t], k) => `<li style="--k:${k}"><b>${v}</b><span>${esc(t)}</span></li>`).join('')}</ul></section>
+      ${d.diz ? `<section class="dvs-sec"><div class="dvs-tarefa"><small>O Radar diz</small><p>${textoAgente(d.diz)}</p></div></section>` : ''}
+      <section class="dvs-sec">${cats.length > 1 ? `<div class="vg-filtros" role="group" aria-label="Filtrar vagas"><button type="button" class="${f ? '' : 'on'}" onclick="filtrarVagas('')">Todas <i>${top.length}</i></button>${cats.map(c => `<button type="button" class="${f === c ? 'on' : ''}" style="--c:${CATS_VAGAS[c][1]}" onclick="filtrarVagas(${jsa(c)})">${esc(CATS_VAGAS[c][0])} <i>${top.filter(v => v.cat === c).length}</i></button>`).join('')}</div>` : ''}
+        <div class="vg-lista">${lista.map(card).join('') || `<p class="dvs-vazio">${vagasDados ? 'Nenhuma vaga nesta busca. O Radar procura de novo no próximo horário.' : 'As vagas aparecem aqui depois da primeira busca.'}</p>`}</div></section>
+      ${cand.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Suas candidaturas</h2><p>O que você marcou como enviado.</p></header><ul class="prm-lista">${cand.slice(0, 20).map(m => `<li><b>${esc(m.titulo || 'Vaga')}</b><span>${esc(m.empresa || '')}</span><em>${esc(isoParaBR(m.quando || ''))}</em></li>`).join('')}</ul></section>` : ''}
+      <footer class="ag-fim">O Radar só procura e explica: nunca se candidata, não cria conta e não manda mensagem. ${esc((d.fontes || []).length ? 'Fontes: ' + d.fontes.join(', ') + '.' : '')}</footer>
+    </div>`;
+  posRenderPagina();
+}
+/** Conversa com o Radar: o chat do J.A.R.V.I.S. com o contexto do agente e as vagas do momento. */
+function conversarComVagas() {
+  const t = vagasTop().slice(0, 10).map((v, i) => `${i + 1}) ${v.titulo} · ${v.empresa || '?'} · ${v.local || ''} ${v.modo || ''} · ${v.valor || 'valor não informado'} · nota ${v.nota || '—'}${marcaVaga(v.id) ? ' · ' + marcaVaga(v.id) : ''}`).join('; ');
+  abrirChatJarvis({ contexto: `Central de Comando › J.A.R.V.I.S. Engenharia › agente Radar de Vagas (especialista em carreira de engenharia civil e segurança do trabalho: estágio home office com bolsa de R$ 2.000 a 2.500 ou mais, estágios em BH e em empresas grandes com plano de carreira, júnior/trainee depois da formatura, que está próxima, técnico de SST em Viçosa ou remoto, e freelas de projeto). Use o currículo da CARTILHA DA ENGENHARIA. Nunca se candidata nem manda mensagem por ele. Vagas da última busca: ${t || 'nenhuma ainda'}. Responda como esse especialista.`, area: 'eng' });
+}
+// =====================================================================================================================
 // GESTÃO DE PATENTES (fase 11, pedido do Rafael 05/10/2026): protege e monetiza os modelos PRÓPRIOS da Primos, em consenso com o
 // Desenvolvedor (quem cria) e a Impressão e Produção (quem imprime e confirma que ficou bom), sob o J.A.R.V.I.S. Por enquanto atua
 // pouco (nuvem: a cada 3 dias ou quando o Desenvolvedor muda algo). A nuvem traz os CANDIDATOS (relatorio.candidatos); o Rafael
@@ -10618,7 +10739,9 @@ function htmlPainelAgenteBase(id) {
       + ccBloco('Situação dos agentes', `<ul class="cc-lista">${ag.map(a => { const st = estadoAgente(a); return `<li onclick="cc.setor=${jsa(a.setor)}; abrirAgenteCentral(${jsa(a.id)})"><i class="cc-luz ${st.nivel}"></i><span><b>${esc(a.nome)}</b><small>${esc(setorCentral(a.setor).nome)} · ${esc(st.metrica)}</small></span><em>›</em></li>`; }).join('')}</ul>`)
       + ccBloco('🛡️ Regras de segurança', `<ul class="cc-regras"><li>Ler e analisar: automático</li><li>Gravar ou alterar: só com o seu OK</li><li>Compras, pagamentos, Pix, e-mails, mensagens e posts: nunca</li></ul>`);
   }
+  if (id === 'jveng') return htmlHubEngenharia(); // 30/10/2026
   const a = todosAgentes().find(x => x.id === id); if (!a) return '';
+  if (a.id === 'vagas') return htmlAgenteVagas(a);
   if (a.id === 'contabil') return htmlAgenteContabil(a);
   if (a.id === 'marketing') return htmlAgenteMarketing(a);
   if (a.id === 'estoque') return htmlAgenteEstoque(a);
@@ -11316,7 +11439,7 @@ function migrarEntregasDePedidos() {
 
 // Config/Backup
 /** O que vai no backup (e o formato de cada módulo, que a importação confere). */
-function dadosBackup() { return { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, agentechat: agenteChats, garimpoaprov: garimpoAprov, patentes: registrosPatentes, pensamentos: pensamentosJv, primosplano: primosPlano, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, recadosagentes: recadosAgentes, metasprimos: metasPrimos, shopeeaprov: shopeeAprov, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; }
+function dadosBackup() { return { habits, habitlog: habitLog, orders, clients, clauderequests: claudeReqs, primoscentral: primosCentral, familia, memorias, jarvischat: jarvisChat, agentechat: agenteChats, garimpoaprov: garimpoAprov, patentes: registrosPatentes, pensamentos: pensamentosJv, primosplano: primosPlano, vagasmarcas: vagasMarcas, agentes: agentesJv, estoqueprimos: estoquePrimos, filaimpressao: filaImpressao, recadosagentes: recadosAgentes, metasprimos: metasPrimos, shopeeaprov: shopeeAprov, shifts, places, events, finances: transactions, recurring, budget, tasks, tasklists, routines, notes, entregas, media, playlists, trips, contacts, devnotes, servicos, pacientes, repasses, maquinas, filamentos, produtos, ordens, vendas, study: studyData, topics, materials, sessions, ritual, assets, moves, goals, projects, wealth, workouts, measures, hydration, meals, medical, profile }; }
 function exportData() { const data = dadosBackup(); const dataStr = JSON.stringify(data, null, 2); const blob = new Blob([dataStr], { type: "application/json" }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; const d = new Date(); const dateString = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`; a.download = `genesis_backup_${dateString}.json`; a.click(); URL.revokeObjectURL(url); const statusEl = document.getElementById('backup-status'); statusEl.innerText = "Backup exportado!"; setTimeout(() => statusEl.innerText = "", 3000); }
 /** Confere o backup INTEIRO antes de gravar qualquer coisa (auditoria do Codex, achado 5): cada módulo tem que vir no mesmo formato
  *  do que já está no aparelho (lista continua lista, objeto continua objeto). Devolve a lista de problemas (vazia = pode importar). */
@@ -11337,7 +11460,7 @@ function validarBackup(data) {
   });
   return erros;
 }
-function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { let data; try { data = JSON.parse(e.target.result); } catch (error) { alert('Erro ao ler o arquivo: não é um backup do app.'); return; } const erros = validarBackup(data); if (erros.length) { alert('Backup NÃO importado (nada foi alterado):\n• ' + erros.slice(0, 6).join('\n• ')); return; } const salvarOrig = salvar; let falhou = false; salvar = (m, v) => { if (falhou) return false; const ok = salvarOrig(m, v); if (!ok) falhou = true; return ok; }; /* se faltar espaço no meio, para (auditoria do Codex) */ try { tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length || !data.orders.length) salvar('orders', ped); /* lista vazia no backup = sem pedidos (achado 6); backup antigo só com entregas não mexe nos pedidos */ } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.agentechat && typeof data.agentechat === 'object') salvar('agentechat', data.agentechat); if (Array.isArray(data.garimpoaprov)) salvar('garimpoaprov', data.garimpoaprov); if (Array.isArray(data.patentes)) salvar('patentes', data.patentes); if (data.pensamentos && typeof data.pensamentos === 'object') salvar('pensamentos', data.pensamentos); if (data.primosplano) salvar('primosplano', data.primosplano); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.metasprimos) salvar('metasprimos', data.metasprimos); if (data.shopeeaprov) salvar('shopeeaprov', data.shopeeaprov); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); salvar = salvarOrig; snapPausado = false; if (falhou) { alert('O aparelho ficou sem espaço no meio da importação: o backup NÃO entrou por inteiro. Uma cópia de antes foi guardada em Ajustes → Cópias.'); return; } location.reload(); } catch (error) { salvar = salvarOrig; snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
+function importData(event) { const file = event.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = function (e) { let data; try { data = JSON.parse(e.target.result); } catch (error) { alert('Erro ao ler o arquivo: não é um backup do app.'); return; } const erros = validarBackup(data); if (erros.length) { alert('Backup NÃO importado (nada foi alterado):\n• ' + erros.slice(0, 6).join('\n• ')); return; } const salvarOrig = salvar; let falhou = false; salvar = (m, v) => { if (falhou) return false; const ok = salvarOrig(m, v); if (!ok) falhou = true; return ok; }; /* se faltar espaço no meio, para (auditoria do Codex) */ try { tirarFoto('antes de importar arquivo'); snapPausado = true; if (data.habits) salvar('habits', data.habits); if (data.habitlog) salvar('habitlog', data.habitlog); if (data.shifts) salvar('shifts', data.shifts); if (data.places) salvar('places', data.places); if (data.events) salvar('events', data.events); if (data.finances) salvar('finances', data.finances); if (data.recurring) salvar('recurring', data.recurring); if (data.budget) salvar('budget', data.budget); if (data.tasks) salvar('tasks', data.tasks); if (data.tasklists) salvar('tasklists', data.tasklists); if (data.routines) salvar('routines', data.routines); if (data.entregas) salvar('entregas', data.entregas); if (Array.isArray(data.orders)) { const [ent, ped] = separarEntregasDePedidos(data.orders); if (ent.length) salvar('entregas', (data.entregas || []).concat(ent)); if (ped.length || !data.orders.length) salvar('orders', ped); /* lista vazia no backup = sem pedidos (achado 6); backup antigo só com entregas não mexe nos pedidos */ } if (data.clients) salvar('clients', data.clients); if (data.clauderequests) salvar('clauderequests', data.clauderequests); if (data.primoscentral) localStorage.setItem('lifeos_primoscentral', JSON.stringify(data.primoscentral)); /* cache do cofre, não sincroniza */ if (data.familia) salvar('familia', data.familia); if (data.memorias) salvar('memorias', data.memorias); if (data.jarvischat) salvar('jarvischat', data.jarvischat); if (data.agentechat && typeof data.agentechat === 'object') salvar('agentechat', data.agentechat); if (Array.isArray(data.garimpoaprov)) salvar('garimpoaprov', data.garimpoaprov); if (Array.isArray(data.patentes)) salvar('patentes', data.patentes); if (data.pensamentos && typeof data.pensamentos === 'object') salvar('pensamentos', data.pensamentos); if (data.primosplano) salvar('primosplano', data.primosplano); if (Array.isArray(data.vagasmarcas)) salvar('vagasmarcas', data.vagasmarcas); if (data.agentes) salvar('agentes', data.agentes); if (data.estoqueprimos) salvar('estoqueprimos', data.estoqueprimos); if (data.filaimpressao) salvar('filaimpressao', data.filaimpressao); if (data.recadosagentes) salvar('recadosagentes', data.recadosagentes); if (data.metasprimos) salvar('metasprimos', data.metasprimos); if (data.shopeeaprov) salvar('shopeeaprov', data.shopeeaprov); if (data.media) salvar('media', data.media); if (data.playlists) salvar('playlists', data.playlists); if (data.trips) salvar('trips', data.trips); if (data.contacts) salvar('contacts', data.contacts); if (data.devnotes) salvar('devnotes', data.devnotes); if (data.servicos) salvar('servicos', data.servicos); if (data.pacientes) salvar('pacientes', data.pacientes); if (data.repasses) salvar('repasses', data.repasses); ['maquinas', 'filamentos', 'produtos', 'ordens', 'vendas'].forEach(k => { if (data[k]) salvar(k, data[k]); }); if (data.notes) salvar('notes', data.notes); if (data.study) salvar('study', data.study); if (data.topics) salvar('topics', data.topics); if (data.materials) salvar('materials', data.materials); if (data.sessions) salvar('sessions', data.sessions); if (data.ritual) salvar('ritual', data.ritual); ['assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'].forEach(k => { if (data[k]) salvar(k, data[k]); }); salvar = salvarOrig; snapPausado = false; if (falhou) { alert('O aparelho ficou sem espaço no meio da importação: o backup NÃO entrou por inteiro. Uma cópia de antes foi guardada em Ajustes → Cópias.'); return; } location.reload(); } catch (error) { salvar = salvarOrig; snapPausado = false; alert("Erro ao ler o arquivo."); } }; reader.readAsText(file); }
 
 // ============================================================================
 // PERFIL DE TRABALHO — o app deixa de ser "de médico"
@@ -13550,7 +13673,7 @@ if (_vndProd) _vndProd.addEventListener('change', previaVenda);
 // planilha tiver de mais novo. Em empate, a planilha vence.
 // URL e token ficam SÓ no localStorage deste aparelho (aba Config).
 // ============================================================================
-const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'agentechat', 'garimpoaprov', 'patentes', 'pensamentos', 'primosplano', 'agentes', 'estoqueprimos', 'filaimpressao', 'recadosagentes', 'metasprimos', 'shopeeaprov', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
+const SYNC_MODULOS = ['habits', 'habitlog', 'orders', 'clients', 'clauderequests', 'familia', 'memorias', 'jarvischat', 'agentechat', 'garimpoaprov', 'patentes', 'pensamentos', 'primosplano', 'vagasmarcas', 'agentes', 'estoqueprimos', 'filaimpressao', 'recadosagentes', 'metasprimos', 'shopeeaprov', 'shifts', 'places', 'events', 'finances', 'recurring', 'budget', 'tasks', 'tasklists', 'routines', 'notes', 'entregas', 'media', 'playlists', 'trips', 'contacts', 'devnotes', 'servicos', 'pacientes', 'repasses', 'maquinas', 'filamentos', 'produtos', 'ordens', 'vendas', 'study', 'topics', 'materials', 'sessions', 'ritual', 'assets', 'moves', 'goals', 'projects', 'wealth', 'workouts', 'measures', 'hydration', 'meals', 'medical', 'profile'];
 const SYNC_INTERVALO_MS = 30000; // sincronização periódica com o app aberto
 
 let syncMeta = JSON.parse(localStorage.getItem('lifeos_sync_meta')) || null;
@@ -13835,7 +13958,7 @@ function redesenharTudo(mudou) {
   entregas = JSON.parse(localStorage.getItem('lifeos_entregas')) || [];
   orders = JSON.parse(localStorage.getItem('lifeos_orders')) || []; clients = JSON.parse(localStorage.getItem('lifeos_clients')) || [];
   claudeReqs = JSON.parse(localStorage.getItem('lifeos_clauderequests')) || [];
-  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; try { const ag = JSON.parse(localStorage.getItem('lifeos_agentechat')); agenteChats = ag && typeof ag === 'object' && !Array.isArray(ag) ? ag : {}; } catch (e) { } if (typeof renderChatAgente === 'function') renderChatAgente(); try { const ga = JSON.parse(localStorage.getItem('lifeos_garimpoaprov')); garimpoAprov = Array.isArray(ga) ? ga : []; } catch (e) { } try { const rp = JSON.parse(localStorage.getItem('lifeos_patentes')); registrosPatentes = Array.isArray(rp) ? rp : []; } catch (e) { } try { const pj = JSON.parse(localStorage.getItem('lifeos_pensamentos')); pensamentosJv = pj && typeof pj === 'object' && !Array.isArray(pj) ? pj : {}; } catch (e) { } primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; recadosAgentes = JSON.parse(localStorage.getItem('lifeos_recadosagentes')) || []; metasPrimos = JSON.parse(localStorage.getItem('lifeos_metasprimos')) || []; shopeeAprov = JSON.parse(localStorage.getItem('lifeos_shopeeaprov')) || []; setTimeout(() => atualizarTelasSincronizadas('central', 'primos', ...(paginaAgenteMostra(mudou) ? ['agente'] : [])), 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
+  primosCentral = JSON.parse(localStorage.getItem('lifeos_primoscentral')) || null; familia = JSON.parse(localStorage.getItem('lifeos_familia')) || []; memorias = JSON.parse(localStorage.getItem('lifeos_memorias')) || []; jarvisChat = JSON.parse(localStorage.getItem('lifeos_jarvischat')) || []; try { const ag = JSON.parse(localStorage.getItem('lifeos_agentechat')); agenteChats = ag && typeof ag === 'object' && !Array.isArray(ag) ? ag : {}; } catch (e) { } if (typeof renderChatAgente === 'function') renderChatAgente(); try { const ga = JSON.parse(localStorage.getItem('lifeos_garimpoaprov')); garimpoAprov = Array.isArray(ga) ? ga : []; } catch (e) { } try { const rp = JSON.parse(localStorage.getItem('lifeos_patentes')); registrosPatentes = Array.isArray(rp) ? rp : []; } catch (e) { } try { const pj = JSON.parse(localStorage.getItem('lifeos_pensamentos')); pensamentosJv = pj && typeof pj === 'object' && !Array.isArray(pj) ? pj : {}; } catch (e) { } primosPlano = JSON.parse(localStorage.getItem('lifeos_primosplano')) || []; vagasMarcas = JSON.parse(localStorage.getItem('lifeos_vagasmarcas')) || []; agentesJv = JSON.parse(localStorage.getItem('lifeos_agentes')) || []; estoquePrimos = JSON.parse(localStorage.getItem('lifeos_estoqueprimos')) || []; filaImpressao = JSON.parse(localStorage.getItem('lifeos_filaimpressao')) || []; recadosAgentes = JSON.parse(localStorage.getItem('lifeos_recadosagentes')) || []; metasPrimos = JSON.parse(localStorage.getItem('lifeos_metasprimos')) || []; shopeeAprov = JSON.parse(localStorage.getItem('lifeos_shopeeaprov')) || []; setTimeout(() => atualizarTelasSincronizadas('central', 'primos', ...(paginaAgenteMostra(mudou) ? ['agente'] : [])), 0); if (typeof renderChatJarvis === 'function') renderChatJarvis();
   media = JSON.parse(localStorage.getItem('lifeos_media')) || []; playlists = JSON.parse(localStorage.getItem('lifeos_playlists')) || [];
   trips = JSON.parse(localStorage.getItem('lifeos_trips')) || []; contacts = JSON.parse(localStorage.getItem('lifeos_contacts')) || [];
   devnotes = JSON.parse(localStorage.getItem('lifeos_devnotes')) || {};
