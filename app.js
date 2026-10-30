@@ -10232,39 +10232,66 @@ function htmlAgenteVagas(a) {
   const d = vagasDados || {}, t = vagasTop(), sk = (a.skills || []).filter(k => SKILLS_DESC[k]);
   return cabecalhoAgente(a, '<p class="cc-nota">Trabalha no seu computador às <b>8h</b> e às <b>18h</b> e responde ao <b>J.A.R.V.I.S. Engenharia</b>. Só encontra e explica as vagas: quem se candidata é você.</p>')
     + `<button type="button" class="cc-btn ag-abrir" onclick="abrirPaginaAgente('vagas')">Abrir o Radar de Vagas ›</button>`
-    + ccNums([[t.length, 'vagas boas'], [t.filter(vagaNova).length, 'novas hoje'], [t.filter(v => v.modo === 'remoto').length, 'home office'], [vagasMarcas.filter(m => m.status === 'candidatei').length, 'candidaturas']])
+    + ccNums([[t.filter(v => v.modo === 'remoto').length, 'home office'], [t.filter(v => v.chance === 'alta').length, 'chance alta'], [t.length, 'vagas para você'], [vagasMarcas.filter(m => m.status === 'candidatei').length, 'candidaturas']])
     + (d.diz ? ccBloco('O Radar diz', `<p class="cc-txt">${textoAgente(d.diz)}</p>`) : '')
-    + ccBloco('As 3 melhores agora', t.length ? `<ul class="cc-lista">${t.slice(0, 3).map(v => `<li onclick="abrirPaginaAgente('vagas')"><i class="cc-luz ok"></i><span><b>${esc(v.titulo)}</b><small>${esc([v.empresa, v.local, v.valor].filter(Boolean).join(' · '))} · nota ${esc(String(v.nota || '—'))}</small></span><em>›</em></li>`).join('')}</ul>` : '<p class="cc-txt">A primeira busca aparece aqui assim que o PC rodar (8h ou 18h).</p>')
+    + ccBloco('Para se candidatar hoje', t.length ? `<ul class="cc-lista">${(((d.perspectiva || {}).hoje || []).map(id => t.find(v => v.id === id)).filter(Boolean).concat(t)).filter((v, i, L) => L.indexOf(v) === i).slice(0, 5).map(v => `<li onclick="abrirPaginaAgente('vagas')"><i class="cc-luz ok"></i><span><b>${esc(v.titulo)}</b><small>${esc([v.empresa, v.local, v.valor].filter(Boolean).join(' · '))} · nota ${esc(String(v.nota || '—'))}</small></span><em>›</em></li>`).join('')}</ul>` : '<p class="cc-txt">A primeira busca aparece aqui assim que o PC rodar (8h ou 18h).</p>')
     + (sk.length ? ccBloco('Skills do agente', `<ul class="cc-skills">${sk.map(k => `<li><b>${esc(k)}</b><span>${esc(SKILLS_DESC[k])}</span></li>`).join('')}</ul>`) : '')
     + `<button type="button" class="cc-btn" onclick="conversarComVagas()">Perguntar a este agente</button>`;
 }
+// v2 (30/10/2026, pedido do Rafael: "me dê perspectiva"): as vagas vêm em GRUPOS, com a CHANCE de passar, e os freelas ficam à margem.
+const GRUPOS_VAGAS = [
+  ['home_eng', 'Home office · engenharia', 'O seu foco: trabalha de Viçosa, ao lado da Primos 3D, e combina com o seu currículo.', '#0071e3'],
+  ['home_outra', 'Home office fora da engenharia', 'Não é engenharia, mas usa o que você já sabe (orçamento, licitações, planejamento, Excel). Vale o teste.', '#5e5ce6'],
+  ['presencial_vale', 'Presencial, mas vale a candidatura', 'Empresas grandes, Minas Gerais e programas de estágio: lá na frente pode pagar mais.', '#ff9f0a'],
+  ['sst', 'Segurança do Trabalho', 'Você é técnico em SST: as boas oportunidades da área, de preferência em MG ou remotas.', '#ff3b30']];
+const CHANCE_VAGA = { alta: ['Chance alta', '#248a3d'], media: ['Chance média', '#b25000'], baixa: ['Chance baixa', '#8e8e93'] };
+/** Grupo da vaga (os dados antigos, de antes do v2, só tinham "cat"). */
+function grupoVaga(v) { if (v.grupo) return v.grupo; return v.cat === 'sst' ? 'sst' : v.cat === 'estagio_home' || v.modo === 'remoto' ? 'home_eng' : 'presencial_vale'; }
 function filtrarVagas(c) { cc.vagasFiltro = cc.vagasFiltro === c ? '' : c; renderPaginaVagas(); }
+function maisVagas(g) { cc.vagasMais = cc.vagasMais || {}; cc.vagasMais[g] = !cc.vagasMais[g]; renderPaginaVagas(); }
+/** Na 1ª busca todas são "novas": aí o selo não ajuda e some. */
+function todasNovas() { const L = vagasTodas(); return L.length > 0 && L.filter(vagaNova).length / L.length > 0.8; }
+function cartaoVaga(v, k, curto) {
+  const m = marcaVaga(v.id), u = urlSegura(v.url), ch = CHANCE_VAGA[v.chance] || CHANCE_VAGA.media;
+  const modo = v.modo === 'remoto' ? 'Home office' : v.modo === 'hibrido' ? 'Híbrido' : 'Presencial';
+  return `<article class="vg-card${m ? ' vg-' + m : ''}${curto ? ' curto' : ''}" style="--k:${Math.min(k, 8)}">
+    <p class="vg-tags"><span class="vg-chance" style="--c:${ch[1]}">${esc(ch[0])}</span><span class="vg-cat" style="--c:#48484a">${esc(v.tipo || 'Vaga')}</span><span class="vg-cat" style="--c:${v.modo === 'remoto' ? '#0071e3' : '#86868b'}">${modo}</span>${vagaNova(v) && !todasNovas() ? '<span class="vg-nova">nova</span>' : ''}${m ? `<span class="vg-marca" style="--c:${MARCAS_VAGA[m][1]}">${esc(MARCAS_VAGA[m][0])}</span>` : ''}</p>
+    <h3>${esc(v.titulo)}</h3><p class="vg-onde">${esc([v.empresa, v.grandeEmpresa ? 'empresa grande' : '', v.local].filter(Boolean).join(' · '))}</p>
+    ${v.valor ? `<p class="vg-valor">${esc(v.valor)}</p>` : ''}
+    ${v.porque && !curto ? `<p class="vg-porque">${textoAgente(v.porque)}</p>` : ''}
+    ${(v.atencao || v.dica) && !curto ? `<details class="vg-dica"><summary>Detalhes e dica</summary>${v.atencao ? `<p class="vg-atencao">⚠️ ${textoAgente(v.atencao)}</p>` : ''}${v.dica ? `<p>${textoAgente(v.dica)}</p>` : ''}</details>` : ''}
+    <div class="vg-acoes">${u ? `<a class="vg-abrir" href="${esc(u)}" target="_blank" rel="noopener noreferrer">Candidatar ↗</a>` : ''}
+      <button type="button" class="${m === 'candidatei' ? 'on' : ''}" onclick="marcarVaga(${jsa(v.id)}, 'candidatei')" title="Marcar que já me candidatei">✓ Enviei</button>${curto ? '' : `<button type="button" class="${m === 'salva' ? 'on' : ''}" onclick="marcarVaga(${jsa(v.id)}, 'salva')" aria-label="Salvar esta vaga">☆</button><button type="button" onclick="marcarVaga(${jsa(v.id)}, 'descartei')" aria-label="Descartar esta vaga">✕</button>`}</div>
+    <p class="vg-rodape">${esc([v.fonte, v.publicada ? 'publicada ' + isoParaBR(v.publicada).slice(0, 5) : '', v.prazo ? 'até ' + isoParaBR(v.prazo).slice(0, 5) : ''].filter(Boolean).join(' · '))}</p></article>`;
+}
 function renderPaginaVagas() {
   const el = $j('ag-pag'); if (!el || el.hidden || cc.pagina !== 'vagas') return;
-  const a = todosAgentes().find(x => x.id === 'vagas'), d = vagasDados || {}, top = vagasTop(), f = cc.vagasFiltro || '';
-  const cats = Object.keys(CATS_VAGAS).filter(c => top.some(v => v.cat === c)), lista = top.filter(v => !f || v.cat === f);
+  const a = todosAgentes().find(x => x.id === 'vagas'), d = vagasDados || {}, per = d.perspectiva || {}, f = cc.vagasFiltro || '', mais = cc.vagasMais || {};
+  const top = vagasTop().filter(v => !f || (f === 'chance' ? v.chance !== 'baixa' : f === 'estagio' ? /est[aá]gio/i.test(v.tipo || v.titulo || '') : true));
   const cand = vagasMarcas.filter(m => m.status === 'candidatei').slice().reverse();
-  const card = (v, k) => { const m = marcaVaga(v.id), u = urlSegura(v.url), nota = Math.max(0, Math.min(100, Number(v.nota) || 0));
-    return `<article class="vg-card${m ? ' vg-' + m : ''}" style="--k:${Math.min(k, 8)}"><div class="vg-nota" style="--n:${nota}"><b>${nota || '—'}</b><small>nota</small></div>
-      <div class="vg-corpo"><p class="vg-tags">${chipCatVaga(v.cat)}${vagaNova(v) ? '<span class="vg-nova">nova</span>' : ''}${m ? `<span class="vg-marca" style="--c:${MARCAS_VAGA[m][1]}">${esc(MARCAS_VAGA[m][0])}</span>` : ''}</p>
-        <h3>${esc(v.titulo)}</h3><p class="vg-onde">${esc([v.empresa, v.porte ? 'empresa ' + v.porte : '', v.local, v.modo === 'remoto' ? 'home office' : v.modo].filter(Boolean).join(' · '))}</p>
-        ${v.valor ? `<p class="vg-valor">${esc(v.valor)}</p>` : ''}
-        ${v.porque ? `<p class="vg-porque">${textoAgente(v.porque)}</p>` : ''}
-        ${v.atencao ? `<p class="vg-atencao">⚠️ ${textoAgente(v.atencao)}</p>` : ''}
-        ${v.dica ? `<details class="vg-dica"><summary>Como se candidatar bem</summary><p>${textoAgente(v.dica)}</p></details>` : ''}
-        <p class="vg-rodape">${esc([v.fonte, v.publicada ? 'publicada ' + isoParaBR(v.publicada).slice(0, 5) : '', v.prazo ? 'até ' + isoParaBR(v.prazo).slice(0, 5) : ''].filter(Boolean).join(' · '))}</p>
-        <div class="vg-acoes">${u ? `<a class="vg-abrir" href="${esc(u)}" target="_blank" rel="noopener noreferrer">Abrir a vaga ↗</a>` : ''}
-          <button type="button" class="${m === 'salva' ? 'on' : ''}" onclick="marcarVaga(${jsa(v.id)}, 'salva')">☆ Salvar</button><button type="button" class="${m === 'candidatei' ? 'on' : ''}" onclick="marcarVaga(${jsa(v.id)}, 'candidatei')">✓ Me candidatei</button><button type="button" onclick="marcarVaga(${jsa(v.id)}, 'descartei')" aria-label="Descartar esta vaga">✕</button></div></div></article>`; };
+  const hoje = (per.hoje || []).map(id => vagasTodas().find(v => v.id === id)).filter(v => v && marcaVaga(v.id) !== 'descartei');
+  const qtd = g => top.filter(v => grupoVaga(v) === g).length, rem = top.filter(v => v.modo === 'remoto').length;
+  const secoes = GRUPOS_VAGAS.map(([g, tit, sub, cor]) => { const L = top.filter(v => grupoVaga(v) === g); if (!L.length) return '';
+    const n = mais[g] ? L.length : 6;
+    return `<section class="dvs-sec vg-grupo" style="--g:${cor}"><header class="dvs-tit"><h2><i></i>${esc(tit)} <span>${L.length}</span></h2><p>${esc(sub)}</p></header>
+      <div class="vg-lista">${L.slice(0, n).map((v, k) => cartaoVaga(v, k)).join('')}</div>
+      ${L.length > 6 ? `<button type="button" class="vg-mais" onclick="maisVagas(${jsa(g)})">${mais[g] ? 'Mostrar menos' : `Ver mais ${L.length - 6} vagas`}</button>` : ''}</section>`; }).join('');
+  const frs = (d.freelas || []).filter(x => x && x.titulo);
   el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Engenharia · agente</small><strong>${esc(a.nome)}</strong></div>
       <button type="button" class="ag-falar" onclick="conversarComVagas()">💬 Conversar</button></header>
     <div class="ag-rolo dvs vg" id="ag-rolo">
       <section class="vg-heroi"><small>J.A.R.V.I.S. Engenharia · carreira</small><h1>Radar de Vagas</h1>
-        <p>${vagasDados ? `Última busca ${esc(quandoTxt(d.atualizadoEm))} · a próxima às ${new Date().getHours() < 18 ? '18h' : '8h'}` : 'A primeira busca roda no seu PC às 8h ou às 18h.'}</p>
-        <ul class="dvs-nums">${[[top.length, 'vagas boas'], [top.filter(vagaNova).length, 'novas hoje'], [top.filter(v => v.modo === 'remoto').length, 'home office'], [cand.length, 'candidaturas']].map(([v, t], k) => `<li style="--k:${k}"><b>${v}</b><span>${esc(t)}</span></li>`).join('')}</ul></section>
-      ${d.diz ? `<section class="dvs-sec"><div class="dvs-tarefa"><small>O Radar diz</small><p>${textoAgente(d.diz)}</p></div></section>` : ''}
-      <section class="dvs-sec">${cats.length > 1 ? `<div class="vg-filtros" role="group" aria-label="Filtrar vagas"><button type="button" class="${f ? '' : 'on'}" onclick="filtrarVagas('')">Todas <i>${top.length}</i></button>${cats.map(c => `<button type="button" class="${f === c ? 'on' : ''}" style="--c:${CATS_VAGAS[c][1]}" onclick="filtrarVagas(${jsa(c)})">${esc(CATS_VAGAS[c][0])} <i>${top.filter(v => v.cat === c).length}</i></button>`).join('')}</div>` : ''}
-        <div class="vg-lista">${lista.map(card).join('') || `<p class="dvs-vazio">${vagasDados ? 'Nenhuma vaga nesta busca. O Radar procura de novo no próximo horário.' : 'As vagas aparecem aqui depois da primeira busca.'}</p>`}</div></section>
-      ${cand.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Suas candidaturas</h2><p>O que você marcou como enviado.</p></header><ul class="prm-lista">${cand.slice(0, 20).map(m => `<li><b>${esc(m.titulo || 'Vaga')}</b><span>${esc(m.empresa || '')}</span><em>${esc(isoParaBR(m.quando || ''))}</em></li>`).join('')}</ul></section>` : ''}
+        <p>${vagasDados ? `Última busca ${esc(quandoTxt(d.atualizadoEm))}${per.lidos ? ` · ${per.lidos} anúncios lidos em ${per.buscas} buscas` : ''} · a próxima às ${new Date().getHours() < 18 ? '18h' : '8h'}` : 'A primeira busca roda no seu PC às 8h ou às 18h.'}</p>
+        <ul class="dvs-nums">${[[rem, 'home office'], [top.filter(v => v.chance === 'alta').length, 'com chance alta'], [top.length, 'vagas para você'], [cand.length, 'candidaturas']].map(([v, t], k) => `<li style="--k:${k}"><b>${v}</b><span>${esc(t)}</span></li>`).join('')}</ul></section>
+      ${(per.leitura || []).length || d.diz ? `<section class="dvs-sec"><div class="vg-persp"><small>A perspectiva de hoje</small>${d.diz ? `<p class="vg-persp-diz">${textoAgente(d.diz)}</p>` : ''}
+        ${(per.leitura || []).length ? `<ul>${per.leitura.map(t => `<li>${textoAgente(t)}</li>`).join('')}</ul>` : ''}
+        <div class="vg-mapa">${GRUPOS_VAGAS.map(([g, tit, , cor]) => `<span style="--g:${cor}"><b>${qtd(g)}</b>${esc(tit)}</span>`).join('')}<span style="--g:#86868b"><b>${frs.length}</b>Freelas</span></div></div></section>` : ''}
+      ${hoje.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Para se candidatar hoje</h2><p>As ${hoje.length} com a melhor combinação de perfil, chance e empresa.</p></header><div class="vg-hoje">${hoje.map((v, k) => cartaoVaga(v, k, true)).join('')}</div></section>` : ''}
+      <section class="dvs-sec vg-filtro-sec"><div class="vg-filtros" role="group" aria-label="Filtrar vagas"><button type="button" class="${f ? '' : 'on'}" onclick="filtrarVagas('')">Todas</button><button type="button" class="${f === 'chance' ? 'on' : ''}" onclick="filtrarVagas('chance')">Só chance alta e média</button><button type="button" class="${f === 'estagio' ? 'on' : ''}" onclick="filtrarVagas('estagio')">Só estágio</button></div></section>
+      ${secoes || `<section class="dvs-sec"><p class="dvs-vazio">${vagasDados ? 'Nenhuma vaga com este filtro.' : 'As vagas aparecem aqui depois da primeira busca.'}</p></section>`}
+      ${frs.length ? `<section class="dvs-sec vg-freelas"><header class="dvs-tit"><h2>Freelas <span>à margem</span></h2><p>Renda extra com projeto, CAD, orçamento e SST. A chance é melhor onde há poucas propostas.</p></header>
+        <ul>${frs.map(x => { const ch = CHANCE_VAGA[x.chance] || CHANCE_VAGA.media, u = urlSegura(x.url); return `<li><span class="vg-chance" style="--c:${ch[1]}">${x.chance === 'alta' ? 'Chance boa' : esc(ch[0])}</span><div><b>${esc(x.titulo)}</b><small>${esc([x.categoria, plural(Number(x.propostas) || 0, 'proposta', 'propostas'), x.publicada ? 'publicado ' + isoParaBR(x.publicada).slice(0, 5) : ''].filter(Boolean).join(' · '))}</small></div>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Ver ↗</a>` : ''}</li>`; }).join('')}</ul></section>` : ''}
+      ${cand.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Suas candidaturas</h2><p>O que você marcou como enviado.</p></header><ul class="prm-lista">${cand.slice(0, 30).map(m => `<li><b>${esc(m.titulo || 'Vaga')}</b><span>${esc(m.empresa || '')}</span><em>${esc(isoParaBR(m.quando || ''))}</em></li>`).join('')}</ul></section>` : ''}
       <footer class="ag-fim">O Radar só procura e explica: nunca se candidata, não cria conta e não manda mensagem. ${esc((d.fontes || []).length ? 'Fontes: ' + d.fontes.join(', ') + '.' : '')}</footer>
     </div>`;
   posRenderPagina();
