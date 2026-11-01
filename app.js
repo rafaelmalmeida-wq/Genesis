@@ -10251,13 +10251,27 @@ function filtrarVagas(c) { cc.vagasFiltro = cc.vagasFiltro === c ? '' : c; rende
 function maisVagas(g) { cc.vagasMais = cc.vagasMais || {}; cc.vagasMais[g] = !cc.vagasMais[g]; renderPaginaVagas(); }
 /** Na 1ª busca todas são "novas": aí o selo não ajuda e some. */
 function todasNovas() { const L = vagasTodas(); return L.length > 0 && L.filter(vagaNova).length / L.length > 0.8; }
+/** Salário/bolsa da vaga (01/11/2026, pedido do Rafael): o valor achado no anúncio ou "não anunciado". */
+function valorVaga(v) {
+  const est = /est[aá]gio/i.test(v.tipo || v.nivel || '') || v.nivel === 'estagio', val = String(v.valor || v.salario || '').trim();
+  if (!val) return ['', est ? 'Bolsa não anunciada' : 'Salário não anunciado'];
+  return [(est && !/bolsa/i.test(val) ? 'Bolsa ' : '') + val, ''];
+}
+/** "Hoje · 01/11/2026", "Ontem · 31/10/2026", "Sexta · 30/10/2026". */
+function rotuloDiaVaga(iso) {
+  if (!iso) return 'Sem data';
+  const d = diasEntre(iso, hojeISO()), br = isoParaBR(iso), [y, m, dd] = iso.split('-').map(Number);
+  const sem = new Date(y, m - 1, dd).toLocaleDateString('pt-BR', { weekday: 'long' }).replace('-feira', '');
+  return d === 0 ? `Hoje · ${br}` : d === 1 ? `Ontem · ${br}` : `${sem.charAt(0).toUpperCase() + sem.slice(1)} · ${br}`;
+}
+function grupoVagasAba(g) { cc.vagasGrupo = g; cc.vagasMais = {}; renderPaginaVagas(); }
 function cartaoVaga(v, k, curto) {
-  const m = marcaVaga(v.id), u = urlSegura(v.url), ch = CHANCE_VAGA[v.chance] || CHANCE_VAGA.media;
+  const m = marcaVaga(v.id), u = urlSegura(v.url), ch = CHANCE_VAGA[v.chance] || CHANCE_VAGA.media, [val, semVal] = valorVaga(v);
   const modo = v.modo === 'remoto' ? 'Home office' : v.modo === 'hibrido' ? 'Híbrido' : 'Presencial';
   return `<article class="vg-card${m ? ' vg-' + m : ''}${curto ? ' curto' : ''}" style="--k:${Math.min(k, 8)}">
-    <p class="vg-tags"><span class="vg-chance" style="--c:${ch[1]}">${esc(ch[0])}</span><span class="vg-cat" style="--c:#48484a">${esc(v.tipo || 'Vaga')}</span><span class="vg-cat" style="--c:${v.modo === 'remoto' ? '#0071e3' : '#86868b'}">${modo}</span>${vagaNova(v) && !todasNovas() ? '<span class="vg-nova">nova</span>' : ''}${m ? `<span class="vg-marca" style="--c:${MARCAS_VAGA[m][1]}">${esc(MARCAS_VAGA[m][0])}</span>` : ''}</p>
+    <p class="vg-tags"><span class="vg-chance" style="--c:${ch[1]}">${esc(ch[0])}</span><span class="vg-cat" style="--c:#48484a">${esc(v.tipo || 'Vaga')}</span><span class="vg-cat" style="--c:${v.modo === 'remoto' ? '#0071e3' : '#86868b'}">${modo}</span>${curto && vagaNova(v) && !todasNovas() ? '<span class="vg-nova">nova</span>' : ''}${m ? `<span class="vg-marca" style="--c:${MARCAS_VAGA[m][1]}">${esc(MARCAS_VAGA[m][0])}</span>` : ''}</p>
     <h3>${esc(v.titulo)}</h3><p class="vg-onde">${esc([v.empresa, v.grandeEmpresa ? 'empresa grande' : '', v.local].filter(Boolean).join(' · '))}</p>
-    ${v.valor ? `<p class="vg-valor">${esc(v.valor)}</p>` : ''}
+    <p class="vg-valor${val ? '' : ' sem'}">${esc(val || semVal)}</p>
     ${v.porque && !curto ? `<p class="vg-porque">${textoAgente(v.porque)}</p>` : ''}
     ${(v.atencao || v.dica) && !curto ? `<details class="vg-dica"><summary>Detalhes e dica</summary>${v.atencao ? `<p class="vg-atencao">⚠️ ${textoAgente(v.atencao)}</p>` : ''}${v.dica ? `<p>${textoAgente(v.dica)}</p>` : ''}</details>` : ''}
     <div class="vg-acoes">${u ? `<a class="vg-abrir" href="${esc(u)}" target="_blank" rel="noopener noreferrer">Candidatar ↗</a>` : ''}
@@ -10270,27 +10284,39 @@ function renderPaginaVagas() {
   const top = vagasTop().filter(v => !f || (f === 'chance' ? v.chance !== 'baixa' : f === 'estagio' ? /est[aá]gio/i.test(v.tipo || v.titulo || '') : true));
   const cand = vagasMarcas.filter(m => m.status === 'candidatei').slice().reverse();
   const hoje = (per.hoje || []).map(id => vagasTodas().find(v => v.id === id)).filter(v => v && marcaVaga(v.id) !== 'descartei');
-  const qtd = g => top.filter(v => grupoVaga(v) === g).length, rem = top.filter(v => v.modo === 'remoto').length;
-  const secoes = GRUPOS_VAGAS.map(([g, tit, sub, cor]) => { const L = top.filter(v => grupoVaga(v) === g); if (!L.length) return '';
-    const n = mais[g] ? L.length : 6;
-    return `<section class="dvs-sec vg-grupo" style="--g:${cor}"><header class="dvs-tit"><h2><i></i>${esc(tit)} <span>${L.length}</span></h2><p>${esc(sub)}</p></header>
-      <div class="vg-lista">${L.slice(0, n).map((v, k) => cartaoVaga(v, k)).join('')}</div>
-      ${L.length > 6 ? `<button type="button" class="vg-mais" onclick="maisVagas(${jsa(g)})">${mais[g] ? 'Mostrar menos' : `Ver mais ${L.length - 6} vagas`}</button>` : ''}</section>`; }).join('');
+  const qtd = g => top.filter(v => grupoVaga(v) === g).length, hojeIso = hojeISO();
   const frs = (d.freelas || []).filter(x => x && x.titulo);
+  // 01/11/2026 (pedido do Rafael: "mais clean, e mostrar o que ele buscou em cada dia"): uma aba por tipo de vaga e, dentro dela,
+  // as vagas separadas pelo DIA em que o Radar as encontrou (vistaEm), as mais novas em cima.
+  const curto = { home_eng: 'Home office · engenharia', home_outra: 'Home office · outras', presencial_vale: 'Presencial', sst: 'Seg. do Trabalho' };
+  const abas = GRUPOS_VAGAS.map(([g, tit, sub, cor]) => [g, curto[g] || tit, sub, cor, qtd(g)]).concat([['freelas', 'Freelas', 'Renda extra com projeto, CAD, orçamento e SST. A chance é melhor onde há poucas propostas.', '#86868b', frs.length]]);
+  let gAt = cc.vagasGrupo; if (!abas.some(x => x[0] === gAt)) gAt = (abas.find(x => x[4]) || abas[0])[0];
+  const [, , subAt, corAt] = abas.find(x => x[0] === gAt);
+  let corpo = '';
+  if (gAt === 'freelas') corpo = frs.length ? `<div class="vg-freelas"><ul>${frs.map(x => { const ch = CHANCE_VAGA[x.chance] || CHANCE_VAGA.media, u = urlSegura(x.url); return `<li><span class="vg-chance" style="--c:${ch[1]}">${x.chance === 'alta' ? 'Chance boa' : esc(ch[0])}</span><div><b>${esc(x.titulo)}</b><small>${esc([x.categoria, plural(Number(x.propostas) || 0, 'proposta', 'propostas'), x.publicada ? 'publicado ' + isoParaBR(x.publicada).slice(0, 5) : ''].filter(Boolean).join(' · '))}</small></div>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Ver ↗</a>` : ''}</li>`; }).join('')}</ul></div>` : '';
+  else {
+    const L = top.filter(v => grupoVaga(v) === gAt), dias = {};
+    L.forEach(v => { (dias[v.vistaEm || ''] = dias[v.vistaEm || ''] || []).push(v); });
+    corpo = Object.keys(dias).sort().reverse().map((dia, i) => { const D = dias[dia], chave = gAt + dia, n = mais[chave] || i === 0 ? D.length : 4;
+      return `<div class="vg-dia"><h3 class="vg-dia-tit"><span>${esc(rotuloDiaVaga(dia))}</span><em>${i === 0 && dia === hojeIso && Object.keys(dias).length > 1 ? 'novas · ' : ''}${plural(D.length, 'vaga', 'vagas')}</em></h3>
+        <div class="vg-lista">${D.slice(0, n).map((v, k) => cartaoVaga(v, k)).join('')}</div>
+        ${D.length > n || mais[chave] && i ? `<button type="button" class="vg-mais" onclick="maisVagas(${jsa(chave)})">${mais[chave] ? 'Mostrar menos' : `Ver mais ${D.length - n} deste dia`}</button>` : ''}</div>`; }).join('');
+  }
+  const rods = (per.rodadas || []).slice(-4).reverse(), totNovas = r => Object.values(r.novas || {}).reduce((s, x) => s + (Number(x) || 0), 0);
   el.innerHTML = `<header class="ag-topo"><button type="button" class="ag-voltar" onclick="fecharPaginaAgente()" aria-label="Voltar">‹</button><div><small>Engenharia · agente</small><strong>${esc(a.nome)}</strong></div>
       <button type="button" class="ag-falar" onclick="conversarComVagas()">💬 Conversar</button></header>
     <div class="ag-rolo dvs vg" id="ag-rolo">
       <section class="vg-heroi"><small>J.A.R.V.I.S. Engenharia · carreira</small><h1>Radar de Vagas</h1>
-        <p>${vagasDados ? `Última busca ${esc(quandoTxt(d.atualizadoEm))}${per.lidos ? ` · ${per.lidos} anúncios lidos em ${per.buscas} buscas` : ''} · a próxima às ${new Date().getHours() < 18 ? '18h' : '8h'}` : 'A primeira busca roda no seu PC às 8h ou às 18h.'}</p>
-        <ul class="dvs-nums">${[[rem, 'home office'], [top.filter(v => v.chance === 'alta').length, 'com chance alta'], [top.length, 'vagas para você'], [cand.length, 'candidaturas']].map(([v, t], k) => `<li style="--k:${k}"><b>${v}</b><span>${esc(t)}</span></li>`).join('')}</ul></section>
-      ${(per.leitura || []).length || d.diz ? `<section class="dvs-sec"><div class="vg-persp"><small>A perspectiva de hoje</small>${d.diz ? `<p class="vg-persp-diz">${textoAgente(d.diz)}</p>` : ''}
-        ${(per.leitura || []).length ? `<ul>${per.leitura.map(t => `<li>${textoAgente(t)}</li>`).join('')}</ul>` : ''}
-        <div class="vg-mapa">${GRUPOS_VAGAS.map(([g, tit, , cor]) => `<span style="--g:${cor}"><b>${qtd(g)}</b>${esc(tit)}</span>`).join('')}<span style="--g:#86868b"><b>${frs.length}</b>Freelas</span></div></div></section>` : ''}
-      ${hoje.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Para se candidatar hoje</h2><p>As ${hoje.length} com a melhor combinação de perfil, chance e empresa.</p></header><div class="vg-hoje">${hoje.map((v, k) => cartaoVaga(v, k, true)).join('')}</div></section>` : ''}
-      <section class="dvs-sec vg-filtro-sec"><div class="vg-filtros" role="group" aria-label="Filtrar vagas"><button type="button" class="${f ? '' : 'on'}" onclick="filtrarVagas('')">Todas</button><button type="button" class="${f === 'chance' ? 'on' : ''}" onclick="filtrarVagas('chance')">Só chance alta e média</button><button type="button" class="${f === 'estagio' ? 'on' : ''}" onclick="filtrarVagas('estagio')">Só estágio</button></div></section>
-      ${secoes || `<section class="dvs-sec"><p class="dvs-vazio">${vagasDados ? 'Nenhuma vaga com este filtro.' : 'As vagas aparecem aqui depois da primeira busca.'}</p></section>`}
-      ${frs.length ? `<section class="dvs-sec vg-freelas"><header class="dvs-tit"><h2>Freelas <span>à margem</span></h2><p>Renda extra com projeto, CAD, orçamento e SST. A chance é melhor onde há poucas propostas.</p></header>
-        <ul>${frs.map(x => { const ch = CHANCE_VAGA[x.chance] || CHANCE_VAGA.media, u = urlSegura(x.url); return `<li><span class="vg-chance" style="--c:${ch[1]}">${x.chance === 'alta' ? 'Chance boa' : esc(ch[0])}</span><div><b>${esc(x.titulo)}</b><small>${esc([x.categoria, plural(Number(x.propostas) || 0, 'proposta', 'propostas'), x.publicada ? 'publicado ' + isoParaBR(x.publicada).slice(0, 5) : ''].filter(Boolean).join(' · '))}</small></div>${u ? `<a href="${esc(u)}" target="_blank" rel="noopener noreferrer">Ver ↗</a>` : ''}</li>`; }).join('')}</ul></section>` : ''}
+        <p>${vagasDados ? `Última busca ${esc(quandoTxt(d.atualizadoEm))}${per.lidos ? ` · ${per.lidos} anúncios lidos` : ''} · próxima às ${new Date().getHours() < 18 ? '18h' : '8h'}` : 'A primeira busca roda no seu PC às 8h ou às 18h.'}</p>
+        ${rods.length ? `<ul class="vg-rodadas" aria-label="Últimas buscas">${rods.map(r => `<li><b>${esc(isoParaBR(String(r.quando).slice(0, 10)).slice(0, 5))} ${esc(String(r.quando).slice(11, 16))}</b>${plural(totNovas(r), 'nova', 'novas')}</li>`).join('')}</ul>` : ''}</section>
+      ${d.diz ? `<section class="dvs-sec"><div class="vg-persp"><small>O Radar diz</small><p class="vg-persp-diz">${textoAgente(d.diz)}</p>
+        ${(per.leitura || []).length ? `<details class="vg-leitura"><summary>Ver a leitura do mercado</summary><ul>${per.leitura.map(t => `<li>${textoAgente(t)}</li>`).join('')}</ul></details>` : ''}</div></section>` : ''}
+      ${hoje.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Para se candidatar hoje</h2></header><div class="vg-hoje">${hoje.map((v, k) => cartaoVaga(v, k, true)).join('')}</div></section>` : ''}
+      <section class="dvs-sec vg-grupo" style="--g:${corAt}">
+        <div class="vg-abas" role="tablist" aria-label="Tipo de vaga">${abas.map(([g, tit, , cor, n]) => `<button type="button" role="tab" aria-selected="${g === gAt}" class="${g === gAt ? 'on' : ''}" style="--g:${cor}" onclick="grupoVagasAba(${jsa(g)})">${esc(tit)} <i>${n}</i></button>`).join('')}</div>
+        <p class="vg-abas-sub">${esc(subAt)}</p>
+        ${gAt !== 'freelas' ? `<div class="vg-filtros" role="group" aria-label="Filtrar vagas"><button type="button" class="${f ? '' : 'on'}" onclick="filtrarVagas('')">Todas</button><button type="button" class="${f === 'chance' ? 'on' : ''}" onclick="filtrarVagas('chance')">Chance alta e média</button><button type="button" class="${f === 'estagio' ? 'on' : ''}" onclick="filtrarVagas('estagio')">Só estágio</button></div>` : ''}
+        ${corpo || `<p class="dvs-vazio">${vagasDados ? 'Nenhuma vaga aqui com este filtro.' : 'As vagas aparecem aqui depois da primeira busca.'}</p>`}</section>
       ${cand.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Suas candidaturas</h2><p>O que você marcou como enviado.</p></header><ul class="prm-lista">${cand.slice(0, 30).map(m => `<li><b>${esc(m.titulo || 'Vaga')}</b><span>${esc(m.empresa || '')}</span><em>${esc(isoParaBR(m.quando || ''))}</em></li>`).join('')}</ul></section>` : ''}
       <footer class="ag-fim">O Radar só procura e explica: nunca se candidata, não cria conta e não manda mensagem. ${esc((d.fontes || []).length ? 'Fontes: ' + d.fontes.join(', ') + '.' : '')}</footer>
     </div>`;

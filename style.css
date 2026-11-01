@@ -4468,3 +4468,29 @@ body.jv-ouvindo #ag-chat .agc-mic { background: #ff453a; color: #fff; }
 .vg .vg-acoes { flex-wrap: nowrap; align-items: center; } .vg .vg-acoes .vg-abrir { flex: 1; text-align: center; }
 .vg .vg-dica p { margin: 6px 0 0; } .vg .vg-dica .vg-atencao { margin-top: 6px; }
 .vg .vg-acoes a, .vg .vg-acoes button { white-space: nowrap; padding: 9px 12px; }
+/* 01/11/2026: página mais clean — abas por tipo de vaga, vagas por dia da busca, salário em todo cartão, histórico das buscas */
+.vg-rodadas { list-style: none; margin: 14px 0 0; padding: 0; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.vg-rodadas::-webkit-scrollbar { display: none; }
+.vg-rodadas li { flex: none; display: flex; gap: 6px; align-items: baseline; padding: 6px 12px; border-radius: 999px; background: var(--dv-card); box-shadow: inset 0 0 0 0.5px var(--dv-linha); font-size: 0.8rem; color: var(--dv-txt3); }
+.vg-rodadas li b { color: var(--dv-txt); font-weight: 600; }
+.vg-rodadas li:first-child { box-shadow: inset 0 0 0 1px #34c759; }
+.vg .vg-persp { padding: 18px 20px; } .vg .vg-persp-diz { font-size: 1rem; line-height: 1.5; }
+.vg-leitura { margin-top: 10px; } .vg-leitura summary { cursor: pointer; color: var(--dv-azul); font-weight: 600; font-size: 0.92rem; }
+.vg-abas { display: flex; gap: 4px; overflow-x: auto; padding: 4px; border-radius: 14px; background: rgba(118,118,128,0.12); scrollbar-width: none; }
+.vg-abas::-webkit-scrollbar { display: none; }
+.vg-abas button { flex: 1 0 auto; border: 0; border-radius: 10px; padding: 9px 14px; font: inherit; font-size: 0.88rem; font-weight: 600; white-space: nowrap; background: transparent; color: var(--dv-txt2); cursor: pointer; }
+.vg-abas button i { font-style: normal; font-weight: 700; color: var(--dv-txt3); margin-left: 3px; }
+.vg-abas button.on { background: var(--dv-card); color: var(--dv-txt); box-shadow: 0 1px 3px rgba(0,0,0,0.12), inset 0 -2px 0 var(--g); }
+.vg-abas-sub { margin: 10px 2px 12px; font-size: 0.9rem; color: var(--dv-txt3); }
+.vg-grupo .vg-filtros { padding-bottom: 6px; }
+.vg-grupo .vg-filtros button { padding: 6px 12px; font-size: 0.82rem; }
+.vg-dia { margin-top: 18px; }
+.vg-dia-tit { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 2px 10px; padding-bottom: 6px; border-bottom: 0.5px solid var(--dv-linha); font-size: 1.02rem; font-weight: 700; color: var(--dv-txt); }
+.vg-dia-tit em { font-style: normal; font-size: 0.82rem; font-weight: 600; color: var(--dv-txt3); }
+.vg-dia:first-of-type .vg-dia-tit span { color: var(--g); }
+.vg-valor.sem { font-size: 0.85rem; font-weight: 600; color: var(--dv-txt3); }
+@media (max-width: 600px) {
+  .vg-hoje { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 10px; padding-bottom: 6px; scrollbar-width: none; }
+  .vg-hoje::-webkit-scrollbar { display: none; }
+  .vg-hoje .vg-card { flex: 0 0 82%; scroll-snap-align: start; }
+}
