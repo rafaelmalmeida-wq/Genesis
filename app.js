@@ -10281,6 +10281,7 @@ function cartaoVaga(v, k, curto) {
 function renderPaginaVagas() {
   const el = $j('ag-pag'); if (!el || el.hidden || cc.pagina !== 'vagas') return;
   const a = todosAgentes().find(x => x.id === 'vagas'), d = vagasDados || {}, per = d.perspectiva || {}, f = cc.vagasFiltro || '', mais = cc.vagasMais || {};
+  const leitura = Array.isArray(per.leitura) ? per.leitura : per.leitura ? [String(per.leitura)] : []; // 04/11/2026: uma leitura em texto único (e não lista) quebrava a página inteira
   const top = vagasTop().filter(v => !f || (f === 'chance' ? v.chance !== 'baixa' : f === 'estagio' ? /est[aá]gio/i.test(v.tipo || v.titulo || '') : true));
   const cand = vagasMarcas.filter(m => m.status === 'candidatei').slice().reverse();
   const hoje = (per.hoje || []).map(id => vagasTodas().find(v => v.id === id)).filter(v => v && marcaVaga(v.id) !== 'descartei');
@@ -10310,7 +10311,7 @@ function renderPaginaVagas() {
         <p>${vagasDados ? `Última busca ${esc(quandoTxt(d.atualizadoEm))}${per.lidos ? ` · ${per.lidos} anúncios lidos` : ''} · próxima às ${new Date().getHours() < 18 ? '18h' : '8h'}` : 'A primeira busca roda no seu PC às 8h ou às 18h.'}</p>
         ${rods.length ? `<ul class="vg-rodadas" aria-label="Últimas buscas">${rods.map(r => `<li><b>${esc(isoParaBR(String(r.quando).slice(0, 10)).slice(0, 5))} ${esc(String(r.quando).slice(11, 16))}</b>${plural(totNovas(r), 'nova', 'novas')}</li>`).join('')}</ul>` : ''}</section>
       ${d.diz ? `<section class="dvs-sec"><div class="vg-persp"><small>O Radar diz</small><p class="vg-persp-diz">${textoAgente(d.diz)}</p>
-        ${(per.leitura || []).length ? `<details class="vg-leitura"><summary>Ver a leitura do mercado</summary><ul>${per.leitura.map(t => `<li>${textoAgente(t)}</li>`).join('')}</ul></details>` : ''}</div></section>` : ''}
+        ${leitura.length ? `<details class="vg-leitura"><summary>Ver a leitura do mercado</summary><ul>${leitura.map(t => `<li>${textoAgente(t)}</li>`).join('')}</ul></details>` : ''}</div></section>` : ''}
       ${hoje.length ? `<section class="dvs-sec"><header class="dvs-tit"><h2>Para se candidatar hoje</h2></header><div class="vg-hoje">${hoje.map((v, k) => cartaoVaga(v, k, true)).join('')}</div></section>` : ''}
       <section class="dvs-sec vg-grupo" style="--g:${corAt}">
         <div class="vg-abas" role="tablist" aria-label="Tipo de vaga">${abas.map(([g, tit, , cor, n]) => `<button type="button" role="tab" aria-selected="${g === gAt}" class="${g === gAt ? 'on' : ''}" style="--g:${cor}" onclick="grupoVagasAba(${jsa(g)})">${esc(tit)} <i>${n}</i></button>`).join('')}</div>
